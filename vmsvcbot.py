@@ -268,6 +268,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             fid.close()
             cmd = "/bin/rm -f " + fname + " " + fn
             shellcmd(cmd)
+            resp = "Thanks for the photo but I am not able read it" if resp=="" else resp
         elif content_type != "text":
             print(content_type)
             print(str(msg))
