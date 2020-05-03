@@ -12,11 +12,8 @@ from telepot.namedtuple import ReplyKeyboardMarkup
 from telepot.namedtuple import InlineKeyboardMarkup, InlineKeyboardButton
 from telepot.helper import IdleEventCoordinator
 
-import speech_recognition as sr
-from gtts import gTTS          # Google text to speech
 import googletrans
 from googletrans import Translator
-from nltk.chat.iesha  import iesha_chatbot
 
 #---------------------------------------------------------------------------------------------------------------------------------------
 import urllib3
@@ -25,7 +22,7 @@ telepot.api._pools = {    'default': urllib3.ProxyManager(proxy_url=proxy_url, n
 telepot.api._onetime_pool_spec = (urllib3.ProxyManager, dict(proxy_url=proxy_url, num_pools=1, maxsize=1, retries=False, timeout=30))
 #---------------------------------------------------------------------------------------------------------------------------------------
 
-global chat_list,user_list,run_server
+global chat_list,user_list
 
 translator = Translator()
 adminchatid = 71354936
@@ -111,7 +108,7 @@ class ServiceBot(telepot.Bot):
 
 
 def do_main():
-    global user_list, Token, chat_list, run_server
+    global user_list, Token, chat_list
     run_server = True
     user_list = {}
     job_list = []
