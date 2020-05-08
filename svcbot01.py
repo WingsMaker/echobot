@@ -6,16 +6,14 @@ warnings.filterwarnings("ignore")
 
 import sqlite3
 import pymysql
-import pymysql.cursors
 
 import pandas as pd
 import pandas.io.formats.style
-import os, sys, time, string
+import os, sys, time
 import random, wget, json
 import subprocess
 import cryptography
 from cryptography.fernet import Fernet
-
 import telepot
 from telepot.loop import MessageLoop
 from telepot.delegate import pave_event_space, per_chat_id, create_open, per_callback_query_chat_id
@@ -28,34 +26,22 @@ from gtts import gTTS          # Google text to speech
 import googletrans
 from googletrans import Translator
 from nltk.chat.iesha  import iesha_chatbot
-from vmbotlib import write2html 
-from vmnlplib import NLP_Parser
 
 global chat_list,code2fa_list,user_list,run_server
 
 translator = Translator()
-omchat = NLP_Parser()
-adminchatid = 1064466049
-max_duration = 604800
+adminchatid = 71354936
+max_duration = 3600
 max_rows = 20
 option_back = "◀️"
 option_lang = "Language"
 option_chat = "Chat 💬"
 option_cmd = "Cmd Mode"
-option_edx = "SQL Mode"
 option_py = "Script Mode"
-option_nlp = "NLP"
-nlp_corpus = "Corpus"
-nlp_train = "Train NLP"
 
-svcbot_menu = [[option_nlp, option_edx, option_chat], [option_py, option_cmd, option_back]]
+svcbot_menu = [[option_chat, option_py, option_cmd, option_back]]
 echobot_menu = [[option_chat, option_lang, option_back]]
-nlp_menu = [[nlp_corpus, nlp_train, option_back]]
 
-#lang_opts = ['English', '简体中文','繁體中文','हिंदी','தமிழ்','বাংলা','Filipino','Indonesian', 'Malay',\
-#    'မြန်မာ','ไทย','Việt Nam','日本語','한국어']
-#lang_codes = ['en','zh-cn','zh-tw','hi','ta','bn','tl','id','ms','my','th','vi','ja','ko']
-#lang_menu = [  (lang_opts + [option_back])[n*5:][:5] for n in range(3) ]
 lang_opts = ['English', '简体中文','繁體中文','हिंदी','தமிழ்','বাংলা','Filipino','Indonesian', 'Malay',\
     'မြန်မာ','ไทย','Việt Nam','日本語','한국어', 'Nederlands','Français','Deutsch','Italiano','Español']
 lang_codes = ['en','zh-cn','zh-tw','hi','ta','bn','pil','id','ms','my','th','vi','ja','ko','nl','fr','de','it','es']
@@ -63,15 +49,16 @@ lang_audio = ['en-US','zh-CN','zh-TW','hi-IN','ta-Sg','bn-BD','fil-PH','id-ID','
 lang_menu = [  (lang_opts + [option_back])[n*5:][:5] for n in range(4) ]
 
 
+#EchoBotToken = "1042610944:AAGme_h2ztEG50jwbW8_cVEi0mgXjkXijd8"  # @LimKopiBot
 EchoBotToken = "1231701118:AAGImKeF8SULGP5ktSnsjuUxD7Jg0RRo0Y4"  # @echochatbot
-SvcBotToken = "906052064:AAHGP6uDK4D77t9jGl5MbYfI_3IixJdFpC8"    # @omnimentorservicebot
+SvcBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0" # t @OmniMentorBot
 
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
 vars = dict()
 
 class BotInstance():
     def __init__(self, Token, InlineMode=False):
-        self.Token = ""        
+        self.Token = ""
         self.bot_name = ""
         self.bot_id = ""
         self.bot_running = False
@@ -117,7 +104,7 @@ class ServiceBot(telepot.Bot):
         self.lang = "en"
         self.mainmenu = []
         self.thisbot = None
-       
+
     def on_callback_query(self, msg):
         query_id, from_id, query_data = telepot.glance(msg, flavor='callback_query')
 
@@ -133,7 +120,7 @@ class ServiceBot(telepot.Bot):
             articles = [{'type': 'article','id': 'L'+str(n+1) ,'title': lang_opts[n] ,'message_text': translator.translate(query_string, dest = lang_codes[n]).text } for n in range(cnt)]
             return articles
 
-        self._answerer.answer(msg, lang_options)        
+        self._answerer.answer(msg, lang_options)
         return
 
     def on_chat_message(self, msg):
@@ -142,11 +129,11 @@ class ServiceBot(telepot.Bot):
             resp = msg['text'].strip()
             if resp == '/start':
                 txt = "The chatmode is not available"
-                self.thisbot.sendMessage(chat_id, txt)            
+                self.thisbot.sendMessage(chat_id, txt)
             else:
                 result = translator.translate(resp, dest = "en")
                 txt = result.text
-                self.thisbot.sendMessage(chat_id, txt)            
+                self.thisbot.sendMessage(chat_id, txt)
         return
 
 class MessageCounter(telepot.helper.ChatHandler):
@@ -234,7 +221,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                 code2fa = [x for x in msglist if 'bot_command' in x ][0].split(' ')[-1].replace("'",'')
                 txt = "Hi " + req_user + ", your 2FA code is : " + code2fa
                 bot.sendMessage(reply_id,txt)
-        elif content_type == 'voice' and self.is_svcbot:
+        elif content_type == 'voice':
             try:
                 fid = msg['voice']['file_id']
                 fpath = bot.getFile(fid)['file_path']
@@ -245,7 +232,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                     resp = txt
             except:
                 pass
-        elif content_type=="audio" and not self.is_svcbot:
+        elif content_type=="audio":
             fid = msg['audio']['file_id']
             fpath = bot.getFile(fid)['file_path']
             fn = "https://api.telegram.org/file/bot" + bot._token + "/"  + fpath
@@ -254,12 +241,12 @@ class MessageCounter(telepot.helper.ChatHandler):
                 if txt !="":
                     bot.sendMessage(chat_id,txt)
                     resp = txt
-        elif (content_type=="photo") and (os.name != "nt") and not self.is_svcbot:
+        elif (content_type=="photo") and (os.name != "nt"):
             fid = msg['photo'][0]['file_id']
             fpath = bot.getFile(fid)['file_path']
             fn = "https://api.telegram.org/file/bot" + bot._token + "/"  + fpath
             fname = wget.download(fn)
-            fn = str(chat_id) 
+            fn = str(chat_id)
             cmd = "tesseract " + fname + " " + fn
             shellcmd(cmd)
             fn = fn + ".txt"
@@ -303,7 +290,7 @@ class MessageCounter(telepot.helper.ChatHandler):
         elif resp == '/start':
             self.reset
             if self.is_svcbot:
-                if chat_id==adminchatid or chat_id in [56381493, 71354936] :
+                if chat_id==adminchatid :
                     self.is_admin = True
                     txt = banner_msg("Welcome","You are now connected to admin mode.")
                     self.menu_id = 2
@@ -369,25 +356,11 @@ class MessageCounter(telepot.helper.ChatHandler):
                 txt = banner_msg("Python Shell", txt)
                 bot_prompt(bot, chat_id, txt, [[option_back]])
                 self.menu_id = 3
-            elif resp == option_edx and self.is_svcbot:
-                if os.name == "nt":
-                    txt = "You are now connected to Sqlite database via SQL."
-                else:
-                    txt = "You are now connected to EdX database via SQL."
-                txt = banner_msg("SQL Console for EdX", txt)
-                bot_prompt(bot, chat_id, txt, [[option_back]])
-                self.menu_id = 5
             elif resp == option_cmd :
                 txt = "You are now connected to Cmd mode.\nType cmd to list out the commands."
                 txt = banner_msg("Service Console", txt)
                 bot_prompt(bot, chat_id, txt, [[option_back]])
-                self.menu_id = 6
-            elif resp == option_nlp :
-                txt = "This section maintain NLP corpus and trains model.\n"
-                txt += "You can test your NLP dialog from here."
-                txt = banner_msg("NLP", txt)
-                bot_prompt(bot, chat_id, txt, nlp_menu)
-                self.menu_id = 7
+                self.menu_id = 5
             elif resp == option_back :
                 endchat(bot, chat_id)
                 self.logoff()
@@ -405,37 +378,11 @@ class MessageCounter(telepot.helper.ChatHandler):
             elif self.menu_id == 3 and self.is_svcbot:
                 retmsg = pycmd(resp)
             elif self.menu_id == 4:
-                if self.is_svcbot:
-                    txt = omchat.get_response(resp)
-                else:
-                    txt = iesha_chatbot.respond(resp)
+                txt = iesha_chatbot.respond(resp)
                 txt = "`" + txt + "`"
                 bot.sendMessage(chat_id, txt, parse_mode='markdown')
             elif self.menu_id == 5 and self.is_svcbot:
-                retmsg = edxsql( resp )
-            elif self.menu_id == 6 and self.is_svcbot:
                 retmsg = shellcmd(resp)
-            elif self.menu_id == 7 and self.is_svcbot:
-                if resp == nlp_train:
-                    if omchat.train_model() :
-                        retmsg = "NLP model using the corpus table has been trained with model file saved as ft_model.bin"
-                    else:
-                        retmsg = "NLP model using the corpus table was not trained properly"
-                elif resp == nlp_corpus:
-                    fn = "ft_corpus.html"
-                    bot.sendMessage(chat_id,"preparing...one moment")
-                    df = sql2var("nlp-conf.db", "select * from ft_corpus", "", True)
-                    write2html(df, title='FASTTEXT CORPUS', filename=fn)
-                    if os.name == "nt":
-                        bot.sendDocument(chat_id, document=open(fn, 'rb'))
-                    else:
-                        try:
-                            txt = "https://om.sambaash.com/svc/" + fn
-                            bot.sendMessage(chat_id, txt)
-                        except:
-                            bot.sendDocument(chat_id, document=open(fn, 'rb'))
-                else:
-                    retmsg = omchat.get_response(resp)
 
         ## trigger when live chat is initiated
         elif self.menu_id == 20:
@@ -528,7 +475,7 @@ def livechat(bot, chat_id, user_name, sid = 0):
             txt = "Hi I am " + (bot.getMe())['username'] + "\nThere is no online users at the moment, you can chat with me now."
             bot_prompt(bot, chat_id, txt, [ [option_back] ] )
             menu_id = 4
-    return menu_id 
+    return menu_id
 
 def endchat(bot, chat_id):
     global chat_list, user_list
@@ -623,6 +570,11 @@ def shellcmd(cmd):
     return output
 
 def pycmd(resp):
+    print(resp)
+    if 'print' in resp:
+        resp = resp.replace('print','')
+    if '"' in resp:
+        resp = resp.replace('"',"'")
     try:
         if '=' in resp:
             var_name = resp.split('=')[0].strip()
@@ -678,47 +630,17 @@ def process_voice(fn, lang):
         pass
     return txt
 
-def edxsql(query):
-    if os.name == "nt":
-        df = sql2var("nlp-conf.db", query, "", True)
-    else:
-        txt = ""
-        conn_str = "mysql://sambaash:bHyyZ3krZ4fguwcrAD7v@52.226.130.222/edxapp"
-        try:
-            host=piece(piece(piece(conn_str,':',2),"@",1),'/',0)
-            user=piece(piece(conn_str,':',1),'/',2)
-            pw=piece(piece(conn_str,':',2),"@",0)
-            edxcon = pymysql.connect(host=host,
-                    user=user,
-                    password=pw,
-                    db='edxapp',
-                    charset='utf8mb4',
-                    cursorclass=pymysql.cursors.DictCursor)
-            edxcur = edxcon.cursor()
-            edxcur.execute(query)
-            rows = edxcur.fetchall()
-            df = pd.DataFrame.from_dict(rows)
-            edxcon.commit()
-            edxcon.close()
-        except:
-            return ""
-    if len(df) >= max_rows:
-        txt = str(df.head(max_rows))
-    else:
-        txt = str(df)
-    return txt
-
 def sql2var(fn, sql, retval, dfmode=False):
     try:
         conn = sqlite3.connect(fn)
-        cursor = conn.cursor()    
-        df = pd.read_sql_query(sql, conn)            
+        cursor = conn.cursor()
+        df = pd.read_sql_query(sql, conn)
         if dfmode :
             sqlvar = df.copy()
         else:
             fld = list(df)[0]
             sqlvar = df[fld].iloc[0]
-            if type(retval) != type(sqlvar):                
+            if type(retval) != type(sqlvar):
                 sqlvar = eval( str(sqlvar) )
     except:
         sqlvar = retval
@@ -756,13 +678,12 @@ def do_main():
     chat_list = {}
     code2fa_list = {}
     err = 0
-    svcbot = BotInstance(SvcBotToken)
-    print(svcbot)
-    svcbot.bot.sendMessage(adminchatid,"Click /start to connect the ServiceBot")
+    #svcbot = BotInstance(SvcBotToken)
+    #print(svcbot)
+    #svcbot.bot.sendMessage(adminchatid,"Click /start to connect the ServiceBot")
     #echobot = BotInstance(EchoBotToken , True)
-    #echobot = BotInstance(EchoBotToken)
-    #echobot.bot.sendMessage(adminchatid,"Click /start to starts a chat.")
-    omchat.load_model("ft_model.bin", "nlp-conf.db")
+    echobot = BotInstance(EchoBotToken)
+    echobot.bot.sendMessage(adminchatid,"Click /start to starts a chat.")
     while run_server:
         time.sleep(3)
     try:
