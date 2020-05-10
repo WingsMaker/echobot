@@ -10,7 +10,7 @@ from telepot.loop import MessageLoop
 from telepot.namedtuple import ReplyKeyboardMarkup
 from googletrans import Translator
 
-global chat_list,user_list
+global echobot
 
 translator = Translator()
 adminchatid = 71354936
@@ -79,13 +79,17 @@ class ServiceBot(telepot.Bot):
         return
 
     def on_chat_message(self, msg):
+        global echobot
         content_type, chat_type, chat_id = telepot.glance(msg)
         if content_type == 'text':
             resp = msg['text'].strip()
             if resp == '/start':
                 txt = "The chatmode has been removed, please use @echochatbot"
                 self.thisbot.sendMessage(chat_id, txt)
-                self.menu_id = 1
+                self.menu_id = 1            
+            elif resp=='/stop' and (chat_id==adminchatid):
+                echobot.bot_running = False            
+                retmsg = 'System already shutdown.'
             elif resp.startswith('/lang'):
                 if resp=='/lang' :
                     txt = "Select the prefered language"
@@ -155,16 +159,14 @@ def bot_prompt(bot, chat_id, txt, buttons, opt_resize = True):
     return
 
 def do_main():
-    global user_list, Token, chat_list
-    run_server = True
-    user_list = {}
-    job_list = []
-    chat_list = {}
+    global echobot
     err = 0
     echobot = BotInstance(EchoBotToken , True)
-    echobot.bot.sendMessage(adminchatid,"Click /start to starts a chat.")
-    #print(echobot)
-    while run_server:
+    try:
+        echobot.bot.sendMessage(adminchatid,"Click /start to starts a chat.")
+    except:
+        print(echobot)
+    while echobot.bot_running :
         time.sleep(3)
     try:
         os.kill(os.getpid(), 9)
@@ -179,4 +181,3 @@ if __name__ == "__main__":
         do_main()
     else:
         print("Unable to use this version of python\n", version)
-
