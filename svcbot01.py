@@ -264,13 +264,13 @@ class MessageCounter(telepot.helper.ChatHandler):
                 bot.sendMessage(tid , resp)
                 bot_prompt(bot, chat_id, "(type bye when you want to end the conversation)", [['bye']])
                 self.menu_id = 20
-            elif resp == option_chat :
+            elif (resp == option_chat ) or (resp == '/chat'):
                 self.menu_id = livechat(bot, chat_id, self.username)
-            elif resp == option_lang :
+            elif (resp == option_lang ) or (resp == '/lang'):
                 txt = "welcome to the translation bot\npnPlease select your language:"
                 bot_prompt(bot, chat_id, txt, lang_menu)
                 self.menu_id = 24
-            elif resp == option_voice :
+            elif (resp == option_voice ) or (resp == '/voice'):                
                 self.txt2voice = not self.txt2voice
                 retmsg = "text to speech turn " + (" on." if self.txt2voice else "off.")
             elif resp == option_py :
