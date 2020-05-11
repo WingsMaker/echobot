@@ -18,7 +18,6 @@ import telepot
 from telepot.loop import MessageLoop
 from telepot.delegate import pave_event_space, per_chat_id, create_open, per_callback_query_chat_id
 from telepot.namedtuple import ReplyKeyboardMarkup
-from telepot.namedtuple import InlineKeyboardMarkup, InlineKeyboardButton
 from telepot.helper import IdleEventCoordinator
 
 import speech_recognition as sr
@@ -49,8 +48,8 @@ lang_codes = ['en','zh-cn','zh-tw','hi','ta','bn','pil','id','ms','my','th','vi'
 lang_audio = ['en-US','zh-CN','zh-TW','hi-IN','ta-Sg','bn-BD','fil-PH','id-ID','ms-MY','my-MM','th-TH','vi-VN','ja-JP','ko-KR','nl-NL','fr-FR','de-DE','it-IT','es-ES']
 lang_menu = [  (lang_opts + [option_back])[n*5:][:5] for n in range(4) ]
 
-SvcBotToken = "1231701118:AAGImKeF8SULGP5ktSnsjuUxD7Jg0RRo0Y4"  # @echochatbot
-#SvcBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"    # @OmniMentorBot
+#SvcBotToken = "1231701118:AAGImKeF8SULGP5ktSnsjuUxD7Jg0RRo0Y4"  # @echochatbot
+SvcBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"    # @OmniMentorBot
 
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
 
@@ -444,16 +443,12 @@ def bot_prompt(bot, chat_id, txt, buttons, opt_resize = True):
         hide_keyboard = {'hide_keyboard': True}
         bot.sendMessage(chat_id, txt, reply_markup=hide_keyboard)
         return
-    if chat_id > 0:
-        mark_up = ReplyKeyboardMarkup(keyboard=buttons,one_time_keyboard=True,resize_keyboard=opt_resize)
-    else:
-        if type(buttons[0])==list:
-            menu_keyboard = [[InlineKeyboardButton(text=c[0], callback_data=c[0])] for c in buttons if len(c[0])<=60]
-        else:
-            menu_keyboard=[list(map(lambda c: InlineKeyboardButton(text=c, callback_data=c), buttons))]
-        mark_up = InlineKeyboardMarkup(inline_keyboard=menu_keyboard)
     try:
-        sent = bot.sendMessage(chat_id, txt, reply_markup=mark_up)
+        if chat_id > 0:
+            mark_up = ReplyKeyboardMarkup(keyboard=buttons,one_time_keyboard=True,resize_keyboard=opt_resize)
+            sent = bot.sendMessage(chat_id, txt, reply_markup=mark_up)
+        else:
+            sent = bot.sendMessage(chat_id, txt)
     except:
         sent = bot.sendMessage(chat_id, txt)
     edited = telepot.message_identifier(sent)
