@@ -22,8 +22,7 @@ option_back = "◀️"
 
 lang_opts = ['English', '简体中文','繁體中文','हिंदी','தமிழ்','বাংলা','Filipino','Indonesian', 'Malay',\
     'မြန်မာ','ไทย','Việt Nam','日本語','한국어', 'Nederlands','Français','Deutsch','Italiano','Español']
-lang_codes = ['en','zh-cn','zh-tw','hi','ta','bn','pil','id','ms','my','th','vi','ja','ko','nl','fr','de','it','es']
-
+lang_codes = ['en','zh-cn','zh-tw','hi','ta','bn','tl','id','ms','my','th','vi','ja','ko','nl','fr','de','it','es']
 
 EchoBotToken = "1042610944:AAGme_h2ztEG50jwbW8_cVEi0mgXjkXijd8" # @limkopibot
 #EchoBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"  # @OmniMentorBot
@@ -61,8 +60,7 @@ class BotInstance():
 class QueryCounter(telepot.helper.InlineUserHandler, telepot.helper.AnswererMixin):
     def __init__(self, *args, **kwargs):
         super(QueryCounter, self).__init__(*args, **kwargs)        
-        self.menu_id = 1
-        self.lang = "en"        
+
     def on_callback_query(self, msg):
         query_id, from_id, query_data = telepot.glance(msg, flavor='callback_query')
 
@@ -74,12 +72,13 @@ class QueryCounter(telepot.helper.InlineUserHandler, telepot.helper.AnswererMixi
         query_id, from_id, query_string = telepot.glance(msg, flavor='inline_query')
         if query_string == "":
             return
+
         def lang_options():
             cnt = len(lang_opts)
             articles = [{'type': 'article','id': 'L'+str(n+1) ,'title': lang_opts[n] ,'message_text': translator.translate(query_string, dest = lang_codes[n]).text } for n in range(cnt)]
             return articles
 
-        echobot.answerer.answer(msg, lang_options)        
+        self.answerer.answer(msg, lang_options)
         return
 
 def do_main():
