@@ -21,6 +21,7 @@ from telepot.namedtuple import ReplyKeyboardMarkup
 from telepot.helper import IdleEventCoordinator
 import pyaudio
 import speech_recognition as sr
+import gtts
 from gtts import gTTS          # Google text to speech
 import googletrans
 from googletrans import Translator
@@ -52,8 +53,8 @@ lang_vopts = ['English', '华语','粤语','हिंदी','தமிழ்','
 lang_audio = ['en-US','zh-CN','zh-YUE','hi-IN','ta-Sg','bn-BD','fil-PH','id-ID','ms-MY','my-MM','th-TH','vi-VN','ja-JP','ko-KR','nl-NL','fr-FR','de-DE','it-IT','es-ES']
 lang_v2t = [  (lang_vopts + ['auto'])[n*5:][:5] for n in range(4) ]
 
-#SvcBotToken = "1231701118:AAGImKeF8SULGP5ktSnsjuUxD7Jg0RRo0Y4"  # @echochatbot
-SvcBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"    # @OmniMentorBot
+SvcBotToken = "1231701118:AAGImKeF8SULGP5ktSnsjuUxD7Jg0RRo0Y4"  # @echochatbot
+#SvcBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"    # @OmniMentorBot
 
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
 
@@ -274,7 +275,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             elif (resp == option_chat ) or (resp == '/chat'):
                 self.menu_id = livechat(bot, chat_id, self.username)
             elif (resp == option_lang ) or (resp == '/lang'):
-                txt = "welcome to the translation bot\npnPlease select your language:"
+                txt = "welcome to the translation bot\nPlease select your language:"
                 bot_prompt(bot, chat_id, txt, lang_menu)
                 self.menu_id = 24
             elif (resp == option_text2voice ) or (resp == '/voice'):                
@@ -551,7 +552,7 @@ def wav2txt_auto(fn):
     pass_rate = 0.8
     best_score = pass_rate
     lang_detected = 'en'
-    transcript = ""
+    transcript = ""    
     lang_list = ['en', 'en-UK','en-US','zh-CN','zh-TW', 'zh-YUE','hi-IN','ta-Sg','bn-BD','fil-PH','id-ID','ms-MY','my-MM','th-TH','vi-VN','ja-JP','ko-KR','nl-NL','fr-FR','de-DE','it-IT','es-ES']
     try:
         r = sr.Recognizer()
