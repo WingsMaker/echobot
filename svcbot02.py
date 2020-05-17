@@ -38,7 +38,10 @@ option_lang = "Language 🇸🇬"
 option_chat = "Chat 💬"
 option_text2voice = "Text2Voice 🎧"
 option_voice2text = "Voice2Text 🎤"
+option_cmd = "Cmd Mode 💻"
+option_py = "Script Mode 📜"
 
+svcbot_menu = [[option_chat, option_py, option_cmd, option_back]]
 echobot_menu = [[option_chat, option_lang, option_text2voice, option_voice2text, option_back]]
 
 lang_opts = ['English', '简体中文','繁體中文','हिंदी','தமிழ்','বাংলা','Filipino','Indonesian', 'Malay',\
@@ -51,9 +54,12 @@ lang_audio = ['en-US','zh-CN','zh-YUE','hi-IN','ta-Sg','bn-BD','fil-PH','id-ID',
 lang_v2t = [  (lang_vopts + ['auto'])[n*5:][:5] for n in range(4) ]
 
 SvcBotToken = "1231701118:AAGImKeF8SULGP5ktSnsjuUxD7Jg0RRo0Y4"  # @echochatbot
+#SvcBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"    # @OmniMentorBot
+
+piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
 
 class BotInstance():
-    def __init__(self, Token):
+    def __init__(self, Token, svc_mode = False):
         self.Token = ""
         self.bot_name = ""
         self.bot_id = ""
@@ -62,8 +68,9 @@ class BotInstance():
         self.chat_list = {}
         self.code2fa_list = {}
         self.vars = dict()
+        self.is_svcbot = svc_mode
         self.Token = Token
-        self.mainmenu = echobot_menu
+        self.mainmenu = svcbot_menu if svc_mode else echobot_menu
         self.bot = telepot.DelegatorBot(Token, [
             pave_event_space()( [per_chat_id(), per_callback_query_chat_id()],
             create_open, MessageCounter, timeout=max_duration, include_callback_query=True),
@@ -165,6 +172,22 @@ class MessageCounter(telepot.helper.ChatHandler):
             fn = "https://api.telegram.org/file/bot" + bot._token + "/"  + fpath
             if fn[-4:]=='.ogg':
                 voice2txt = True
+        # OCR temporary removed
+        #elif (content_type=="photo") and (os.name != "nt"):
+        #    fid = msg['photo'][0]['file_id']
+        #    fpath = bot.getFile(fid)['file_path']
+        #    fn = "https://api.telegram.org/file/bot" + bot._token + "/"  + fpath
+        #    fname = wget.download(fn)
+        #    fn = str(chat_id)
+        #    cmd = "tesseract " + fname + " " + fn
+        #    shellcmd(cmd)
+        #    fn = fn + ".txt"
+        #    fid = open(fn)
+        #    resp = fid.read()
+        #    fid.close()
+        #    cmd = "/bin/rm -f " + fname + " " + fn
+        #    shellcmd(cmd)
+        #    resp = "Thanks for the photo but I am not able read it" if resp=="" else resp
         elif content_type != "text":
             print(content_type)
             print(str(msg))
@@ -193,12 +216,33 @@ class MessageCounter(telepot.helper.ChatHandler):
 
         elif resp == '/start':
             self.reset            
-            self.is_admin = True
-            self.menu_id = 2
-            self.lang = 'en'
-            txt = "This is a translation chatbot with voice support.\nPlease select your language."
-            bot_prompt(bot, chat_id, txt, svcbot.mainmenu)
-            svcbot.user_list[chat_id] = [self.username, self.lang]
+            if svcbot.is_svcbot:
+                if chat_id==adminchatid :
+                    self.is_admin = True
+                    txt = banner_msg("Welcome","You are now connected to admin mode.")
+                    self.menu_id = 2
+                    bot_prompt(bot, chat_id, txt, svcbot.mainmenu)
+                    svcbot.user_list[chat_id] = [self.username, self.lang]
+                else:
+                    self.is_admin = False
+                    txt = "Following user requesting for admin access :\n"
+                    txt += f"Command of request : {resp} \n\n"
+                    txt += json.dumps(msg)
+                    code2FA = ''.join(random.choice( "ABCDEFGHJKLMNPQRTUVWXY0123456789" ) for i in range(32))
+                    code2FA = code2FA.upper()
+                    svcbot.code2fa_list[chat_id] = code2FA
+                    txt += "\n\nFor your approval with 2FA code : " + code2FA
+                    bot.sendMessage(adminchatid, txt)
+                    txt = "Please enter the 2FA code :"
+                    bot_prompt(bot, chat_id, txt, [])
+                    self.menu_id = 23
+            else:
+                self.is_admin = True
+                self.menu_id = 2
+                self.lang = 'en'
+                txt = "This is a translation chatbot with voice support.\nPlease select your language."
+                bot_prompt(bot, chat_id, txt, svcbot.mainmenu)
+                svcbot.user_list[chat_id] = [self.username, self.lang]
 
         elif chat_id in svcbot.chat_list and (resp.strip() != "") :
             tid = svcbot.chat_list[chat_id]
@@ -241,24 +285,41 @@ class MessageCounter(telepot.helper.ChatHandler):
                 txt = "To recognise a voice and translated into following language :"
                 bot_prompt(bot, chat_id, txt, lang_v2t)
                 self.menu_id = 25
+            elif resp == option_py :
+                txt = "You are now connected to Script mode.\nDo not use double quote \" for string quotation."
+                txt = banner_msg("Python Shell", txt)
+                bot_prompt(bot, chat_id, txt, [[option_back]])
+                self.menu_id = 3
+            elif resp == option_cmd :
+                txt = "You are now connected to Cmd mode.\nType cmd to list out the commands."
+                txt = banner_msg("Service Console", txt)
+                bot_prompt(bot, chat_id, txt, [[option_back]])
+                self.menu_id = 5
             elif resp == option_back :
                 endchat(bot, chat_id)
                 self.logoff()
             else:
-                txt = translate(self.lang,resp)
-                if self.txt2voice :
-                    text2voice(self.bot, self.chatid, self.lang, txt)
+                if svcbot.is_svcbot:
+                    retmsg = translate(self.lang,resp)
                 else:
-                    retmsg = txt
+                    txt = translate(self.lang,resp)
+                    if self.txt2voice :
+                        text2voice(self.bot, self.chatid, self.lang, txt)
+                    else:
+                        retmsg = txt
 
         elif self.menu_id in range(3,8):
             if resp == option_back :
                 bot_prompt(bot, chat_id, "You are back in the main menu", svcbot.mainmenu)
                 self.menu_id = 2
+            elif self.menu_id == 3 and svcbot.is_svcbot:
+                retmsg = pycmd(resp)
             elif self.menu_id == 4:
                 txt = iesha_chatbot.respond(resp)                                
                 txt = "`" + txt + "`"
                 bot.sendMessage(chat_id, txt, parse_mode='markdown')
+            elif self.menu_id == 5 and svcbot.is_svcbot:
+                retmsg = shellcmd(resp)
 
         ## trigger when live chat is initiated
         elif self.menu_id == 20:
@@ -457,6 +518,26 @@ def shellcmd(cmd):
         output = ''
     return output
 
+def pycmd(resp):
+    global svcbot
+    vars = svcbot.vars
+    if 'print' in resp:
+        resp = resp.replace('print','str')
+    if '"' in resp:
+        resp = resp.replace('"',"'")
+    try:
+        if '=' in resp:
+            var_name = resp.split('=')[0].strip()
+            var_expr = resp.split('=')[1].strip()
+            vars[var_name] = eval(var_expr)
+            result = "vars['" + var_name + "'] := " + str(vars[var_name])
+        else:
+            result = eval(eval('f"@"'.replace('@',resp.replace('{',"{vars['").replace('}',"']}"))))
+    except:
+        result = ""
+    svcbot.vars = vars
+    return result
+
 def convert_audio(fname, fmt = ".wav"):
     try:
         fn = fname.split('.')[0]
@@ -517,6 +598,7 @@ def wav2txt(wavfile, lang):
     else:
         #print("`recognizer` must be `Recognizer` instance")
         pass
+    #return result
     return ""
 
 def process_voice(fn, lang):    
@@ -538,6 +620,41 @@ def process_voice(fn, lang):
         pass
     return txt
 
+def sql2var(fn, sql, retval, dfmode=False):
+    try:
+        conn = sqlite3.connect(fn)
+        cursor = conn.cursor()
+        df = pd.read_sql_query(sql, conn)
+        if dfmode :
+            sqlvar = df.copy()
+        else:
+            fld = list(df)[0]
+            sqlvar = df[fld].iloc[0]
+            if type(retval) != type(sqlvar):
+                sqlvar = eval( str(sqlvar) )
+    except:
+        sqlvar = retval
+    finally:
+        cursor.close()
+        conn.close()
+    return sqlvar
+
+def decrypt(msg):
+    key = '4jYUFl-wbMZ4NIiI2kG3LMFD5KTTKiT5ZiE6Yhoshp0='
+    cto = Fernet(key)
+    try:
+        txt = msg.encode()
+    except:
+        txt = msg
+    resp = cto.decrypt(txt)
+    return resp.decode()
+
+def encrypt(msg):
+    key = '4jYUFl-wbMZ4NIiI2kG3LMFD5KTTKiT5ZiE6Yhoshp0='
+    cto = Fernet(key)
+    txt = cto.encrypt(msg.encode())
+    return txt
+
 def banner_msg(banner_title, banner_msg):
     txt = "▓▓▓▒▒▒▒▒▒▒░░░  " + banner_title + "  ░░░▒▒▒▒▒▒▒▓▓▓"
     txt += "\n" + banner_msg + "\n"
@@ -546,10 +663,10 @@ def banner_msg(banner_title, banner_msg):
 def do_main():
     global svcbot
     err = 0
-    svcbot = BotInstance(SvcBotToken)
+    svcbot = BotInstance(SvcBotToken, False)
     print(svcbot)
     try:
-        svcbot.bot.sendMessage(adminchatid,"Click /start to session")
+        svcbot.bot.sendMessage(adminchatid,"Click /start to connect the ServiceBot")
     except:
         pass
     while svcbot.bot_running:    
