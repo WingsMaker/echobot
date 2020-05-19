@@ -4,21 +4,17 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore")
 
-import sqlite3
-import pymysql
-
-import pandas as pd
-import pandas.io.formats.style
 import os, sys, time
 import random, wget, json
 import subprocess
-import cryptography
-from cryptography.fernet import Fernet
 import telepot
 from telepot.loop import MessageLoop
 from telepot.delegate import pave_event_space, per_chat_id, create_open, per_callback_query_chat_id
 from telepot.namedtuple import ReplyKeyboardMarkup
 from telepot.helper import IdleEventCoordinator
+import pdftotext
+import cv2
+import pytesseract 
 import pyaudio
 import speech_recognition as sr
 import gtts
@@ -48,9 +44,10 @@ lang_menu = [  (lang_opts + [option_back])[n*5:][:5] for n in range(4) ]
 lang_vopts = ['English', '华语','粤语','हिंदी','தமிழ்','বাংলা','Filipino','Indonesian', 'Malay',\
     'မြန်မာ','ไทย','Việt Nam','日本語','한국어', 'Nederlands','Français','Deutsch','Italiano','Español']
 lang_audio = ['en-US','zh-CN','zh-YUE','hi-IN','ta-Sg','bn-BD','fil-PH','id-ID','ms-MY','my-MM','th-TH','vi-VN','ja-JP','ko-KR','nl-NL','fr-FR','de-DE','it-IT','es-ES']
-lang_v2t = [  (lang_vopts + ['auto'])[n*5:][:5] for n in range(4) ]
+lang_v2t = [(lang_vopts + ['auto'])[n*5:][:5] for n in range(4) ] + [[option_back]]
 
 SvcBotToken = "1231701118:AAGImKeF8SULGP5ktSnsjuUxD7Jg0RRo0Y4"  # @echochatbot
+#SvcBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"    # @OmniMentorBot
 
 class BotInstance():
     def __init__(self, Token):
@@ -60,7 +57,6 @@ class BotInstance():
         self.bot_running = False
         self.user_list = {}        
         self.chat_list = {}
-        self.code2fa_list = {}
         self.vars = dict()
         self.Token = Token
         self.mainmenu = echobot_menu
@@ -100,7 +96,7 @@ class MessageCounter(telepot.helper.ChatHandler):
         self.edited = 0
         self.menu_id = 1
         self.lang = "en"
-        self.lang_v2t = "auto"
+        self.lang_v2t = "en-US"
         self.txt2voice = False
 
     def reset(self):
@@ -136,46 +132,57 @@ class MessageCounter(telepot.helper.ChatHandler):
         retmsg = ''
         username = ""
         voice2txt = False
+        img2txt = False
+        pdf2txt = False
         if content_type == 'text':
             resp = msg['text'].strip()
             if 'from' in list(msg):
                 username = msg['from']['first_name']
                 self.username = username
-            if 'reply_to_message' in list(msg) and 'For your approval with 2FA code :' in str(msg):
-                msglist = str(msg).replace('"',"'").replace("'message_id':",chr(4644)).split(chr(4644))[3].split(',')
-                reply_id = int([x for x in msglist if 'from' in x ][0].split(':')[2].strip())
-                if 'username'  in str(msglist):
-                    req_user = [x for x in msglist if 'username' in x ][0].replace("'",'').split(':')[1].strip()
-                else:
-                    req_user = [x for x in msglist if 'first_name' in x ][0].replace("'",'').split(':')[1].strip()
-                code2fa = [x for x in msglist if 'bot_command' in x ][0].split(' ')[-1].replace("'",'')
-                txt = "Hi " + req_user + ", your 2FA code is : " + code2fa
-                bot.sendMessage(reply_id,txt)
         elif content_type == 'voice':
-            try:
+            ftype = msg['voice']['mime_type']
+            if 'ogg' in ftype :
+                voice2txt = True
                 fid = msg['voice']['file_id']
-                fpath = bot.getFile(fid)['file_path']
-                fn = "https://api.telegram.org/file/bot" + bot._token + "/"  + fpath
-                voice2txt = True
-            except:
-                pass
         elif content_type=="audio":
-            fid = msg['audio']['file_id']
-            fpath = bot.getFile(fid)['file_path']
-            fn = "https://api.telegram.org/file/bot" + bot._token + "/"  + fpath
-            if fn[-4:]=='.ogg':
+            ftype = msg['audio']['mime_type']
+            if 'ogg' in ftype :
+                fid = msg['audio']['file_id']
                 voice2txt = True
+        elif (content_type=="document") :
+            ftype = msg['document']['mime_type']
+            if ftype=="application/pdf":
+                fid = msg['document']['file_id']
+                fname = get_attachment(bot, fid)
+                pdf2txt = True                
+            elif ftype=="image/jpeg":
+                fid = msg['document']['thumb']['file_id']
+                fname = get_attachment(bot, fid)
+                img2txt = True
+            else:
+                pass
+        elif (content_type=="photo") :
+            fid = msg['photo'][0]['file_id']
+            fname = get_attachment(bot, fid)
+            img2txt = True
         elif content_type != "text":
-            print(content_type)
-            print(str(msg))
             txt = "Thanks for the " + content_type + " but I do not need it for now."
             bot.sendMessage(chat_id,txt)
             return
 
+        if pdf2txt:
+            resp = readtxt_pdf(fname)
+            os.remove(fname)
+
+        if img2txt:
+            resp = readtxt_image(fname)
+            os.remove(fname)
+
         if voice2txt:
             if self.lang_v2t=="auto":
                 bot.sendMessage(chat_id, "detecting the language...")
-            txt = process_voice(fn , self.lang_v2t)
+            fname = get_attachment(bot, fid)
+            txt = process_voice(fname , self.lang_v2t)
             if txt !="":
                 bot.sendMessage(chat_id, txt)
                 resp = txt
@@ -233,14 +240,14 @@ class MessageCounter(telepot.helper.ChatHandler):
             elif (resp == option_lang ) or (resp == '/lang'):
                 txt = "welcome to the translation bot\nPlease select your language:"
                 bot_prompt(bot, chat_id, txt, lang_menu)
-                self.menu_id = 24
+                self.menu_id = 23
             elif (resp == option_text2voice ) or (resp == '/voice'):                
                 self.txt2voice = not self.txt2voice
                 retmsg = "text to speech turn " + (" on." if self.txt2voice else "off.")
             elif (resp == option_voice2text):
                 txt = "To recognise a voice and translated into following language :"
                 bot_prompt(bot, chat_id, txt, lang_v2t)
-                self.menu_id = 25
+                self.menu_id = 24
             elif resp == option_back :
                 endchat(bot, chat_id)
                 self.logoff()
@@ -251,7 +258,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                 else:
                     retmsg = txt
 
-        elif self.menu_id in range(3,8):
+        elif self.menu_id in [3,4]:
             if resp == option_back :
                 bot_prompt(bot, chat_id, "You are back in the main menu", svcbot.mainmenu)
                 self.menu_id = 2
@@ -298,21 +305,6 @@ class MessageCounter(telepot.helper.ChatHandler):
                     self.menu_id = 2
 
         elif self.menu_id == 23:
-            code2FA = svcbot.code2fa_list[chat_id]
-            if code2FA == resp:
-                self.is_admin = True
-                txt = banner_msg("Welcome","You are now connected to Mentor mode.")
-                self.menu_id = 2
-                bot_prompt(bot, chat_id, txt, svcbot.mainmenu)
-                svcbot.code2fa_list.pop(chat_id)
-                svcbot.user_list[chat_id] = [self.username, self.lang]
-            else:
-                txt  = "Sorry the 2FA code is invalid, please try again."
-                self.is_admin = False
-                bot_prompt(bot, chat_id, txt, [['/start']])
-                self.menu_id = 1
-
-        elif self.menu_id == 24:
             if resp in lang_opts:
                 n = lang_opts.index(resp)                
                 lang = lang_codes[n]
@@ -325,7 +317,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             bot_prompt(bot, chat_id, txt, svcbot.mainmenu)
             self.menu_id = 2
 
-        elif self.menu_id == 25:
+        elif self.menu_id == 24:
             if resp in lang_vopts:
                 n = lang_vopts.index(resp)
                 lang = lang_audio[n]                    
@@ -519,10 +511,9 @@ def wav2txt(wavfile, lang):
         pass
     return ""
 
-def process_voice(fn, lang):    
+def process_voice(fname, lang):    
     try:
-        print(595, fn)
-        fname = wget.download(fn)
+        #fname = wget.download(fn)
         wav = convert_audio(fname, "wav")
         if wav != "":
             print(fname, lang)
@@ -537,6 +528,31 @@ def process_voice(fn, lang):
         txt = ""
         pass
     return txt
+
+def readtxt_pdf(fn):
+    txt = ""
+    try:
+        with open(fn, "rb") as f:
+            pdf = pdftotext.PDF(f)
+        txt = "".join(pdf)
+    except:
+        txt = "Thanks for the pdf but I am not able read it"        
+    return txt
+
+def readtxt_image(fn):
+    txt = ""
+    try:
+        img = cv2.imread(fn)
+        txt = pytesseract.image_to_string(img)
+    except:
+        txt = "Thanks for the image but I am not able read it"        
+    return txt
+
+def get_attachment(bot, fid):
+    fpath = bot.getFile(fid)['file_path']
+    fn = "https://api.telegram.org/file/bot" + bot._token + "/"  + fpath
+    fname = wget.download(fn)
+    return fname
 
 def banner_msg(banner_title, banner_msg):
     txt = "▓▓▓▒▒▒▒▒▒▒░░░  " + banner_title + "  ░░░▒▒▒▒▒▒▒▓▓▓"
