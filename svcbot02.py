@@ -25,7 +25,7 @@ import pytesseract
 import pyaudio
 import speech_recognition as sr
 import gtts
-from gtts import gTTS          # Google text to speech
+from gtts import gTTS
 import googletrans
 from googletrans import Translator
 from nltk.chat.iesha  import iesha_chatbot
@@ -57,8 +57,8 @@ lang_vopts = ['English', '华语','粤语','हिंदी','தமிழ்','
 lang_audio = ['en-US','zh-CN','zh-YUE','hi-IN','ta-Sg','bn-BD','fil-PH','id-ID','ms-MY','my-MM','th-TH','vi-VN','ja-JP','ko-KR','nl-NL','fr-FR','de-DE','it-IT','es-ES']
 lang_v2t = [(lang_vopts + ['auto'])[n*5:][:5] for n in range(4) ] + [[option_back]]
 
-#SvcBotToken = "1231701118:AAGImKeF8SULGP5ktSnsjuUxD7Jg0RRo0Y4"  # @echochatbot
-SvcBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"    # @OmniMentorBot
+SvcBotToken = "1231701118:AAGImKeF8SULGP5ktSnsjuUxD7Jg0RRo0Y4"  # @echochatbot
+#SvcBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"    # @OmniMentorBot
 
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
 
@@ -316,14 +316,11 @@ class MessageCounter(telepot.helper.ChatHandler):
                 endchat(bot, chat_id)
                 self.logoff()
             else:
-                if svcbot.is_svcbot:
-                    retmsg = translate(self.lang,resp)
+                txt = translate(self.lang,resp)
+                if self.txt2voice :
+                    text2voice(self.bot, self.chatid, self.lang, txt)
                 else:
-                    txt = translate(self.lang,resp)
-                    if self.txt2voice :
-                        text2voice(self.bot, self.chatid, self.lang, txt)
-                    else:
-                        retmsg = txt
+                    retmsg = txt
 
         elif self.menu_id in range(3,8):
             if resp == option_back :
@@ -515,7 +512,7 @@ def translate(lang, txt):
 def text2voice(bot, chat_id, lang, resp):
     try:
         bot.sendMessage(chat_id, resp)
-        mp3 = 'echobot.mp3'
+        mp3 = 'echobot' + str(chat_id) + '.mp3'
         myobj = gTTS(text=resp, lang=lang, slow=False)
         myobj.save(mp3)
         fn = convert_audio(mp3, "ogg")

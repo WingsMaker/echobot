@@ -46,8 +46,8 @@ lang_vopts = ['English', '华语','粤语','हिंदी','தமிழ்','
 lang_audio = ['en-US','zh-CN','zh-YUE','hi-IN','ta-Sg','bn-BD','fil-PH','id-ID','ms-MY','my-MM','th-TH','vi-VN','ja-JP','ko-KR','nl-NL','fr-FR','de-DE','it-IT','es-ES']
 lang_v2t = [(lang_vopts + ['auto'])[n*5:][:5] for n in range(4) ] + [[option_back]]
 
-#SvcBotToken = "1231701118:AAGImKeF8SULGP5ktSnsjuUxD7Jg0RRo0Y4"  # @echochatbot
-SvcBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"    # @OmniMentorBot
+SvcBotToken = "1231701118:AAGImKeF8SULGP5ktSnsjuUxD7Jg0RRo0Y4"  # @echochatbot
+#SvcBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"    # @OmniMentorBot
 
 class BotInstance():
     def __init__(self, Token):
@@ -434,7 +434,7 @@ def translate(lang, txt):
 def text2voice(bot, chat_id, lang, resp):
     try:
         bot.sendMessage(chat_id, resp)
-        mp3 = 'echobot.mp3'
+        mp3 = 'echobot' + str(chat_id) + '.mp3'
         myobj = gTTS(text=resp, lang=lang, slow=False)
         myobj.save(mp3)
         fn = convert_audio(mp3, "ogg")
