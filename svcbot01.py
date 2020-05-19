@@ -46,8 +46,8 @@ lang_vopts = ['English', '华语','粤语','हिंदी','தமிழ்','
 lang_audio = ['en-US','zh-CN','zh-YUE','hi-IN','ta-Sg','bn-BD','fil-PH','id-ID','ms-MY','my-MM','th-TH','vi-VN','ja-JP','ko-KR','nl-NL','fr-FR','de-DE','it-IT','es-ES']
 lang_v2t = [(lang_vopts + ['auto'])[n*5:][:5] for n in range(4) ] + [[option_back]]
 
-SvcBotToken = "1231701118:AAGImKeF8SULGP5ktSnsjuUxD7Jg0RRo0Y4"  # @echochatbot
-#SvcBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"    # @OmniMentorBot
+#SvcBotToken = "1231701118:AAGImKeF8SULGP5ktSnsjuUxD7Jg0RRo0Y4"  # @echochatbot
+SvcBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"    # @OmniMentorBot
 
 class BotInstance():
     def __init__(self, Token):
@@ -153,22 +153,25 @@ class MessageCounter(telepot.helper.ChatHandler):
             ftype = msg['document']['mime_type']
             if ftype=="application/pdf":
                 fid = msg['document']['file_id']
-                fname = get_attachment(bot, fid)
                 pdf2txt = True                
             elif ftype=="image/jpeg":
-                fid = msg['document']['thumb']['file_id']
-                fname = get_attachment(bot, fid)
+                fid = msg['document']['thumb']['file_id']                
                 img2txt = True
+            elif ftype=="audio/x-wav":
+                fid = msg['document']['file_id']
+                voice2txt = True                
             else:
-                pass
+                print( json.dumps(msg) )
         elif (content_type=="photo") :
             fid = msg['photo'][0]['file_id']
-            fname = get_attachment(bot, fid)
             img2txt = True
         elif content_type != "text":
             txt = "Thanks for the " + content_type + " but I do not need it for now."
             bot.sendMessage(chat_id,txt)
             return
+
+        if pdf2txt or img2txt or voice2txt:
+            fname = get_attachment(bot, fid)
 
         if pdf2txt:
             resp = readtxt_pdf(fname)
@@ -181,11 +184,13 @@ class MessageCounter(telepot.helper.ChatHandler):
         if voice2txt:
             if self.lang_v2t=="auto":
                 bot.sendMessage(chat_id, "detecting the language...")
-            fname = get_attachment(bot, fid)
-            txt = process_voice(fname , self.lang_v2t)
-            if txt !="":
+            txt = process_voice(fname, self.lang_v2t)
+            if txt == '':
+                print("Unable to understand the voice")
+            else:
                 bot.sendMessage(chat_id, txt)
-                resp = txt
+                resp = txt            
+
 
         if resp=='/end':
             endchat(bot, chat_id)
@@ -459,22 +464,25 @@ def convert_audio(fname, fmt = ".wav"):
         fn = ""
     return fn
 
-def wav2txt_auto(fn):    
+def wav2txt(wavfile, lang):    
     pass_rate = 0.8
     best_score = pass_rate
     lang_detected = 'en'
     transcript = ""    
-    lang_list = ['en', 'en-UK','en-US','zh-CN','zh-TW', 'zh-YUE','hi-IN','ta-Sg','bn-BD','fil-PH','id-ID','ms-MY','my-MM','th-TH','vi-VN','ja-JP','ko-KR','nl-NL','fr-FR','de-DE','it-IT','es-ES']
+    if lang=="auto":
+        lang_list = ['en', 'en-UK','en-US','zh-CN','zh-TW', 'zh-YUE','hi-IN','ta-Sg','bn-BD','fil-PH','id-ID','ms-MY','my-MM','th-TH','vi-VN','ja-JP','ko-KR','nl-NL','fr-FR','de-DE','it-IT','es-ES']
+    else:
+        lang_list = [lang]
     try:
         r = sr.Recognizer()
-        with sr.AudioFile(fn) as src:
-            audio = r.record(src)
+        if isinstance(r, sr.Recognizer):
+            wav = sr.AudioFile(wavfile)
+            with wav as source:
+                audio = r.record(source)
             for vlang in lang_list:
-                score = 0                
-                try:
-                    result = r.recognize_google(audio,language=vlang, show_all=True)                    
-                except:
-                    skip
+                score = 0
+                txt = ""
+                result = r.recognize_google(audio,language=vlang, show_all=True)                    
                 if 'alternative' in list(result):
                     txt = result['alternative'][0]['transcript']
                     score =  result['alternative'][0]['confidence']
@@ -487,45 +495,19 @@ def wav2txt_auto(fn):
         pass
     return (lang_detected, transcript, best_score)
 
-def wav2txt(wavfile, lang):
-    r = sr.Recognizer()
-    if isinstance(r, sr.Recognizer):
-        wav = sr.AudioFile(wavfile)
-        with wav as source:
-            #r.adjust_for_ambient_noise(source)
-            audio = r.record(source)            
-            score = 0
-            transcript = ""
-            try:
-                result = r.recognize_google(audio,language=lang, show_all=True)
-                if 'alternative' in list(result):
-                    transcript = result['alternative'][0]['transcript']
-                    score =  result['alternative'][0]['confidence']                    
-                    return transcript
-                else:
-                    print(result)
-            except:
-                pass
-    else:
-        #print("`recognizer` must be `Recognizer` instance")
-        pass
-    return ""
-
 def process_voice(fname, lang):    
     try:
-        #fname = wget.download(fn)
-        wav = convert_audio(fname, "wav")
-        if wav != "":
-            print(fname, lang)
-            if lang=="auto":
-                (lang_detected, txt, best_score) = wav2txt_auto(wav)
-                print(lang_detected, txt, best_score)
-            else:
-                txt = wav2txt(wav, lang)
-            os.remove(wav)
-        os.remove(fname)
-    except:
         txt = ""
+        if '.wav' in fname:
+            wav = fname
+        else:
+            wav = convert_audio(fname, "wav")
+        if wav != "":
+            (lang_detected, txt, best_score) = wav2txt(wav, lang)
+            os.remove(wav)
+        if wav != fname:
+            os.remove(fname)
+    except:
         pass
     return txt
 

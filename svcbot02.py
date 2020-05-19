@@ -4,11 +4,11 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore")
 
-import sqlite3
-import pymysql
+#import sqlite3
+#import pymysql
 
-import pandas as pd
-import pandas.io.formats.style
+#import pandas as pd
+#import pandas.io.formats.style
 import os, sys, time
 import random, wget, json
 import subprocess
@@ -19,6 +19,9 @@ from telepot.loop import MessageLoop
 from telepot.delegate import pave_event_space, per_chat_id, create_open, per_callback_query_chat_id
 from telepot.namedtuple import ReplyKeyboardMarkup
 from telepot.helper import IdleEventCoordinator
+import pdftotext
+import cv2
+import pytesseract 
 import pyaudio
 import speech_recognition as sr
 import gtts
@@ -41,7 +44,8 @@ option_voice2text = "Voice2Text 🎤"
 option_cmd = "Cmd Mode 💻"
 option_py = "Script Mode 📜"
 
-svcbot_menu = [[option_chat, option_py, option_cmd, option_back]]
+#svcbot_menu = [[option_chat, option_py, option_cmd, option_back]]
+svcbot_menu = [[option_chat, option_text2voice, option_voice2text],[ option_lang, option_py, option_cmd, option_back]]
 echobot_menu = [[option_chat, option_lang, option_text2voice, option_voice2text, option_back]]
 
 lang_opts = ['English', '简体中文','繁體中文','हिंदी','தமிழ்','বাংলা','Filipino','Indonesian', 'Malay',\
@@ -51,10 +55,10 @@ lang_menu = [  (lang_opts + [option_back])[n*5:][:5] for n in range(4) ]
 lang_vopts = ['English', '华语','粤语','हिंदी','தமிழ்','বাংলা','Filipino','Indonesian', 'Malay',\
     'မြန်မာ','ไทย','Việt Nam','日本語','한국어', 'Nederlands','Français','Deutsch','Italiano','Español']
 lang_audio = ['en-US','zh-CN','zh-YUE','hi-IN','ta-Sg','bn-BD','fil-PH','id-ID','ms-MY','my-MM','th-TH','vi-VN','ja-JP','ko-KR','nl-NL','fr-FR','de-DE','it-IT','es-ES']
-lang_v2t = [  (lang_vopts + ['auto'])[n*5:][:5] for n in range(4) ]
+lang_v2t = [(lang_vopts + ['auto'])[n*5:][:5] for n in range(4) ] + [[option_back]]
 
-SvcBotToken = "1231701118:AAGImKeF8SULGP5ktSnsjuUxD7Jg0RRo0Y4"  # @echochatbot
-#SvcBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"    # @OmniMentorBot
+#SvcBotToken = "1231701118:AAGImKeF8SULGP5ktSnsjuUxD7Jg0RRo0Y4"  # @echochatbot
+SvcBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"    # @OmniMentorBot
 
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
 
@@ -107,7 +111,7 @@ class MessageCounter(telepot.helper.ChatHandler):
         self.edited = 0
         self.menu_id = 1
         self.lang = "en"
-        self.lang_v2t = "auto"
+        self.lang_v2t = "en-US"
         self.txt2voice = False
 
     def reset(self):
@@ -143,6 +147,8 @@ class MessageCounter(telepot.helper.ChatHandler):
         retmsg = ''
         username = ""
         voice2txt = False
+        img2txt = False
+        pdf2txt = False
         if content_type == 'text':
             resp = msg['text'].strip()
             if 'from' in list(msg):
@@ -159,49 +165,60 @@ class MessageCounter(telepot.helper.ChatHandler):
                 txt = "Hi " + req_user + ", your 2FA code is : " + code2fa
                 bot.sendMessage(reply_id,txt)
         elif content_type == 'voice':
-            try:
+            ftype = msg['voice']['mime_type']            
+            if ('ogg' in ftype ) or ('oga' in ftype ):                
+                voice2txt = True
                 fid = msg['voice']['file_id']
-                fpath = bot.getFile(fid)['file_path']
-                fn = "https://api.telegram.org/file/bot" + bot._token + "/"  + fpath
-                voice2txt = True
-            except:
-                pass
+            else:
+                print( json.dumps(msg) )
         elif content_type=="audio":
-            fid = msg['audio']['file_id']
-            fpath = bot.getFile(fid)['file_path']
-            fn = "https://api.telegram.org/file/bot" + bot._token + "/"  + fpath
-            if fn[-4:]=='.ogg':
+            ftype = msg['audio']['mime_type']
+            if ('ogg' in ftype ) or ('oga' in ftype ):
+                fid = msg['audio']['file_id']
                 voice2txt = True
-        # OCR temporary removed
-        #elif (content_type=="photo") and (os.name != "nt"):
-        #    fid = msg['photo'][0]['file_id']
-        #    fpath = bot.getFile(fid)['file_path']
-        #    fn = "https://api.telegram.org/file/bot" + bot._token + "/"  + fpath
-        #    fname = wget.download(fn)
-        #    fn = str(chat_id)
-        #    cmd = "tesseract " + fname + " " + fn
-        #    shellcmd(cmd)
-        #    fn = fn + ".txt"
-        #    fid = open(fn)
-        #    resp = fid.read()
-        #    fid.close()
-        #    cmd = "/bin/rm -f " + fname + " " + fn
-        #    shellcmd(cmd)
-        #    resp = "Thanks for the photo but I am not able read it" if resp=="" else resp
+            else:
+                print( json.dumps(msg) )
+        elif (content_type=="document") :
+            ftype = msg['document']['mime_type']
+            if ftype=="application/pdf":
+                fid = msg['document']['file_id']
+                pdf2txt = True                
+            elif ftype=="image/jpeg":
+                fid = msg['document']['thumb']['file_id']                
+                img2txt = True
+            elif ftype=="audio/x-wav":
+                fid = msg['document']['file_id']
+                voice2txt = True                
+            else:
+                print( json.dumps(msg) )
+        elif (content_type=="photo") :
+            fid = msg['photo'][0]['file_id']
+            img2txt = True
         elif content_type != "text":
-            print(content_type)
-            print(str(msg))
             txt = "Thanks for the " + content_type + " but I do not need it for now."
             bot.sendMessage(chat_id,txt)
             return
 
+        if pdf2txt or img2txt or voice2txt:
+            fname = get_attachment(bot, fid)
+
+        if pdf2txt:
+            resp = readtxt_pdf(fname)
+            os.remove(fname)
+
+        if img2txt:
+            resp = readtxt_image(fname)
+            os.remove(fname)
+
         if voice2txt:
             if self.lang_v2t=="auto":
                 bot.sendMessage(chat_id, "detecting the language...")
-            txt = process_voice(fn , self.lang_v2t)
-            if txt !="":
+            txt = process_voice(fname, self.lang_v2t)
+            if txt == '':
+                print("Unable to understand the voice")
+            else:
                 bot.sendMessage(chat_id, txt)
-                resp = txt
+                resp = txt            
 
         if resp=='/end':
             endchat(bot, chat_id)
@@ -548,22 +565,25 @@ def convert_audio(fname, fmt = ".wav"):
         fn = ""
     return fn
 
-def wav2txt_auto(fn):    
+def wav2txt(wavfile, lang):    
     pass_rate = 0.8
     best_score = pass_rate
     lang_detected = 'en'
     transcript = ""    
-    lang_list = ['en', 'en-UK','en-US','zh-CN','zh-TW', 'zh-YUE','hi-IN','ta-Sg','bn-BD','fil-PH','id-ID','ms-MY','my-MM','th-TH','vi-VN','ja-JP','ko-KR','nl-NL','fr-FR','de-DE','it-IT','es-ES']
+    if lang=="auto":
+        lang_list = ['en', 'en-UK','en-US','zh-CN','zh-TW', 'zh-YUE','hi-IN','ta-Sg','bn-BD','fil-PH','id-ID','ms-MY','my-MM','th-TH','vi-VN','ja-JP','ko-KR','nl-NL','fr-FR','de-DE','it-IT','es-ES']
+    else:
+        lang_list = [lang]
     try:
         r = sr.Recognizer()
-        with sr.AudioFile(fn) as src:
-            audio = r.record(src)
+        if isinstance(r, sr.Recognizer):
+            wav = sr.AudioFile(wavfile)
+            with wav as source:
+                audio = r.record(source)
             for vlang in lang_list:
-                score = 0                
-                try:
-                    result = r.recognize_google(audio,language=vlang, show_all=True)                    
-                except:
-                    skip
+                score = 0
+                txt = ""
+                result = r.recognize_google(audio,language=vlang, show_all=True)                    
                 if 'alternative' in list(result):
                     txt = result['alternative'][0]['transcript']
                     score =  result['alternative'][0]['confidence']
@@ -576,68 +596,21 @@ def wav2txt_auto(fn):
         pass
     return (lang_detected, transcript, best_score)
 
-def wav2txt(wavfile, lang):
-    r = sr.Recognizer()
-    if isinstance(r, sr.Recognizer):
-        wav = sr.AudioFile(wavfile)
-        with wav as source:
-            #r.adjust_for_ambient_noise(source)
-            audio = r.record(source)            
-            score = 0
-            transcript = ""
-            try:
-                result = r.recognize_google(audio,language=lang, show_all=True)
-                if 'alternative' in list(result):
-                    transcript = result['alternative'][0]['transcript']
-                    score =  result['alternative'][0]['confidence']                    
-                    return transcript
-                else:
-                    print(result)
-            except:
-                pass
-    else:
-        #print("`recognizer` must be `Recognizer` instance")
-        pass
-    #return result
-    return ""
-
-def process_voice(fn, lang):    
+def process_voice(fname, lang):    
     try:
-        print(595, fn)
-        fname = wget.download(fn)
-        wav = convert_audio(fname, "wav")
-        if wav != "":
-            print(fname, lang)
-            if lang=="auto":
-                (lang_detected, txt, best_score) = wav2txt_auto(wav)
-                print(lang_detected, txt, best_score)
-            else:
-                txt = wav2txt(wav, lang)
-            os.remove(wav)
-        os.remove(fname)
-    except:
         txt = ""
+        if '.wav' in fname:
+            wav = fname
+        else:
+            wav = convert_audio(fname, "wav")
+        if wav != "":
+            (lang_detected, txt, best_score) = wav2txt(wav, lang)
+            os.remove(wav)
+        if wav != fname:
+            os.remove(fname)
+    except:
         pass
     return txt
-
-def sql2var(fn, sql, retval, dfmode=False):
-    try:
-        conn = sqlite3.connect(fn)
-        cursor = conn.cursor()
-        df = pd.read_sql_query(sql, conn)
-        if dfmode :
-            sqlvar = df.copy()
-        else:
-            fld = list(df)[0]
-            sqlvar = df[fld].iloc[0]
-            if type(retval) != type(sqlvar):
-                sqlvar = eval( str(sqlvar) )
-    except:
-        sqlvar = retval
-    finally:
-        cursor.close()
-        conn.close()
-    return sqlvar
 
 def decrypt(msg):
     key = '4jYUFl-wbMZ4NIiI2kG3LMFD5KTTKiT5ZiE6Yhoshp0='
@@ -660,10 +633,35 @@ def banner_msg(banner_title, banner_msg):
     txt += "\n" + banner_msg + "\n"
     return txt
 
+def readtxt_pdf(fn):
+    txt = ""
+    try:
+        with open(fn, "rb") as f:
+            pdf = pdftotext.PDF(f)
+        txt = "".join(pdf)
+    except:
+        txt = "Thanks for the pdf but I am not able read it"        
+    return txt
+
+def readtxt_image(fn):
+    txt = ""
+    try:
+        img = cv2.imread(fn)
+        txt = pytesseract.image_to_string(img)
+    except:
+        txt = "Thanks for the image but I am not able read it"        
+    return txt
+
+def get_attachment(bot, fid):
+    fpath = bot.getFile(fid)['file_path']
+    fn = "https://api.telegram.org/file/bot" + bot._token + "/"  + fpath
+    fname = wget.download(fn)
+    return fname
+
 def do_main():
     global svcbot
     err = 0
-    svcbot = BotInstance(SvcBotToken, False)
+    svcbot = BotInstance(SvcBotToken, True)
     print(svcbot)
     try:
         svcbot.bot.sendMessage(adminchatid,"Click /start to connect the ServiceBot")
