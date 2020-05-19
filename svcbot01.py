@@ -257,11 +257,15 @@ class MessageCounter(telepot.helper.ChatHandler):
                 endchat(bot, chat_id)
                 self.logoff()
             else:
-                txt = translate(self.lang,resp)
-                if self.txt2voice :
-                    text2voice(self.bot, self.chatid, self.lang, txt)
-                else:
-                    retmsg = txt
+                dt = translator.detect(resp)                
+                if (dt.lang).lower() == self.lang:
+                    if self.txt2voice :
+                        text2voice(self.bot, self.chatid, self.lang, resp)
+                else:                    
+                    txt = translate(self.lang,resp)
+                    if self.txt2voice :
+                        text2voice(self.bot, self.chatid, self.lang, txt)
+                    retmsg = txt                
 
         elif self.menu_id in [3,4]:
             if resp == option_back :
@@ -433,7 +437,7 @@ def translate(lang, txt):
 
 def text2voice(bot, chat_id, lang, resp):
     try:
-        bot.sendMessage(chat_id, resp)
+        #bot.sendMessage(chat_id, resp)
         mp3 = 'echobot' + str(chat_id) + '.mp3'
         myobj = gTTS(text=resp, lang=lang, slow=False)
         myobj.save(mp3)

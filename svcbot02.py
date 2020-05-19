@@ -4,11 +4,6 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore")
 
-#import sqlite3
-#import pymysql
-
-#import pandas as pd
-#import pandas.io.formats.style
 import os, sys, time
 import random, wget, json
 import subprocess
@@ -316,11 +311,15 @@ class MessageCounter(telepot.helper.ChatHandler):
                 endchat(bot, chat_id)
                 self.logoff()
             else:
-                txt = translate(self.lang,resp)
-                if self.txt2voice :
-                    text2voice(self.bot, self.chatid, self.lang, txt)
-                else:
-                    retmsg = txt
+                dt = translator.detect(resp)                
+                if (dt.lang).lower() == self.lang:
+                    if self.txt2voice :
+                        text2voice(self.bot, self.chatid, self.lang, resp)
+                else:                    
+                    txt = translate(self.lang,resp)
+                    if self.txt2voice :
+                        text2voice(self.bot, self.chatid, self.lang, txt)
+                    retmsg = txt                
 
         elif self.menu_id in range(3,8):
             if resp == option_back :
@@ -394,7 +393,6 @@ class MessageCounter(telepot.helper.ChatHandler):
                 self.lang = lang
                 svcbot.user_list[chat_id][1] = lang
                 txt = f"You had selected {resp} language"
-            #elif resp == option_back :
             else:
                 txt = "You are back in main menu."
             bot_prompt(bot, chat_id, txt, svcbot.mainmenu)
@@ -511,7 +509,7 @@ def translate(lang, txt):
 
 def text2voice(bot, chat_id, lang, resp):
     try:
-        bot.sendMessage(chat_id, resp)
+        #bot.sendMessage(chat_id, resp)
         mp3 = 'echobot' + str(chat_id) + '.mp3'
         myobj = gTTS(text=resp, lang=lang, slow=False)
         myobj.save(mp3)
