@@ -149,47 +149,35 @@ class MessageCounter(telepot.helper.ChatHandler):
             if 'from' in list(msg):
                 username = msg['from']['first_name']
                 self.username = username
-            if 'reply_to_message' in list(msg) and 'For your approval with 2FA code :' in str(msg):
-                msglist = str(msg).replace('"',"'").replace("'message_id':",chr(4644)).split(chr(4644))[3].split(',')
-                reply_id = int([x for x in msglist if 'from' in x ][0].split(':')[2].strip())
-                if 'username'  in str(msglist):
-                    req_user = [x for x in msglist if 'username' in x ][0].replace("'",'').split(':')[1].strip()
-                else:
-                    req_user = [x for x in msglist if 'first_name' in x ][0].replace("'",'').split(':')[1].strip()
-                code2fa = [x for x in msglist if 'bot_command' in x ][0].split(' ')[-1].replace("'",'')
-                txt = "Hi " + req_user + ", your 2FA code is : " + code2fa
-                bot.sendMessage(reply_id,txt)
-        elif content_type == 'voice':
-            ftype = msg['voice']['mime_type']            
-            if ('ogg' in ftype ) or ('oga' in ftype ):                
-                voice2txt = True
-                fid = msg['voice']['file_id']
-            else:
-                print( json.dumps(msg) )
-        elif content_type=="audio":
-            ftype = msg['audio']['mime_type']
-            if ('ogg' in ftype ) or ('oga' in ftype ):
-                fid = msg['audio']['file_id']
-                voice2txt = True
-            else:
-                print( json.dumps(msg) )
+        elif content_type in ['audio','voice'] and 'audio/' in msg[content_type]['mime_type']:
+            fid = msg[content_type]['file_id']
+            voice2txt = True
         elif (content_type=="document") :
             ftype = msg['document']['mime_type']
             if ftype=="application/pdf":
-                fid = msg['document']['file_id']
+                fid = msg[content_type]['file_id']
                 pdf2txt = True                
             elif ftype=="image/jpeg":
-                fid = msg['document']['thumb']['file_id']                
+                print( json.dumps(msg) )
+                fid = msg[content_type]['thumb']['file_id']
                 img2txt = True
             elif ftype=="audio/x-wav":
-                fid = msg['document']['file_id']
-                voice2txt = True                
+                fid = msg[content_type]['file_id']
+                voice2txt = True
             else:
                 print( json.dumps(msg) )
         elif (content_type=="photo") :
-            fid = msg['photo'][0]['file_id']
+            fid = msg[content_type][0]['file_id']
             img2txt = True
+        #elif (content_type=="video") and msg[content_type]['mime_type']=='video/mp4':
+        elif (content_type=="video") :
+            fid = msg[content_type]['file_id']
+            voice2txt = True
+        elif (content_type=="video_note") :
+            fid = msg[content_type]['file_id']
+            voice2txt = True
         elif content_type != "text":
+            print( json.dumps(msg) )
             txt = "Thanks for the " + content_type + " but I do not need it for now."
             bot.sendMessage(chat_id,txt)
             return

@@ -139,33 +139,35 @@ class MessageCounter(telepot.helper.ChatHandler):
             if 'from' in list(msg):
                 username = msg['from']['first_name']
                 self.username = username
-        elif content_type == 'voice':
-            ftype = msg['voice']['mime_type']
-            if 'ogg' in ftype :
-                voice2txt = True
-                fid = msg['voice']['file_id']
-        elif content_type=="audio":
-            ftype = msg['audio']['mime_type']
-            if 'ogg' in ftype :
-                fid = msg['audio']['file_id']
-                voice2txt = True
+        elif content_type in ['audio','voice'] and 'audio/' in msg[content_type]['mime_type']:
+            fid = msg[content_type]['file_id']
+            voice2txt = True
         elif (content_type=="document") :
             ftype = msg['document']['mime_type']
             if ftype=="application/pdf":
-                fid = msg['document']['file_id']
+                fid = msg[content_type]['file_id']
                 pdf2txt = True                
             elif ftype=="image/jpeg":
-                fid = msg['document']['thumb']['file_id']                
+                print( json.dumps(msg) )
+                fid = msg[content_type]['thumb']['file_id']
                 img2txt = True
             elif ftype=="audio/x-wav":
-                fid = msg['document']['file_id']
-                voice2txt = True                
+                fid = msg[content_type]['file_id']
+                voice2txt = True
             else:
                 print( json.dumps(msg) )
         elif (content_type=="photo") :
-            fid = msg['photo'][0]['file_id']
+            fid = msg[content_type][0]['file_id']
             img2txt = True
+        #elif (content_type=="video") and msg[content_type]['mime_type']=='video/mp4':
+        elif (content_type=="video") :
+            fid = msg[content_type]['file_id']
+            voice2txt = True
+        elif (content_type=="video_note") :
+            fid = msg[content_type]['file_id']
+            voice2txt = True
         elif content_type != "text":
+            print( json.dumps(msg) )
             txt = "Thanks for the " + content_type + " but I do not need it for now."
             bot.sendMessage(chat_id,txt)
             return
@@ -190,7 +192,6 @@ class MessageCounter(telepot.helper.ChatHandler):
             else:
                 bot.sendMessage(chat_id, txt)
                 resp = txt            
-
 
         if resp=='/end':
             endchat(bot, chat_id)
