@@ -4,6 +4,11 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore")
 
+import sqlite3
+import pymysql
+import pymysql.cursors
+import pandas as pd
+import pandas.io.formats.style
 import os, sys, time
 import random, wget, json
 import subprocess
@@ -24,9 +29,13 @@ from gtts import gTTS
 import googletrans
 from googletrans import Translator
 from nltk.chat.iesha  import iesha_chatbot
+from vmbotlib import write2html, sql2var, encrypt, decrypt, banner_msg, shellcmd
+from vmnlplib import NLP_Parser
+from vmedxlib import edx_connect, edx_disconnect, edx_query
 
 global svcbot,echobot
 
+omchat = NLP_Parser()
 translator = Translator()
 adminchatid = 71354936
 max_duration = 3600
@@ -38,10 +47,14 @@ option_text2voice = "Text2Voice 🎧"
 option_voice2text = "Voice2Text 🎤"
 option_cmd = "Cmd Mode 💻"
 option_py = "Script Mode 📜"
+option_edx = "SQL Mode"
+option_nlp = "NLP"
+nlp_corpus = "Corpus"
+nlp_train = "Train NLP"
 
-#svcbot_menu = [[option_chat, option_py, option_cmd, option_back]]
-svcbot_menu = [[option_chat, option_text2voice, option_voice2text],[ option_lang, option_py, option_cmd, option_back]]
 echobot_menu = [[option_chat, option_lang, option_text2voice, option_voice2text, option_back]]
+svcbot_menu = [[option_nlp, option_edx, option_chat], [option_py, option_cmd, option_back]]
+nlp_menu = [[nlp_corpus, nlp_train, option_back]]
 
 lang_opts = ['English', '简体中文','繁體中文','हिंदी','தமிழ்','বাংলা','Filipino','Indonesian', 'Malay',\
     'မြန်မာ','ไทย','Việt Nam','日本語','한국어', 'Nederlands','Français','Deutsch','Italiano','Español']
@@ -52,9 +65,9 @@ lang_vopts = ['English', '华语','粤语','हिंदी','தமிழ்','
 lang_audio = ['en-US','zh-CN','zh-YUE','hi-IN','ta-Sg','bn-BD','fil-PH','id-ID','ms-MY','my-MM','th-TH','vi-VN','ja-JP','ko-KR','nl-NL','fr-FR','de-DE','it-IT','es-ES']
 lang_v2t = [(lang_vopts + ['auto'])[n*5:][:5] for n in range(4) ] + [[option_back]]
 
-#SvcBotToken = "906052064:AAHGP6uDK4D77t9jGl5MbYfI_3IixJdFpC8"    # @omnimentorservicebot
-SvcBotToken = "1231701118:AAGImKeF8SULGP5ktSnsjuUxD7Jg0RRo0Y4"  # @echochatbot
-#SvcBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"    # @OmniMentorBot
+SvcBotToken = "906052064:AAHGP6uDK4D77t9jGl5MbYfI_3IixJdFpC8"    # @omnimentorservicebot
+#EchoBotToken = "1231701118:AAGImKeF8SULGP5ktSnsjuUxD7Jg0RRo0Y4"  # @echochatbot
+EchoBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"    # @OmniMentorBot
 
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
 
@@ -110,15 +123,15 @@ class MessageCounter(telepot.helper.ChatHandler):
         self.lang_v2t = "en-US"
         self.txt2voice = False
         self.mainmenu = []
+        self.parentbot = None
 
     def reset(self):
         self.__init__()
         return
 
-    def logoff(self):
-        global svcbot
-        if self.chatid in svcbot.user_list:
-            svcbot.user_list.pop(self.chatid)
+    def logoff(self):        
+        if self.chatid in self.parentbot.user_list:
+            self.parentbot.user_list.pop(self.chatid)
         txt = "Have a great day!"
         bot_prompt(self.bot, self.chatid, txt, [['/start']])
         self.chatid = 0
@@ -133,7 +146,7 @@ class MessageCounter(telepot.helper.ChatHandler):
         return
 
     def on_chat_message(self, msg):
-        global svcbot         
+        global svcbot, echobot
         try:
             content_type, chat_type, chat_id = telepot.glance(msg)
             bot = self.bot
@@ -151,6 +164,16 @@ class MessageCounter(telepot.helper.ChatHandler):
             if 'from' in list(msg):
                 username = msg['from']['first_name']
                 self.username = username
+            if 'reply_to_message' in list(msg) and 'For your approval with 2FA code :' in str(msg):
+                msglist = str(msg).replace('"',"'").replace("'message_id':",chr(4644)).split(chr(4644))[3].split(',')
+                reply_id = int([x for x in msglist if 'from' in x ][0].split(':')[2].strip())
+                if 'username'  in str(msglist):
+                    req_user = [x for x in msglist if 'username' in x ][0].replace("'",'').split(':')[1].strip()
+                else:
+                    req_user = [x for x in msglist if 'first_name' in x ][0].replace("'",'').split(':')[1].strip()
+                code2fa = [x for x in msglist if 'bot_command' in x ][0].split(' ')[-1].replace("'",'')
+                txt = "Hi " + req_user + ", your 2FA code is : " + code2fa
+                bot.sendMessage(reply_id,txt)
         elif content_type in ['audio','voice'] and 'audio/' in msg[content_type]['mime_type']:
             fid = msg[content_type]['file_id']
             voice2txt = True
@@ -206,32 +229,33 @@ class MessageCounter(telepot.helper.ChatHandler):
                 resp = txt            
 
         if resp=='/end':
-            endchat(bot, chat_id)
+            endchat(bot, self.parentbot, chat_id)
             self.is_admin = (chat_id == adminchatid)
             self.logoff()
             self.menu_id = 1
 
         elif resp=='/stop' and (chat_id==adminchatid):
-            svcbot.broadcast('System shutting down.')
-            svcbot.bot_running = False            
+            self.parentbot.broadcast('System shutting down.')
+            self.parentbot.bot_running = False            
             retmsg = 'System already shutdown.'
 
         elif resp == '/start':
             self.reset
             if self.bot._token == SvcBotToken:
-                self.mainmenu = svcbot_menu
+                self.parentbot = svcbot
                 self.is_svcbot = True
             else:
-                self.mainmenu = echobot_menu
+                self.parentbot = echobot
                 self.is_svcbot = False
-            if svcbot.is_svcbot:
-            #if self.is_svcbot:
+            self.mainmenu = self.parentbot.mainmenu
+            self.is_svcbot = self.parentbot.is_svcbot
+            if self.is_svcbot:
                 if chat_id==adminchatid :
                     self.is_admin = True
                     txt = banner_msg("Welcome","You are now connected to admin mode.")
                     self.menu_id = 2
-                    bot_prompt(bot, chat_id, txt, svcbot.mainmenu)
-                    svcbot.user_list[chat_id] = [self.username, self.lang]
+                    bot_prompt(bot, chat_id, txt, self.mainmenu)
+                    self.parentbot.user_list[chat_id] = [self.username, self.lang]
                 else:
                     self.is_admin = False
                     txt = "Following user requesting for admin access :\n"
@@ -239,7 +263,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                     txt += json.dumps(msg)
                     code2FA = ''.join(random.choice( "ABCDEFGHJKLMNPQRTUVWXY0123456789" ) for i in range(32))
                     code2FA = code2FA.upper()
-                    svcbot.code2fa_list[chat_id] = code2FA
+                    self.parentbot.code2fa_list[chat_id] = code2FA
                     txt += "\n\nFor your approval with 2FA code : " + code2FA
                     bot.sendMessage(adminchatid, txt)
                     txt = "Please enter the 2FA code :"
@@ -250,39 +274,39 @@ class MessageCounter(telepot.helper.ChatHandler):
                 self.menu_id = 2
                 self.lang = 'en'
                 txt = "This is a translation chatbot with voice support.\nPlease select your language."
-                bot_prompt(bot, chat_id, txt, svcbot.mainmenu)
-                svcbot.user_list[chat_id] = [self.username, self.lang]
+                bot_prompt(bot, chat_id, txt, self.mainmenu)
+                self.parentbot.user_list[chat_id] = [self.username, self.lang]
 
-        elif chat_id in svcbot.chat_list and (resp.strip() != "") :
-            tid = svcbot.chat_list[chat_id]
+        elif chat_id in self.parentbot.chat_list and (resp.strip() != "") :
+            tid = self.parentbot.chat_list[chat_id]
             if resp.lower() == 'bye':
-                endchat(bot, chat_id)
-                bot_prompt(bot, chat_id, "You are back to the main menu", svcbot.mainmenu)
+                endchat(bot, self.parentbot, chat_id)
+                bot_prompt(bot, chat_id, "You are back to the main menu", self.mainmenu)
                 self.menu_id = 2
             elif resp == option_lang :
                 txt = "Select the prefered language"
                 bot_prompt(bot, chat_id, txt, lang_menu)
                 self.menu_id = 21
-            elif resp in svcbot.mainmenu[0]:
+            elif resp in self.mainmenu[0]:
                 bot_prompt(bot, chat_id, "Bot> you are in a livechat.", [ ['bye'] ] )
                 self.menu_id = 20
             else:
                 if self.menu_id != 20:
                     bot_prompt(bot, chat_id, "Bot> you are in a livechat now.", [ ['bye'] ] )
                     self.menu_id=20
-                peermsg(bot, chat_id, resp)
+                peermsg(bot, self.parentbot, chat_id, resp)
 
         elif self.menu_id == 1:
             retmsg = translate(self.lang,resp)
 
         elif self.menu_id == 2:
-            if chat_id in svcbot.chat_list:
-                tid = svcbot.chat_list[ chat_id ]
+            if chat_id in self.parentbot.chat_list:
+                tid = self.parentbot.chat_list[ chat_id ]
                 bot.sendMessage(tid , resp)
                 bot_prompt(bot, chat_id, "(type bye when you want to end the conversation)", [['bye']])
                 self.menu_id = 20
             elif (resp == option_chat ) or (resp == '/chat'):
-                self.menu_id = livechat(bot, chat_id, self.username)
+                self.menu_id = livechat(bot, self.parentbot, chat_id, self.username)
             elif (resp == option_lang ) or (resp == '/lang'):
                 txt = "welcome to the translation bot\nPlease select your language:"
                 bot_prompt(bot, chat_id, txt, lang_menu)
@@ -304,8 +328,22 @@ class MessageCounter(telepot.helper.ChatHandler):
                 txt = banner_msg("Service Console", txt)
                 bot_prompt(bot, chat_id, txt, [[option_back]])
                 self.menu_id = 5
+            elif resp == option_edx and self.is_svcbot:
+                if os.name == "nt":
+                    txt = "You are now connected to Sqlite database via SQL."
+                else:
+                    txt = "You are now connected to EdX database via SQL."
+                txt = banner_msg("SQL Console for EdX", txt)
+                bot_prompt(bot, chat_id, txt, [[option_back]])
+                self.menu_id = 6
+            elif resp == option_nlp :
+                txt = "This section maintain NLP corpus and trains model.\n"
+                txt += "You can test your NLP dialog from here."
+                txt = banner_msg("NLP", txt)
+                bot_prompt(bot, chat_id, txt, nlp_menu)
+                self.menu_id = 7
             elif resp == option_back :
-                endchat(bot, chat_id)
+                endchat(bot, self.parentbot, chat_id)
                 self.logoff()
             else:
                 dt = translator.detect(resp)                
@@ -320,38 +358,61 @@ class MessageCounter(telepot.helper.ChatHandler):
 
         elif self.menu_id in range(3,8):
             if resp == option_back :
-                bot_prompt(bot, chat_id, "You are back in the main menu", svcbot.mainmenu)
+                bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
                 self.menu_id = 2
-            elif self.menu_id == 3 and svcbot.is_svcbot:
-                retmsg = pycmd(resp)
+            elif self.menu_id == 3 and self.is_svcbot:
+                retmsg = pycmd(resp, self.parentbot)
             elif self.menu_id == 4:
-                txt = iesha_chatbot.respond(resp)                                
+                if self.is_svcbot:
+                    (txt, accuracy)  = omchat.get_response(resp)
+                else:
+                    txt = iesha_chatbot.respond(resp)
                 txt = "`" + txt + "`"
                 bot.sendMessage(chat_id, txt, parse_mode='markdown')
-            elif self.menu_id == 5 and svcbot.is_svcbot:
+            elif self.menu_id == 5 and self.is_svcbot:
                 retmsg = shellcmd(resp)
+            elif self.menu_id == 6 and self.is_svcbot:
+                fn = "sql_output" + str(chat_id) + ".html"
+                if edxsql(resp,fn)==0:
+                    retmsg =  "Unable to execute the query."
+                else:
+                    bot.sendDocument(chat_id, document=open(fn, 'rb'))
+            elif self.menu_id == 7 and self.is_svcbot:
+                if resp == nlp_train:
+                    if omchat.train_model() :
+                        retmsg = "NLP model using the corpus table has been trained with model file saved as ft_model.bin"
+                    else:
+                        retmsg = "NLP model using the corpus table was not trained properly"
+                elif resp == nlp_corpus:
+                    fn = "ft_corpus." + str(chat_id) + "html"
+                    bot.sendMessage(chat_id,"preparing...one moment")
+                    df = sql2var("nlp-conf.db", "select * from ft_corpus", "", True)
+                    write2html(df, title='FASTTEXT CORPUS', filename=fn)
+                    bot.sendDocument(chat_id, document=open(fn, 'rb'))
+                else:                    
+                    (retmsg,accuracy)  = omchat.get_response(resp)
 
         ## trigger when live chat is initiated
         elif self.menu_id == 20:
             if resp.lower() == 'bye':
-                endchat(bot, chat_id)
-                bot_prompt(bot, chat_id, "You are back in the main menu", svcbot.mainmenu)
+                endchat(bot, self.parentbot, chat_id)
+                bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
                 self.menu_id = 2
             else:
-                peermsg(bot, chat_id, resp)
+                peermsg(bot, self.parentbot, chat_id, resp)
 
         elif self.menu_id == 21:
             if resp in lang_opts:
                 n = lang_opts.index(resp)
                 self.lang = lang_codes[n]
                 txt = f"You had selected {resp} language"
-                svcbot.user_list[chat_id][1] = self.lang
+                self.parentbot.user_list[chat_id][1] = self.lang
                 self.sender.sendMessage(txt)
-                self.menu_id = livechat(bot, chat_id, self.username)
+                self.menu_id = livechat(bot, self.parentbot, chat_id, self.username)
 
         elif self.menu_id == 22:
-            if chat_id in svcbot.chat_list:
-                tid = svcbot.chat_list[ chat_id ]
+            if chat_id in self.parentbot.chat_list:
+                tid = self.parentbot.chat_list[ chat_id ]
                 bot.sendMessage(tid , resp)
                 bot_prompt(bot, chat_id, "(type bye when you want to end the conversation)", [['bye']])
                 self.menu_id = 20
@@ -360,23 +421,23 @@ class MessageCounter(telepot.helper.ChatHandler):
                 sid = rlist[0]
                 if sid.isnumeric():
                     sid = int(sid)
-                    if sid in svcbot.chat_list:
+                    if sid in self.parentbot.chat_list:
                         retmsg = "User " + rlist[-1] + " is on another conversation."
                     else:
-                        self.menu_id = livechat(bot, chat_id, self.username,sid)
+                        self.menu_id = livechat(bot, self.parentbot, chat_id, self.username,sid)
                 elif resp == option_back:
-                    bot_prompt(bot, chat_id, "You are back in the main menu", svcbot.mainmenu)
+                    bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
                     self.menu_id = 2
 
         elif self.menu_id == 23:
-            code2FA = svcbot.code2fa_list[chat_id]
+            code2FA = self.parentbot.code2fa_list[chat_id]
             if code2FA == resp:
                 self.is_admin = True
                 txt = banner_msg("Welcome","You are now connected to Mentor mode.")
                 self.menu_id = 2
-                bot_prompt(bot, chat_id, txt, svcbot.mainmenu)
-                svcbot.code2fa_list.pop(chat_id)
-                svcbot.user_list[chat_id] = [self.username, self.lang]
+                bot_prompt(bot, chat_id, txt, self.mainmenu)
+                self.parentbot.code2fa_list.pop(chat_id)
+                self.parentbot.user_list[chat_id] = [self.username, self.lang]
             else:
                 txt  = "Sorry the 2FA code is invalid, please try again."
                 self.is_admin = False
@@ -388,11 +449,11 @@ class MessageCounter(telepot.helper.ChatHandler):
                 n = lang_opts.index(resp)                
                 lang = lang_codes[n]
                 self.lang = lang
-                svcbot.user_list[chat_id][1] = lang
+                self.parentbot.user_list[chat_id][1] = lang
                 txt = f"You had selected {resp} language"
             else:
                 txt = "You are back in main menu."
-            bot_prompt(bot, chat_id, txt, svcbot.mainmenu)
+            bot_prompt(bot, chat_id, txt, self.mainmenu)
             self.menu_id = 2
 
         elif self.menu_id == 25:
@@ -406,28 +467,28 @@ class MessageCounter(telepot.helper.ChatHandler):
                 txt = f"You had selected auto detection."
             else:
                 txt = "You are back in main menu."
-            bot_prompt(bot, chat_id, txt, svcbot.mainmenu)
+            bot_prompt(bot, chat_id, txt, self.mainmenu)
             self.menu_id = 2
 
         if retmsg != '':
             self.sender.sendMessage(retmsg)
         return
 
-def livechat(bot, chat_id, user_name, sid = 0):
+def livechat(bot, parentbot, chat_id, user_name, sid = 0):
     global  svcbot
     if sid > 0:
-            user_from = svcbot.user_list[chat_id][0] + "("  + str(chat_id) + ")"
-            tname = svcbot.user_list[sid][0]
+            user_from = parentbot.user_list[chat_id][0] + "("  + str(chat_id) + ")"
+            tname = parentbot.user_list[sid][0]
             txt = banner_msg("Live Chat","Hi " + tname + ", you are in the live chat with " + user_from)
             bot.sendMessage(sid,txt)
-            svcbot.chat_list[sid] = chat_id
-            svcbot.chat_list[chat_id] = sid
-            user_to = svcbot.user_list[sid][0] + "("  + str(sid) + ")"
+            parentbot.chat_list[sid] = chat_id
+            parentbot.chat_list[chat_id] = sid
+            user_to = parentbot.user_list[sid][0] + "("  + str(sid) + ")"
             txt = banner_msg("Live Chat","Hi " + user_name + ", you are in the live chat with " + user_to)
             bot_prompt(bot, chat_id, txt, [['bye']])
             menu_id = 20
     else:
-        online_users = [ [str(r) + "     " + svcbot.user_list[r][0] ] for r in svcbot.user_list if r != chat_id]
+        online_users = [ [str(r) + "     " + parentbot.user_list[r][0] ] for r in parentbot.user_list if r != chat_id]
         if len(online_users) > 0:
             txt = 'Chat with online users 🗣'
             online_users = online_users + [ [option_back] ]
@@ -439,25 +500,23 @@ def livechat(bot, chat_id, user_name, sid = 0):
             menu_id = 4
     return menu_id
 
-def endchat(bot, chat_id):
-    global svcbot 
+def endchat(bot, parentbot, chat_id):
     chat_found = False
-    if chat_id in svcbot.chat_list:
+    if chat_id in parentbot.chat_list:
         chat_found = True
-        tid = svcbot.chat_list[chat_id]
+        tid = parentbot.chat_list[chat_id]
         txt = "Live chat session disconnected. 👋"
         bot.sendMessage(chat_id, txt)
         bot.sendMessage(tid, txt)
-        if chat_id in svcbot.chat_list:
-            svcbot.chat_list.pop(chat_id)
-        if tid in svcbot.chat_list:
-            svcbot.chat_list.pop(tid)
+        if chat_id in parentbot.chat_list:
+            parentbot.chat_list.pop(chat_id)
+        if tid in parentbot.chat_list:
+            parentbot.chat_list.pop(tid)
     return chat_found
 
-def peermsg(bot, chat_id,  resp):
-    global svcbot 
-    tid = svcbot.chat_list[chat_id]
-    dest_lang = svcbot.user_list[ tid ][1]
+def peermsg(bot, parentbot, chat_id,  resp):
+    tid = parentbot.chat_list[chat_id]
+    dest_lang = parentbot.user_list[ tid ][1]
     dt = translator.detect(resp)
     if dt.lang == dest_lang:
         txt = resp
@@ -506,7 +565,6 @@ def translate(lang, txt):
 
 def text2voice(bot, chat_id, lang, resp):
     try:
-        #bot.sendMessage(chat_id, resp)
         mp3 = 'echobot' + str(chat_id) + '.mp3'
         myobj = gTTS(text=resp, lang=lang, slow=False)
         myobj.save(mp3)
@@ -519,17 +577,8 @@ def text2voice(bot, chat_id, lang, resp):
         pass
     return
 
-def shellcmd(cmd):
-    try:
-        ps = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
-        output = (ps.communicate()[0]).decode("utf8")
-    except:
-        output = ''
-    return output
-
-def pycmd(resp):
-    global svcbot
-    vars = svcbot.vars
+def pycmd(resp, parentbot):
+    vars = parentbot.vars
     if 'print' in resp:
         resp = resp.replace('print','str')
     if '"' in resp:
@@ -544,8 +593,24 @@ def pycmd(resp):
             result = eval(eval('f"@"'.replace('@',resp.replace('{',"{vars['").replace('}',"']}"))))
     except:
         result = ""
-    svcbot.vars = vars
+    parentbot.vars = vars
     return result
+
+def edxsql(query, fn):
+    if os.name == "nt":
+        df = sql2var("nlp-conf.db", query, "", True)
+    else:
+        edx_connect()
+        df = edx_query( query, True )
+        edx_disconnect()
+    ok = 0
+    if df is not None :
+        try:
+            write2html(df, title=query, filename=fn)
+            ok = 1
+        except:
+            pass
+    return ok
 
 def convert_audio(fname, fmt = ".wav"):
     try:
@@ -604,27 +669,6 @@ def process_voice(fname, lang):
         pass
     return txt
 
-def decrypt(msg):
-    key = '4jYUFl-wbMZ4NIiI2kG3LMFD5KTTKiT5ZiE6Yhoshp0='
-    cto = Fernet(key)
-    try:
-        txt = msg.encode()
-    except:
-        txt = msg
-    resp = cto.decrypt(txt)
-    return resp.decode()
-
-def encrypt(msg):
-    key = '4jYUFl-wbMZ4NIiI2kG3LMFD5KTTKiT5ZiE6Yhoshp0='
-    cto = Fernet(key)
-    txt = cto.encrypt(msg.encode())
-    return txt
-
-def banner_msg(banner_title, banner_msg):
-    txt = "▓▓▓▒▒▒▒▒▒▒░░░  " + banner_title + "  ░░░▒▒▒▒▒▒▒▓▓▓"
-    txt += "\n" + banner_msg + "\n"
-    return txt
-
 def readtxt_pdf(fn):
     txt = ""
     try:
@@ -653,10 +697,13 @@ def get_attachment(bot, fid):
 def do_main():
     global svcbot,echobot
     err = 0
-    svcbot = BotInstance(SvcBotToken, False)
+    omchat.load_model("ft_model.bin", "nlp-conf.db")
+    svcbot = BotInstance(SvcBotToken, True)
+    echobot = BotInstance(EchoBotToken, False)
     print(svcbot)
     try:
-        svcbot.bot.sendMessage(adminchatid,"Click /start to connect the ServiceBot")
+        if os.name != 'nt':
+            svcbot.bot.sendMessage(adminchatid,"Click /start to connect the ServiceBot")
     except:
         pass
     while svcbot.bot_running:    
