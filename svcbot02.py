@@ -25,7 +25,7 @@ import googletrans
 from googletrans import Translator
 from nltk.chat.iesha  import iesha_chatbot
 
-global svcbot
+global svcbot,echobot
 
 translator = Translator()
 adminchatid = 71354936
@@ -52,6 +52,7 @@ lang_vopts = ['English', '华语','粤语','हिंदी','தமிழ்','
 lang_audio = ['en-US','zh-CN','zh-YUE','hi-IN','ta-Sg','bn-BD','fil-PH','id-ID','ms-MY','my-MM','th-TH','vi-VN','ja-JP','ko-KR','nl-NL','fr-FR','de-DE','it-IT','es-ES']
 lang_v2t = [(lang_vopts + ['auto'])[n*5:][:5] for n in range(4) ] + [[option_back]]
 
+#SvcBotToken = "906052064:AAHGP6uDK4D77t9jGl5MbYfI_3IixJdFpC8"    # @omnimentorservicebot
 SvcBotToken = "1231701118:AAGImKeF8SULGP5ktSnsjuUxD7Jg0RRo0Y4"  # @echochatbot
 #SvcBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"    # @OmniMentorBot
 
@@ -108,6 +109,7 @@ class MessageCounter(telepot.helper.ChatHandler):
         self.lang = "en"
         self.lang_v2t = "en-US"
         self.txt2voice = False
+        self.mainmenu = []
 
     def reset(self):
         self.__init__()
@@ -215,8 +217,15 @@ class MessageCounter(telepot.helper.ChatHandler):
             retmsg = 'System already shutdown.'
 
         elif resp == '/start':
-            self.reset            
+            self.reset
+            if self.bot._token == SvcBotToken:
+                self.mainmenu = svcbot_menu
+                self.is_svcbot = True
+            else:
+                self.mainmenu = echobot_menu
+                self.is_svcbot = False
             if svcbot.is_svcbot:
+            #if self.is_svcbot:
                 if chat_id==adminchatid :
                     self.is_admin = True
                     txt = banner_msg("Welcome","You are now connected to admin mode.")
@@ -642,9 +651,9 @@ def get_attachment(bot, fid):
     return fname
 
 def do_main():
-    global svcbot
+    global svcbot,echobot
     err = 0
-    svcbot = BotInstance(SvcBotToken, True)
+    svcbot = BotInstance(SvcBotToken, False)
     print(svcbot)
     try:
         svcbot.bot.sendMessage(adminchatid,"Click /start to connect the ServiceBot")
