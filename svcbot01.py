@@ -249,7 +249,8 @@ class MessageCounter(telepot.helper.ChatHandler):
                 self.menu_id = 23
             elif (resp == option_text2voice ) or (resp == '/voice'):                
                 self.txt2voice = not self.txt2voice
-                retmsg = "text to speech turn " + (" on." if self.txt2voice else "off.")
+                txt = "text to speech turn " + (" on." if self.txt2voice else "off.")
+                bot_prompt(bot, chat_id, txt, svcbot.mainmenu)
             elif (resp == option_voice2text):
                 txt = "To recognise a voice and translated into following language :"
                 bot_prompt(bot, chat_id, txt, lang_v2t)
