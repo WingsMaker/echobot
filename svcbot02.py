@@ -189,6 +189,13 @@ class MessageCounter(telepot.helper.ChatHandler):
             elif ftype=="audio/x-wav":
                 fid = msg[content_type]['file_id']
                 voice2txt = True
+            elif ftype=="text/plain":
+                fid = msg[content_type]['file_id']
+                fname = get_attachment(bot, fid)
+                f = open(fname, "r")
+                resp = f.read()
+                f.close()
+                bot.sendMessage(chat_id,resp)
             else:
                 print( json.dumps(msg) )
         elif (content_type=="photo") :
