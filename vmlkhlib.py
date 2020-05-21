@@ -10,38 +10,39 @@ summary = """
 ╔«═══════════════════════════════════════════════════════════════════════•[^]»╗
 ║ ███████████████████████     Functions Name       ███████████████████████    ║
 ╟─────────────────────────────────────────────────────────────────────────────╢
-║ banner_msg                                                                  ║
-║ bot_prompt                                                                  ║
-║ build_menu                                                                  ║
-║ convert_audio                                                               ║
-║ copydbtbl                                                                   ║
-║ csv2sqldb                                                                   ║
-║ decrypt                                                                     ║
-║ edit_fields                                                                 ║
-║ edit_records                                                                ║
-║ edxsql                                                                      ║
-║ email_lookup                                                                ║
-║ encrypt                                                                     ║
-║ encrypt_email                                                               ║
-║ get_attachment                                                              ║
-║ list_table                                                                  ║
-║ load_data                                                                   ║
-║ mass_encrypt_email                                                          ║
-║ process_voice                                                               ║
-║ pycmd                                                                       ║
-║ querydf                                                                     ║
-║ readtxt_image                                                               ║
-║ readtxt_pdf                                                                 ║
-║ render_table                                                                ║
-║ shellcmd                                                                    ║
-║ sql2var                                                                     ║
-║ sqldb2xls                                                                   ║
-║ text2voice                                                                  ║
-║ time_hhmm                                                                   ║
-║ updatesql                                                                   ║
-║ wav2txt                                                                     ║
-║ write2html                                                                  ║
-║ xls2sqldb                                                                   ║
+║ banner_msg         create a string of text banner in a line                 ║
+║ bot_prompt         bot response with text and optional menu buttons         ║
+║ build_menu         build telegram reply-to menu buttons with a list         ║
+║ copydbtbl          import .db file into sqlite database(replace mode)       ║
+║ csv2sqldb          import .csv file into sqlite database(replace mode)      ║
+║ decrypt            to decrypt text using fernet cryptography                ║
+║ edit_fields        update record based on a list of (key, value) pairs      ║
+║ edit_records       list of (key, value) pairs in a string                   ║
+║ edxsql             sql query from EdX database into HTML file               ║
+║ email_lookup       email address search when the field is encrypted         ║
+║ encrypt            to encrypt text using fernet cryptography                ║
+║ encrypt_email      to encrypt email address field on a database record      ║
+║ get_attachment     download the telegram attachement file locally           ║
+║ list_table         output sql query into HTML table in picture format       ║
+║ load_data          output a table in SQLite database into dataframe/list    ║
+║ mass_encrypt_email to encrypt email address field across the entire table   ║
+║ pycmd              execute python codes via eval()                          ║
+║ querydf            output sql query on SQLite database into dataframe       ║
+║ render_table       output dataframe into HTML table in picture format       ║
+║ shellcmd           to execute system commands from the server shell access  ║
+║ sql2var            extract a value from params table in sysconf.db          ║
+║ sqldb2xls          export a table in SQLite database into .xlsx             ║
+║ time_hhmm          local time in hhmm numeric format                        ║
+║ updatesql          perform SQL update query for SQLite database             ║
+║ write2html         output dataframe content into HTML file                  ║
+║ xls2sqldb          import .xlsx file into sqlite database(replace mode)     ║
+╟─────────────────────────────────────────────────────────────────────────────╢
+║ convert_audio      convert audio file to a specific format using ffmpeg     ║
+║ process_voice      convert audio/video into .wav audio before wav2txt       ║
+║ readtxt_image      text recognition from a picture or image document        ║
+║ readtxt_pdf        text recognition from pdf (limited support)              ║
+║ text2voice         convert text to audo using google gTTS api               ║
+║ wav2txt            text recognition using google speech_recognition api     ║
 ╚═════════════════════════════════════════════════════════════════════════════╝
 """
 import warnings
