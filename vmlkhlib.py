@@ -77,8 +77,8 @@ def banner_msg(banner_title, banner_msg):
     txt += "\n" + banner_msg + "\n"  
     return txt
 
-def bot_prompt(bot, chat_id, txt, buttons, opt_resize = True):
-    if chat_id == 0:
+def bot_prompt(bot, chat_id, txt="", buttons=[], opt_resize = True):
+    if (chat_id == 0) or (txt == ""):
         return
     if chat_id < 0:
         sent = bot.sendMessage(chat_id, txt)
