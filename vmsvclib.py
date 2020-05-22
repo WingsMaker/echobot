@@ -8,42 +8,54 @@
 #------------------------------------------------------------------------------------------------------
 summary = """
 ╔«═══════════════════════════════════════════════════════════════════════•[^]»╗
-║ ███████████████████████     Functions Name       ███████████████████████    ║
-╟─────────────────────────────────────────────────────────────────────────────╢
-║ banner_msg         create a string of text banner in a line                 ║
-║ bot_prompt         bot response with text and optional menu buttons         ║
-║ build_menu         build telegram reply-to menu buttons with a list         ║
-║ copydbtbl          import .db file into sqlite database(replace mode)       ║
-║ csv2sqldb          import .csv file into sqlite database(replace mode)      ║
-║ decrypt            to decrypt text using fernet cryptography                ║
-║ edit_fields        update record based on a list of (key, value) pairs      ║
-║ edit_records       list of (key, value) pairs in a string                   ║
-║ edxsql             sql query from EdX database into HTML file               ║
-║ email_lookup       email address search when the field is encrypted         ║
-║ encrypt            to encrypt text using fernet cryptography                ║
-║ encrypt_email      to encrypt email address field on a database record      ║
-║ get_attachment     download the telegram attachement file locally           ║
-║ list_table         output sql query into HTML table in picture format       ║
-║ load_data          output a table in SQLite database into dataframe/list    ║
-║ mass_encrypt_email to encrypt email address field across the entire table   ║
-║ pycmd              execute python codes via eval()                          ║
-║ querydf            output sql query on SQLite database into dataframe       ║
-║ render_table       output dataframe into HTML table in picture format       ║
-║ shellcmd           to execute system commands from the server shell access  ║
-║ sql2var            extract a value from params table in sysconf.db          ║
-║ sqldb2xls          export a table in SQLite database into .xlsx             ║
-║ time_hhmm          local time in hhmm numeric format                        ║
-║ updatesql          perform SQL update query for SQLite database             ║
-║ write2html         output dataframe content into HTML file                  ║
-║ xls2sqldb          import .xlsx file into sqlite database(replace mode)     ║
-╟─────────────────────────────────────────────────────────────────────────────╢
-║ convert_audio      convert audio file to a specific format using ffmpeg     ║
-║ process_voice      convert audio/video into .wav audio before wav2txt       ║
-║ readtxt_image      text recognition from a picture or image document        ║
-║ readtxt_pdf        text recognition from pdf (limited support)              ║
-║ text2voice         convert text to audo using google gTTS api               ║
-║ wav2txt            text recognition using google speech_recognition api     ║
-╚═════════════════════════════════════════════════════════════════════════════╝
+║ ███████████████████████     Functions Name       ███████████████████████    ║▒▒
+╟─────────────────────────────────────────────────────────────────────────────╢▒▒
+║ banner_msg         create a string of text banner in a line                 ║▒▒
+║ bot_prompt         bot response with text and optional menu buttons         ║▒▒
+║ build_menu         build telegram reply-to menu buttons with a list         ║▒▒
+║ convert_audio      convert audio file to a specific format using ffmpeg     ║▒▒
+║ copydbtbl          import .db file into sqlite database(replace mode)       ║▒▒
+║ csv2sqldb          import .csv file into sqlite database(replace mode)      ║▒▒
+║ decrypt            to decrypt text using fernet cryptography                ║▒▒
+║ edit_fields        update record based on a list of (key, value) pairs      ║▒▒
+║ edit_records       list of (key, value) pairs in a string                   ║▒▒
+║ edx_connect        connect to EdX database client session                   ║▒▒
+║ edx_disconnect     disconnect from EdX database client session              ║▒▒
+║ edx_query          sql query from EdX database into HTML file               ║▒▒
+║ edxsql             edx_connect + edx_query + edx_disconnect                 ║▒▒
+║ email_lookup       email address search when the field is encrypted         ║▒▒
+║ encrypt            to encrypt text using fernet cryptography                ║▒▒
+║ encrypt_email      to encrypt email address field on a database record      ║▒▒
+║ get_attachment     download the telegram attachement file locally           ║▒▒
+║ list_table         output sql query into HTML table in picture format       ║▒▒
+║ load_data          output a table in SQLite database into dataframe/list    ║▒▒
+║ mass_encrypt_email to encrypt email address field across the entire folder  ║▒▒
+║ process_voice      convert audio/video into .wav audio before wav2txt       ║▒▒
+║ pycmd              execute python codes via eval()                          ║▒▒
+║ querydf            output sql query on SQLite database into dataframe       ║▒▒
+║ readtxt_image      text recognition from a picture or image document        ║▒▒
+║ readtxt_pdf        text recognition from pdf (limited support)              ║▒▒
+║ render_table       output dataframe into HTML table in picture format       ║▒▒
+║ shellcmd           to execute system commands from the server shell access  ║▒▒
+║ sql2var            extract a value from params table in sysconf.db          ║▒▒
+║ sqldb2xls          export a table in SQLite database into .xlsx             ║▒▒
+║ text2voice         convert text to audo using google gTTS api               ║▒▒
+║ time_hhmm          local time in hhmm numeric format                        ║▒▒
+║ updatesql          perform SQL update query for SQLite database             ║▒▒
+║ wav2txt            text recognition using google speech_recognition api     ║▒▒
+║ write2html         output dataframe content into HTML file                  ║▒▒
+║ xls2sqldb          import .xlsx file into sqlite database(replace mode)     ║▒▒
+╟─────────────────────────────────────────────────────────────────────────────╢▒▒
+║ Remarks - need to install the libraries in the OS                           ║▒▒
+║ import pdftotext                                                            ║▒▒
+║ import cv2                                                                  ║▒▒
+║ import pytesseract                                                          ║▒▒
+║ import gtts                                                                 ║▒▒
+║ from gtts import gTTS                                                       ║▒▒
+║ import pyaudio                                                              ║▒▒
+║ import speech_recognition as sr                                             ║▒▒
+╚═════════════════════════════════════════════════════════════════════════════╝▒▒
+ ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
 """
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -65,13 +77,6 @@ import cryptography
 from cryptography.fernet import Fernet
 import telepot
 from telepot.namedtuple import ReplyKeyboardMarkup
-import pdftotext
-import cv2
-import pytesseract 
-import gtts
-from gtts import gTTS
-import pyaudio
-import speech_recognition as sr
 import pymysql
 import pymysql.cursors
 import sqlite3
@@ -80,6 +85,7 @@ global edxcon
 
 sysconfig = "sysconf.db"
 pbconfig = "pbconfig.db"
+nlpconfig = "nlp-conf.db"
 
 def banner_msg(banner_title, banner_msg):
     txt = "▓▓▓▒▒▒▒▒▒▒░░░  " + banner_title + "  ░░░▒▒▒▒▒▒▒▓▓▓"
@@ -219,16 +225,63 @@ def edit_records(sqldb, tbl, idx, sid,  fld_prefix = ""):
                     txt += fldname + ":" + str(fldvar) + "\n"
     return txt
 
-def edxsql(query, fn):
-    if os.name == "nt":
-        df = sql2var("nlp-conf.db", query, "", True)
-    else:
-        edx_connect()
+def edx_connect(conn_str = ''):
+    global edxcon
+    def get_conn_str():
+        connect_string = sql2var(sysconfig, "select value from params where key = 'edxapp';", "mysql://admin:0mn!Ment0r@101.100.169.129/edxapp")
+        return connect_string
+    if conn_str == "":
+        conn_str = get_conn_str()
+    try:
+        host = conn_str.split('@')[1].split('/')[0]
+        user = conn_str.split('@')[0].split('/')[2].split(':')[0]
+        pw = conn_str.split('@')[0].split('/')[2].split(':')[1]
+        edxcon = pymysql.connect(host=host,
+                user=user,
+                password=pw,
+                db='edxapp',
+                charset='utf8mb4',
+                cursorclass=pymysql.cursors.DictCursor)
+        edxcur = edxcon.cursor()
+        print("connected to EDX host : " + host)
+        return 1
+    except:
+        print("unable to connect to EDX\n",conn_str)
+        return 0
+
+def edx_disconnect():
+    global edxcon
+    try:
+        edxcon.commit()
+        edxcon.close()        
+        print("Disconnected from EDX")
+    except:
+        pass
+    return
+
+def edx_query(query, df_mode = False):
+    global edxcon
+    result = None
+    try:
         edxcur = edxcon.cursor()    
         edxcur.execute(query)
         rows = edxcur.fetchall()
-        df = pd.DataFrame.from_dict(rows)
-        edxcur.close()
+        if df_mode:
+            result = pd.DataFrame.from_dict(rows)
+        else:
+            rr = dict(rows[0])
+            hdr = list(rr)[0]
+            result = rr[hdr]   
+    except:
+        pass
+    return result
+
+def edxsql(query, fn):    
+    if os.name == "nt":
+        df = sql2var(nlpconfig, query, "", True)
+    else:
+        edx_connect()
+        df = edx_query(query, True)
         edx_disconnect()
     ok = 0
     if df is not None :
@@ -577,59 +630,6 @@ def xls2sqldb(fn, sqldb):
         ok = False
     return ok
 
-
-def get_conn_str():
-    connect_string = sql2var(sysconfig, "select value from params where key = 'edxapp';", "mysql://admin:0mn!Ment0r@101.100.169.129/edxapp")
-    return connect_string
-
-def edx_connect(conn_str = ''):
-    global edxcon
-    if conn_str == "":
-        conn_str = get_conn_str()
-    try:
-        host = conn_str.split('@')[1].split('/')[0]
-        user = conn_str.split('@')[0].split('/')[2].split(':')[0]
-        pw = conn_str.split('@')[0].split('/')[2].split(':')[1]
-        edxcon = pymysql.connect(host=host,
-                user=user,
-                password=pw,
-                db='edxapp',
-                charset='utf8mb4',
-                cursorclass=pymysql.cursors.DictCursor)
-        edxcur = edxcon.cursor()
-        print("connected to EDX host : " + host)
-        return 1
-    except:
-        print("unable to connect to EDX\n",conn_str)
-        return 0
-    
-def edx_disconnect():
-    global edxcon
-    try:
-        edxcon.commit()
-        edxcon.close()        
-        print("Disconnected from EDX")
-    except:
-        pass
-    return
-
-def edx_query(query, df_mode = False):
-    global edxcon
-    result = None
-    try:
-        edxcur = edxcon.cursor()    
-        edxcur.execute(query)
-        rows = edxcur.fetchall()
-        if df_mode:
-            result = pd.DataFrame.from_dict(rows)
-        else:
-            rr = dict(rows[0])
-            hdr = list(rr)[0]
-            result = rr[hdr]   
-    except:
-        pass
-    return result
-
-
 if __name__ == "__main__":
+    #encrypt_email("FOS-1219A.db")
     print("This is vmsvclib")
