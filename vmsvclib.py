@@ -1,8 +1,13 @@
-#  ___                  _ __  __            _
-# / _ \ _ __ ___  _ __ (_)  \/  | ___ _ __ | |_ ___  _ __
-#| | | | '_ ` _ \| '_ \| | |\/| |/ _ \ '_ \| __/ _ \| '__|
-#| |_| | | | | | | | | | | |  | |  __/ | | | || (_) | |
-# \___/|_| |_| |_|_| |_|_|_|  |_|\___|_| |_|\__\___/|_|
+#
+#  ______                        __ __       __                     __
+# /      \                      |  \  \     /  \                   |  \
+#|  ▓▓▓▓▓▓\______ ____  _______  \▓▓ ▓▓\   /  ▓▓ ______  _______  _| ▓▓_    ______   ______
+#| ▓▓  | ▓▓      \    \|       \|  \ ▓▓▓\ /  ▓▓▓/      \|       \|   ▓▓ \  /      \ /      \
+#| ▓▓  | ▓▓ ▓▓▓▓▓▓\▓▓▓▓\ ▓▓▓▓▓▓▓\ ▓▓ ▓▓▓▓\  ▓▓▓▓  ▓▓▓▓▓▓\ ▓▓▓▓▓▓▓\\▓▓▓▓▓▓ |  ▓▓▓▓▓▓\  ▓▓▓▓▓▓\
+#| ▓▓  | ▓▓ ▓▓ | ▓▓ | ▓▓ ▓▓  | ▓▓ ▓▓ ▓▓\▓▓ ▓▓ ▓▓ ▓▓    ▓▓ ▓▓  | ▓▓ | ▓▓ __| ▓▓  | ▓▓ ▓▓   \▓▓
+#| ▓▓__/ ▓▓ ▓▓ | ▓▓ | ▓▓ ▓▓  | ▓▓ ▓▓ ▓▓ \▓▓▓| ▓▓ ▓▓▓▓▓▓▓▓ ▓▓  | ▓▓ | ▓▓|  \ ▓▓__/ ▓▓ ▓▓
+# \▓▓    ▓▓ ▓▓ | ▓▓ | ▓▓ ▓▓  | ▓▓ ▓▓ ▓▓  \▓ | ▓▓\▓▓     \ ▓▓  | ▓▓  \▓▓  ▓▓\▓▓    ▓▓ ▓▓
+#  \▓▓▓▓▓▓ \▓▓  \▓▓  \▓▓\▓▓   \▓▓\▓▓\▓▓      \▓▓ \▓▓▓▓▓▓▓\▓▓   \▓▓   \▓▓▓▓  \▓▓▓▓▓▓ \▓▓
 #
 # Library functions by KH
 #------------------------------------------------------------------------------------------------------
@@ -57,6 +62,14 @@ summary = """
 ╚═════════════════════════════════════════════════════════════════════════════╝▒▒
  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
 """
+import pdftotext               
+import cv2                     
+import pytesseract             
+import gtts                    
+from gtts import gTTS          
+import pyaudio                 
+import speech_recognition as sr
+
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -86,6 +99,7 @@ global edxcon
 sysconfig = "sysconf.db"
 pbconfig = "pbconfig.db"
 nlpconfig = "nlp-conf.db"
+option_back = "◀️"
 
 def banner_msg(banner_title, banner_msg):
     txt = "▓▓▓▒▒▒▒▒▒▒░░░  " + banner_title + "  ░░░▒▒▒▒▒▒▒▓▓▓"
@@ -373,7 +387,7 @@ def mass_encrypt_email():
     df = querydf(pbconfig, "select userdata from playbooks;")
     return [encrypt_email(x) for x in df.userdata]
 
-def process_voice(fname, lang):    
+def process_voice(fname, lang="en"):
     try:
         txt = ""
         if '.wav' in fname:
@@ -381,7 +395,7 @@ def process_voice(fname, lang):
         else:
             wav = convert_audio(fname, "wav")
         if wav != "":
-            (lang_detected, txt, best_score) = wav2txt(wav, lang)
+            (lang_detected, txt, best_score) = wav2txt(wav, lang)            
             os.remove(wav)
         if wav != fname:
             os.remove(fname)
@@ -428,13 +442,23 @@ def readtxt_image(fn):
     return txt
 
 def readtxt_pdf(fn):
+    # if hosted in pythonanywhere, system call /usr/bin/pdftotext directly instead of using this
     txt = ""
     try:
         with open(fn, "rb") as f:
             pdf = pdftotext.PDF(f)
         txt = "".join(pdf)
     except:
-        txt = "Thanks for the pdf but I am not able read it"        
+        if os.name == "nt":
+            cmd = "pdftotext.exe "
+        else:
+            cmd = "/usr/bin/pdftotext "
+        cmd += fn + " result.txt"
+        txt = shellcmd(cmd)
+        f = open("result.txt", "r")
+        txt = f.read()
+        f.close()
+        os.remove("result.txt")
     return txt
 
 def render_table(data, col_width=3.0, row_height=0.625, font_size=14,
@@ -534,7 +558,7 @@ def updatesql(sqldb, updqry):
     except:
         return False
 
-def wav2txt(wavfile, lang):    
+def wav2txt(wavfile, lang="en-US"):
     pass_rate = 0.8
     best_score = pass_rate
     lang_detected = 'en'

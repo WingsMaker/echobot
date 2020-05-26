@@ -18,7 +18,8 @@ from nltk.chat.iesha  import iesha_chatbot
 
 from vmsvclib import *
 
-global echobot
+EchoBotToken = "1231701118:AAGImKeF8SULGP5ktSnsjuUxD7Jg0RRo0Y4"  # @echochatbot
+#EchoBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"    # @OmniMentorBot
 
 translator = Translator()
 adminchatid = 71354936
@@ -27,14 +28,12 @@ max_rows = 20
 option_back = "◀️"
 option_lang = "Language 🇸🇬"
 option_chat = "Chat 💬"
+option_chatlist = "Chat List"
+option_chatempty = "Chat Empty"
 option_text2voice = "Text2Voice 🎧"
 option_voice2text = "Voice2Text 🎤"
-option_cmd = "Cmd Mode 💻"
-option_py = "Script Mode 📜"
-option_edx = "SQL Mode"
-option_nlp = "NLP"
-nlp_corpus = "Corpus"
-nlp_train = "Train NLP"
+
+option_mainmenu = 'echobot_menu'
 
 echobot_menu = [[option_chat, option_lang, option_text2voice, option_voice2text, option_back]]
 
@@ -47,8 +46,7 @@ lang_vopts = ['English', '华语','粤语','हिंदी','தமிழ்','
 lang_audio = ['en-US','zh-CN','zh-YUE','hi-IN','ta-Sg','bn-BD','fil-PH','id-ID','ms-MY','my-MM','th-TH','vi-VN','ja-JP','ko-KR','nl-NL','fr-FR','de-DE','it-IT','es-ES']
 lang_v2t = [(lang_vopts + ['auto'])[n*5:][:5] for n in range(4) ] + [[option_back]]
 
-EchoBotToken = "1231701118:AAGImKeF8SULGP5ktSnsjuUxD7Jg0RRo0Y4"  # @echochatbot
-# EchoBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"    # @OmniMentorBot
+global echobot
 
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
 
@@ -63,6 +61,15 @@ class BotInstance():
         self.vars = dict()
         self.Token = Token
         self.mainmenu = echobot_menu
+        self.keys_dict = {}
+        self.keys_dict[option_mainmenu] = 1
+        self.define_keys(echobot_menu, self.keys_dict[option_mainmenu])
+        self.define_keys(lang_menu, self.keys_dict[option_lang])
+        self.keys_dict[option_chatlist] = (self.keys_dict[option_chat]*10) + 1
+        self.keys_dict[option_chatempty] = (self.keys_dict[option_chat]*10) + 2
+        
+        #print("\n".join([ str(self.keys_dict[x]) + " "*(16-len(str({self.keys_dict[x]}))) + x for x in list(self.keys_dict)]))
+
         self.bot = telepot.DelegatorBot(Token, [
             pave_event_space()( [per_chat_id(), per_callback_query_chat_id()],
             create_open, MessageCounter, timeout=max_duration, include_callback_query=True),
@@ -86,6 +93,15 @@ class BotInstance():
     def __repr__(self):
         return 'BotInstance()'
 
+    def define_keys(self, telegram_menu, start_key):
+        button_list = lambda x : str(x).replace('[','').replace(']','').replace(", ",",").replace("'","").split(',')
+        menu_keys = start_key*100 + 1
+        for menu_item in button_list(telegram_menu):
+            if (menu_item != option_back) and (menu_item != ''):
+                self.keys_dict[menu_item] = menu_keys 
+                menu_keys += 1
+        return 
+
     def broadcast(self, msg):
         for d in self.user_list:
             self.bot.sendMessage(d, msg)
@@ -97,7 +113,7 @@ class MessageCounter(telepot.helper.ChatHandler):
         self.chatid = 0
         self.username = ""
         self.edited = 0
-        self.menu_id = 1
+        self.menu_id = 0
         self.lang = "en"
         self.lang_v2t = "en-US"
         self.txt2voice = False
@@ -118,7 +134,7 @@ class MessageCounter(telepot.helper.ChatHandler):
         bot_prompt(self.bot, self.chatid, txt, [['/start']])
         self.chatid = 0
         self.reset
-        self.menu_id = 1
+        self.menu_id = 0
         #self.lang = "en"
         return
 
@@ -132,7 +148,8 @@ class MessageCounter(telepot.helper.ChatHandler):
         try:
             content_type, chat_type, chat_id = telepot.glance(msg)
             bot = self.bot
-            self.chatid = chat_id            
+            self.chatid = chat_id
+            keys_dict = echobot.keys_dict
         except:
             return
         resp = ""
@@ -203,12 +220,14 @@ class MessageCounter(telepot.helper.ChatHandler):
         if pdf2txt:
             resp = readtxt_pdf(fname)
             os.remove(fname)
-            bot.sendMessage(chat_id, resp)
+            if resp.strip() != "":
+                bot.sendMessage(chat_id, resp)
 
         if img2txt:
             resp = readtxt_image(fname)
             os.remove(fname)
-            bot.sendMessage(chat_id, resp)
+            if resp.strip() != "":
+                bot.sendMessage(chat_id, resp)
 
         if voice2txt:
             if self.lang_v2t=="auto":
@@ -223,7 +242,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             endchat(bot, self.parentbot, chat_id)
             self.is_admin = (chat_id == adminchatid)
             self.logoff()
-            self.menu_id = 1
+            self.menu_id = 0
 
         elif resp=='/stop' and (chat_id==adminchatid):
             self.parentbot.broadcast('System shutting down.')
@@ -235,7 +254,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             self.parentbot = echobot
             self.mainmenu = self.parentbot.mainmenu
             self.is_admin = True
-            self.menu_id = 2
+            self.menu_id = keys_dict[option_mainmenu]
             self.lang = 'en'
             txt = "This is a translation chatbot with voice support.\nPlease select your language."
             bot_prompt(bot, chat_id, txt, self.mainmenu)
@@ -246,42 +265,42 @@ class MessageCounter(telepot.helper.ChatHandler):
             if resp.lower() == 'bye':
                 endchat(bot, self.parentbot, chat_id)
                 bot_prompt(bot, chat_id, "You are back to the main menu", self.mainmenu)
-                self.menu_id = 2
+                self.menu_id = keys_dict[option_mainmenu]
             elif resp == option_lang :
                 txt = "Select the prefered language"
                 bot_prompt(bot, chat_id, txt, lang_menu)
-                self.menu_id = 21
+                self.menu_id = keys_dict[option_lang]
             elif resp in self.mainmenu[0]:
-                bot_prompt(bot, chat_id, "Bot> you are in a livechat.", [ ['bye'] ] )
-                self.menu_id = 20
+                bot_prompt(bot, chat_id, "you are in a livechat.", [ ['bye'] ] )
+                self.menu_id = keys_dict[option_chat]
             else:
-                if self.menu_id != 20:
-                    bot_prompt(bot, chat_id, "Bot> you are in a livechat now.", [ ['bye'] ] )
+                if self.menu_id != keys_dict[option_chat]:
+                    bot_prompt(bot, chat_id, "you are in a livechat now.", [ ['bye'] ] )
                     self.menu_id=20
                 peermsg(bot, self.parentbot, chat_id, resp)
 
-        elif self.menu_id == 1:
+        elif self.menu_id == 0:
             retmsg = translate(self.lang,resp)
 
-        elif self.menu_id == 2:
+        elif self.menu_id == keys_dict[option_mainmenu]:
             if chat_id in self.parentbot.chat_list:
                 tid = self.parentbot.chat_list[ chat_id ]
                 bot.sendMessage(tid , resp)
                 bot_prompt(bot, chat_id, "(type bye when you want to end the conversation)", [['bye']])
-                self.menu_id = 20
+                self.menu_id = keys_dict[option_chat]
             elif (resp == option_chat ) or (resp == '/chat'):
                 self.menu_id = livechat(bot, self.parentbot, chat_id, self.username)
             elif (resp == option_lang ) or (resp == '/lang'):
                 txt = "welcome to the translation bot\nPlease select your language:"
                 bot_prompt(bot, chat_id, txt, lang_menu)
-                self.menu_id = 24
+                self.menu_id = keys_dict[option_lang]
             elif (resp == option_text2voice ) or (resp == '/voice'):                
                 self.txt2voice = not self.txt2voice
                 retmsg = "text to speech turn " + (" on." if self.txt2voice else "off.")
             elif (resp == option_voice2text):
                 txt = "To recognise a voice and translated into following language :"
                 bot_prompt(bot, chat_id, txt, lang_v2t)
-                self.menu_id = 25
+                self.menu_id = keys_dict[option_voice2text]
             elif resp == option_back :
                 endchat(bot, self.parentbot, chat_id)
                 self.logoff()
@@ -296,39 +315,42 @@ class MessageCounter(telepot.helper.ChatHandler):
                         text2voice(self.bot, self.chatid, self.lang, txt)
                     retmsg = txt                
 
-        elif self.menu_id == 23:
+        elif self.menu_id == keys_dict[option_chatempty] :
             if resp == option_back :
                 bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
-                self.menu_id = 2
+                self.menu_id = keys_dict[option_mainmenu]
             else:
                 txt = iesha_chatbot.respond(resp)
                 txt = "`" + txt + "`"
                 bot.sendMessage(chat_id, txt, parse_mode='markdown')
 
-        ## trigger when live chat is initiated
-        elif self.menu_id == 20:
+        elif self.menu_id == keys_dict[option_chat] :
             if resp.lower() == 'bye':
                 endchat(bot, self.parentbot, chat_id)
                 bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
-                self.menu_id = 2
+                self.menu_id = keys_dict[option_mainmenu]
             else:
                 peermsg(bot, self.parentbot, chat_id, resp)
 
-        elif self.menu_id == 21:
+        elif self.menu_id == keys_dict[option_lang] :
             if resp in lang_opts:
                 n = lang_opts.index(resp)
                 self.lang = lang_codes[n]
                 txt = f"You had selected {resp} language"
                 self.parentbot.user_list[chat_id][1] = self.lang
-                self.sender.sendMessage(txt)
-                self.menu_id = livechat(bot, self.parentbot, chat_id, self.username)
+                #self.sender.sendMessage(txt)
+            else:
+                txt = "You are back in the main menu"
+            bot_prompt(bot, chat_id, txt, self.mainmenu)                
+            self.menu_id = keys_dict[option_mainmenu]
+            #self.menu_id = livechat(bot, self.parentbot, chat_id, self.username)
 
-        elif self.menu_id == 22:
+        elif self.menu_id == keys_dict[option_chatlist] :
             if chat_id in self.parentbot.chat_list:
                 tid = self.parentbot.chat_list[ chat_id ]
                 bot.sendMessage(tid , resp)
                 bot_prompt(bot, chat_id, "(type bye when you want to end the conversation)", [['bye']])
-                self.menu_id = 20
+                self.menu_id = keys_dict[option_chat]
             else:
                 rlist = resp.split(' ')
                 sid = rlist[0]
@@ -340,9 +362,9 @@ class MessageCounter(telepot.helper.ChatHandler):
                         self.menu_id = livechat(bot, self.parentbot, chat_id, self.username,sid)
                 elif resp == option_back:
                     bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
-                    self.menu_id = 2
+                    self.menu_id = keys_dict[option_mainmenu]
 
-        elif self.menu_id == 24:
+        elif self.menu_id == keys_dict[option_lang] :
             if resp in lang_opts:
                 n = lang_opts.index(resp)                
                 lang = lang_codes[n]
@@ -352,9 +374,9 @@ class MessageCounter(telepot.helper.ChatHandler):
             else:
                 txt = "You are back in main menu."
             bot_prompt(bot, chat_id, txt, self.mainmenu)
-            self.menu_id = 2
+            self.menu_id = keys_dict[option_mainmenu]
 
-        elif self.menu_id == 25:
+        elif self.menu_id == keys_dict[option_voice2text] :
             if resp in lang_vopts:
                 n = lang_vopts.index(resp)
                 lang = lang_audio[n]                    
@@ -366,7 +388,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             else:
                 txt = "You are back in main menu."
             bot_prompt(bot, chat_id, txt, self.mainmenu)
-            self.menu_id = 2
+            self.menu_id = keys_dict[option_mainmenu]
 
         if retmsg != '':
             self.sender.sendMessage(retmsg)
@@ -382,19 +404,19 @@ def livechat(bot, parentbot, chat_id, user_name, sid = 0):
             parentbot.chat_list[chat_id] = sid
             user_to = parentbot.user_list[sid][0] + "("  + str(sid) + ")"
             txt = banner_msg("Live Chat","Hi " + user_name + ", you are in the live chat with " + user_to)
-            bot_prompt(bot, chat_id, txt, [['bye']])
-            menu_id = 20
+            bot_prompt(bot, chat_id, txt, [['bye']])            
+            menu_id = parentbot.keys_dict[option_chat]
     else:
         online_users = [ [str(r) + "     " + parentbot.user_list[r][0] ] for r in parentbot.user_list if r != chat_id]
         if len(online_users) > 0:
             txt = 'Chat with online users 🗣'
             online_users = online_users + [ [option_back] ]
             bot_prompt(bot, chat_id, txt, online_users)
-            menu_id = 22
+            menu_id = parentbot.keys_dict[option_chatlist]
         else:
             txt = "Hi I am " + (bot.getMe())['username'] + "\nThere is no online users at the moment, you can chat with me now."
             bot_prompt(bot, chat_id, txt, [ [option_back] ] )
-            menu_id = 23
+            menu_id = parentbot.keys_dict[option_chatempty] 
     return menu_id
 
 def endchat(bot, parentbot, chat_id):
