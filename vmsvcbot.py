@@ -53,8 +53,8 @@ nlpconfig = "nlp-conf.db"
 svcbot_menu = [[option_nlp, option_edx, option_chat], [option_py, option_cmd, option_back]]
 nlp_menu = [[nlp_corpus, nlp_train, option_back]]
 
-#SvcBotToken = "906052064:AAHGP6uDK4D77t9jGl5MbYfI_3IixJdFpC8"    # @omnimentorservicebot
-SvcBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"    # @OmniMentorBot
+SvcBotToken = "906052064:AAHGP6uDK4D77t9jGl5MbYfI_3IixJdFpC8"    # @omnimentorservicebot
+#SvcBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"    # @OmniMentorBot
 
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
 
@@ -70,6 +70,7 @@ class BotInstance():
         self.vars = dict()
         self.Token = Token
         self.mainmenu = svcbot_menu 
+        self.cmd_dict = {}
         self.keys_dict = {}
         self.keys_dict[option_mainmenu] = 1
         self.define_keys(svcbot_menu, self.keys_dict[option_mainmenu])
@@ -77,6 +78,9 @@ class BotInstance():
         self.keys_dict[option_chatlist] = (self.keys_dict[option_chat]*10) + 1
         self.keys_dict[option_chatempty] = (self.keys_dict[option_chat]*10) + 2
         self.keys_dict[option_2fa] = (self.keys_dict[option_mainmenu]*10) + 1
+
+        #print("\n".join([ str(self.keys_dict[x]) + " "*(16-len(str({self.keys_dict[x]}))) + x for x in list(self.keys_dict)]))
+        
         self.bot = telepot.DelegatorBot(Token, [
             pave_event_space()( [per_chat_id(), per_callback_query_chat_id()],
             create_open, MessageCounter, timeout=max_duration, include_callback_query=True),
@@ -107,7 +111,8 @@ class BotInstance():
     def define_keys(self, telegram_menu, start_key):
         button_list = lambda x : str(x).replace('[','').replace(']','').replace(", ",",").replace("'","").split(',')
         menu_keys = start_key*100 + 1
-        for menu_item in button_list(telegram_menu):
+        self.cmd_dict[start_key] = button_list(telegram_menu)
+        for menu_item in self.cmd_dict[start_key] :
             if (menu_item != option_back) and (menu_item != ''):
                 self.keys_dict[menu_item] = menu_keys 
                 menu_keys += 1
@@ -179,9 +184,22 @@ class MessageCounter(telepot.helper.ChatHandler):
             fid = msg[content_type]['file_id']
             fname = get_attachment(bot, fid)
             txt = process_voice(fname)
-            if txt != "":                
-                bot.sendMessage(chat_id, "you said : " + txt)
-                resp = txt
+            if txt == "":
+                bot.sendMessage(chat_id, "Sorry, I am not able to understand it.")
+            else:
+                if (self.menu_id in list(svcbot.cmd_dict)) and (re.search('.*go to.*', txt.lower())) :
+                    cmd_obj  = txt.split('go to ')[1].strip().lower()                    
+                    rr = [x for x in svcbot.cmd_dict[self.menu_id] if cmd_obj in x.lower() ]                    
+                    if len(rr)>0:
+                        cmd_obj = rr[0]
+                        if cmd_obj in list(keys_dict):
+                            resp = cmd_obj
+                elif (re.search('.*go back.*', txt.lower())) :
+                    resp = option_back
+                else:
+                    bot.sendMessage(chat_id, "you said : " + txt)
+                    resp = txt
+
         elif content_type != "text":
             print( json.dumps(msg) )
             txt = "Thanks for the " + content_type + " but I do not need it for now."
@@ -202,7 +220,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             self.reset
             if chat_id in [adminchatid , 71354936, 56381493, 263090563]:
                 self.is_admin = True
-                txt = banner_msg("Welcome","You are now connected to admin mode.")
+                txt = "Welcome to the ⓈⓔⓡⓥⓘⓒⓔⒷⓞⓣ"
                 self.menu_id = keys_dict[option_mainmenu]
                 bot_prompt(bot, chat_id, txt, self.mainmenu)
                 self.parentbot.user_list[chat_id] = [self.username, ""]
@@ -273,11 +291,11 @@ class MessageCounter(telepot.helper.ChatHandler):
             else:
                 pass
 
-        elif self.menu_id in range(3,8):
+        elif self.menu_id == keys_dict[option_chatempty]:
             if resp == option_back :
                 bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
                 self.menu_id = keys_dict[option_mainmenu]
-            elif self.menu_id == keys_dict[option_chatempty]:
+            else:
                 (txt, accuracy)  = omchat.get_response(resp)
                 bot.sendMessage(chat_id, txt, parse_mode='markdown')
 
@@ -325,7 +343,6 @@ class MessageCounter(telepot.helper.ChatHandler):
             else:
                 retmsg = shellcmd(resp)
 
-        ## trigger when live chat is initiated
         elif self.menu_id == keys_dict[option_chat]:
             if resp.lower() == 'bye':
                 endchat(bot, self.parentbot, chat_id)

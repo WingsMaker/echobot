@@ -62,9 +62,9 @@ summary = """
 ╚═════════════════════════════════════════════════════════════════════════════╝▒▒
  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
 """
-import pdftotext               
-import cv2                     
-import pytesseract             
+# import pdftotext               
+# import cv2                     
+# import pytesseract             
 import gtts                    
 from gtts import gTTS          
 import pyaudio                 
@@ -395,7 +395,7 @@ def process_voice(fname, lang="en"):
         else:
             wav = convert_audio(fname, "wav")
         if wav != "":
-            (lang_detected, txt, best_score) = wav2txt(wav, lang)            
+            (lang_detected, txt, best_score) = wav2txt(wav, lang)
             os.remove(wav)
         if wav != fname:
             os.remove(fname)
