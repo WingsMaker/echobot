@@ -18,7 +18,6 @@ summary = """
 ║ banner_msg         create a string of text banner in a line                 ║▒▒
 ║ bot_prompt         bot response with text and optional menu buttons         ║▒▒
 ║ build_menu         build telegram reply-to menu buttons with a list         ║▒▒
-║ convert_audio      convert audio file to a specific format using ffmpeg     ║▒▒
 ║ copydbtbl          import .db file into sqlite database(replace mode)       ║▒▒
 ║ csv2sqldb          import .csv file into sqlite database(replace mode)      ║▒▒
 ║ decrypt            to decrypt text using fernet cryptography                ║▒▒
@@ -35,41 +34,21 @@ summary = """
 ║ list_table         output sql query into HTML table in picture format       ║▒▒
 ║ load_data          output a table in SQLite database into dataframe/list    ║▒▒
 ║ mass_encrypt_email to encrypt email address field across the entire folder  ║▒▒
-║ process_voice      convert audio/video into .wav audio before wav2txt       ║▒▒
 ║ pycmd              execute python codes via eval()                          ║▒▒
 ║ querydf            output sql query on SQLite database into dataframe       ║▒▒
-║ readtxt_image      text recognition from a picture or image document        ║▒▒
-║ readtxt_pdf        text recognition from pdf (limited support)              ║▒▒
 ║ render_table       output dataframe into HTML table in picture format       ║▒▒
 ║ shellcmd           to execute system commands from the server shell access  ║▒▒
 ║ sql2var            extract a value from params table in sysconf.db          ║▒▒
 ║ sqldb2xls          export a table in SQLite database into .xlsx             ║▒▒
 ║ text2voice         convert text to audo using google gTTS api               ║▒▒
 ║ time_hhmm          local time in hhmm numeric format                        ║▒▒
+║ update_playbooklist add record into the playbooks table in the pbconfig.db  ║▒▒
 ║ updatesql          perform SQL update query for SQLite database             ║▒▒
-║ wav2txt            text recognition using google speech_recognition api     ║▒▒
 ║ write2html         output dataframe content into HTML file                  ║▒▒
 ║ xls2sqldb          import .xlsx file into sqlite database(replace mode)     ║▒▒
-╟─────────────────────────────────────────────────────────────────────────────╢▒▒
-║ Remarks - need to install the libraries in the OS                           ║▒▒
-║ import pdftotext                                                            ║▒▒
-║ import cv2                                                                  ║▒▒
-║ import pytesseract                                                          ║▒▒
-║ import gtts                                                                 ║▒▒
-║ from gtts import gTTS                                                       ║▒▒
-║ import pyaudio                                                              ║▒▒
-║ import speech_recognition as sr                                             ║▒▒
 ╚═════════════════════════════════════════════════════════════════════════════╝▒▒
  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
 """
-# import pdftotext               
-# import cv2                     
-# import pytesseract             
-import gtts                    
-from gtts import gTTS          
-import pyaudio                 
-import speech_recognition as sr
-
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -140,16 +119,6 @@ def build_menu(btn_list, btns_rows = 3, extra_btn='',toadd_btn=[]):
     rr = int((nn+kk)/btns_rows)
     results = [  btn_list[n*btns_rows:][:btns_rows] for n in range(rr) ]
     return results
-
-def convert_audio(fname, fmt = ".wav"):
-    try:
-        fn = fname.split('.')[0]
-        fn += "." + fmt
-        cmd = f"ffmpeg -y -i {fname} {fn}"
-        txt = shellcmd(cmd)
-    except:
-        fn = ""
-    return fn
 
 def copydbtbl(fn, sqldb, tblname):
     try:
@@ -242,7 +211,8 @@ def edit_records(sqldb, tbl, idx, sid,  fld_prefix = ""):
 def edx_connect(conn_str = ''):
     global edxcon
     def get_conn_str():
-        connect_string = sql2var(sysconfig, "select value from params where key = 'edxapp';", "mysql://admin:0mn!Ment0r@101.100.169.129/edxapp")
+        connect_string = sql2var(sysconfig, "select value from params where key = 'edxapp';", "")
+        # mysql://sambaash:bHyyZ3krZ4fguwcrAD7v@127.0.0.1:33306/edxapp
         return connect_string
     if conn_str == "":
         conn_str = get_conn_str()
@@ -250,7 +220,13 @@ def edx_connect(conn_str = ''):
         host = conn_str.split('@')[1].split('/')[0]
         user = conn_str.split('@')[0].split('/')[2].split(':')[0]
         pw = conn_str.split('@')[0].split('/')[2].split(':')[1]
+        if ':' in host:
+            port=host.split(':')[1]
+            host=host.split(':')[0]
+        else:
+            port = "3306"
         edxcon = pymysql.connect(host=host,
+                port=int(port),
                 user=user,
                 password=pw,
                 db='edxapp',
@@ -291,12 +267,12 @@ def edx_query(query, df_mode = False):
     return result
 
 def edxsql(query, fn):    
-    if os.name == "nt":
+    stat=edx_connect()
+    if stat == 0:
         df = sql2var(nlpconfig, query, "", True)
-    else:
-        edx_connect()
-        df = edx_query(query, True)
-        edx_disconnect()
+        return 1
+    df = edx_query(query, True)
+    edx_disconnect()
     ok = 0
     if df is not None :
         try:
@@ -387,22 +363,6 @@ def mass_encrypt_email():
     df = querydf(pbconfig, "select userdata from playbooks;")
     return [encrypt_email(x) for x in df.userdata]
 
-def process_voice(fname, lang="en"):
-    try:
-        txt = ""
-        if '.wav' in fname:
-            wav = fname
-        else:
-            wav = convert_audio(fname, "wav")
-        if wav != "":
-            (lang_detected, txt, best_score) = wav2txt(wav, lang)
-            os.remove(wav)
-        if wav != fname:
-            os.remove(fname)
-    except:
-        pass
-    return txt
-
 def pycmd(resp, parentbot):
     vars = parentbot.vars
     if 'print' in resp:
@@ -431,35 +391,6 @@ def querydf(sqldb, query):
     except:
         pass
     return df
-
-def readtxt_image(fn):
-    txt = ""
-    try:
-        img = cv2.imread(fn)
-        txt = pytesseract.image_to_string(img)
-    except:
-        txt = "Thanks for the image but I am not able read it"        
-    return txt
-
-def readtxt_pdf(fn):
-    # if hosted in pythonanywhere, system call /usr/bin/pdftotext directly instead of using this
-    txt = ""
-    try:
-        with open(fn, "rb") as f:
-            pdf = pdftotext.PDF(f)
-        txt = "".join(pdf)
-    except:
-        if os.name == "nt":
-            cmd = "pdftotext.exe "
-        else:
-            cmd = "/usr/bin/pdftotext "
-        cmd += fn + " result.txt"
-        txt = shellcmd(cmd)
-        f = open("result.txt", "r")
-        txt = f.read()
-        f.close()
-        os.remove("result.txt")
-    return txt
 
 def render_table(data, col_width=3.0, row_height=0.625, font_size=14,
                     header_color='#40466e', row_colors=['#f1f1f2', 'w'], edge_color='w',
@@ -527,25 +458,41 @@ def sqldb2xls(fn, sqldb, tbl_list, ind_list):
         ok = 0
     return ok
 
-def text2voice(bot, chat_id, lang, resp):
-    try:
-        mp3 = 'echobot' + str(chat_id) + '.mp3'
-        myobj = gTTS(text=resp, lang=lang, slow=False)
-        myobj.save(mp3)
-        fn = convert_audio(mp3, "ogg")
-        if fn != "":
-            bot.sendAudio(chat_id, (fn, open(fn, 'rb')), title='text to voice')
-            os.remove(fn)
-        os.remove(mp3)
-    except:
-        pass
-    return
+#def text2voice(bot, chat_id, lang, resp):
+#    try:
+#        mp3 = 'echobot' + str(chat_id) + '.mp3'
+#        myobj = gTTS(text=resp, lang=lang, slow=False)
+#        myobj.save(mp3)
+#        fn = convert_audio(mp3, "ogg")
+#        if fn != "":
+#            bot.sendAudio(chat_id, (fn, open(fn, 'rb')), title='text to voice')
+#            os.remove(fn)
+#        os.remove(mp3)
+#    except:
+#        pass
+#    return
 
 def time_hhmm(gmt):
     hh = int(datetime.datetime.now().strftime('%H'))
     mm = int(datetime.datetime.now().strftime('%M'))
     hrs = (hh+gmt+24) % 24
     return hrs*100+mm
+
+def update_playbooklist(sqldb, course_id):
+    try:
+        conn = sqlite3.connect(pbconfig)
+        cursor = conn.cursor()
+        query = """delete from playbooks where course_id='_x_';"""
+        query = query.replace("_x_", course_id)
+        cursor.execute(query)
+        query = """insert into playbooks(course_id,userdata) values('_x_','_y_');"""
+        query = query.replace("_x_", course_id)
+        query = query.replace("_y_", sqldb)
+        cursor.execute(query)
+        conn.commit()
+    except:
+        print("Unable to update playbook list")
+    return
 
 def updatesql(sqldb, updqry):
     try:
@@ -557,37 +504,6 @@ def updatesql(sqldb, updqry):
         return True
     except:
         return False
-
-def wav2txt(wavfile, lang="en-US"):
-    pass_rate = 0.8
-    best_score = pass_rate
-    lang_detected = 'en'
-    transcript = ""    
-    if lang=="auto":
-        lang_list = ['en', 'en-UK','en-US','zh-CN','zh-TW', 'zh-YUE','hi-IN','ta-Sg','bn-BD','fil-PH','id-ID','ms-MY','my-MM','th-TH','vi-VN','ja-JP','ko-KR','nl-NL','fr-FR','de-DE','it-IT','es-ES']
-    else:
-        lang_list = [lang]
-    try:
-        r = sr.Recognizer()
-        if isinstance(r, sr.Recognizer):
-            wav = sr.AudioFile(wavfile)
-            with wav as source:
-                audio = r.record(source)
-            for vlang in lang_list:
-                score = 0
-                txt = ""
-                result = r.recognize_google(audio,language=vlang, show_all=True)                    
-                if 'alternative' in list(result):
-                    txt = result['alternative'][0]['transcript']
-                    score =  result['alternative'][0]['confidence']
-                    if score >= pass_rate and score > best_score and txt != "":
-                        best_score = score
-                        lang_detected = vlang
-                        transcript = txt
-    except:
-        print("Error using Recognizer")
-        pass
-    return (lang_detected, transcript, best_score)
 
 def write2html(df, title='', filename='report.html'):    
     result = '''
@@ -656,4 +572,8 @@ def xls2sqldb(fn, sqldb):
 
 if __name__ == "__main__":
     #encrypt_email("FOS-1219A.db")
+    fn = "edx_local.html"
+    query="""select * from course_overviews_courseoverview limit 5;"""
+    result = edxsql(query, fn)
+    print(result)
     print("This is vmsvclib")

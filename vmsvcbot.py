@@ -26,32 +26,38 @@ from telepot.delegate import pave_event_space, per_chat_id, create_open, per_cal
 from telepot.namedtuple import ReplyKeyboardMarkup
 from telepot.helper import IdleEventCoordinator
 
+from vmlkhlib import *
 from vmsvclib import *
 from vmnlplib import NLP_Parser
 
 global svcbot
 
 omchat = NLP_Parser()
-#adminchatid = 71354936
-adminchatid = 1064466049
+adminchatid = 71354936
+#adminchatid = 1064466049
 max_duration = 28800
 max_rows = 20
 option_mainmenu = 'svcbot_menu'
 option_back = "◀️"
+option_nlp = "NLP"
+option_face = "Face Recognition"
 option_chat = "Chat 💬"
+option_chatlist = "Chat List"
+option_chatempty = "Chat Empty"
+option_shell = "Shell"
+option_2fa = "2FA"
+svcbot_menu = [[option_nlp, option_face, option_chat, option_shell, option_back]]
+nlp_corpus = "Corpus"
+nlp_train = "Train NLP"
+nlpconfig = "nlp-conf.db"
+nlp_menu = [[nlp_corpus, nlp_train, option_back]]
+option_cv2 = "Train Image Model"
+option_img = "Image Detection"
+face_menu = [[option_cv2, option_img , option_back]]
 option_cmd = "Cmd Mode 💻"
 option_py = "Script Mode 📜"
 option_edx = "SQL Mode"
-option_nlp = "NLP"
-nlp_corpus = "Corpus"
-nlp_train = "Train NLP"
-option_chatlist = "Chat List"
-option_chatempty = "Chat Empty"
-option_2fa = "2FA"
-nlpconfig = "nlp-conf.db"
-
-svcbot_menu = [[option_nlp, option_edx, option_chat], [option_py, option_cmd, option_back]]
-nlp_menu = [[nlp_corpus, nlp_train, option_back]]
+shell_menu = [[option_edx, option_py, option_cmd, option_back]]
 
 SvcBotToken = "906052064:AAHGP6uDK4D77t9jGl5MbYfI_3IixJdFpC8"    # @omnimentorservicebot
 #SvcBotToken = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"    # @OmniMentorBot
@@ -75,12 +81,14 @@ class BotInstance():
         self.keys_dict[option_mainmenu] = 1
         self.define_keys(svcbot_menu, self.keys_dict[option_mainmenu])
         self.define_keys(nlp_menu, self.keys_dict[option_nlp])
+        self.define_keys(shell_menu, self.keys_dict[option_shell])
+        self.define_keys(face_menu, self.keys_dict[option_face])
         self.keys_dict[option_chatlist] = (self.keys_dict[option_chat]*10) + 1
         self.keys_dict[option_chatempty] = (self.keys_dict[option_chat]*10) + 2
         self.keys_dict[option_2fa] = (self.keys_dict[option_mainmenu]*10) + 1
 
-        #print("\n".join([ str(self.keys_dict[x]) + " "*(16-len(str({self.keys_dict[x]}))) + x for x in list(self.keys_dict)]))
-        
+        #print(*(self.keys_dict).items(), sep = '\n')
+
         self.bot = telepot.DelegatorBot(Token, [
             pave_event_space()( [per_chat_id(), per_callback_query_chat_id()],
             create_open, MessageCounter, timeout=max_duration, include_callback_query=True),
@@ -165,6 +173,9 @@ class MessageCounter(telepot.helper.ChatHandler):
         resp = ""
         retmsg = ''
         username = ""
+        image_det = False
+        video_det = False
+        train_img = False
         if content_type == 'text':
             resp = msg['text'].strip()
             if 'from' in list(msg):
@@ -200,10 +211,69 @@ class MessageCounter(telepot.helper.ChatHandler):
                     bot.sendMessage(chat_id, "you said : " + txt)
                     resp = txt
 
+        elif (content_type=="video_note") or (content_type=="video") :
+            try:
+                fid = msg[content_type]['file_id']
+                if self.menu_id == keys_dict[option_cv2] :
+                    train_img = True
+                elif self.menu_id == keys_dict[option_img] :
+                    video_det= True            
+            except:
+                pass
+
+        elif (content_type=="photo") and (self.menu_id == keys_dict[option_img]):
+            fid = msg[content_type][0]['file_id']
+            image_det = True
+
+        elif (content_type=="document") :
+            ftype = msg['document']['mime_type']
+            if ftype=="image/jpeg" or ftype=="image/png":
+                fid = msg[content_type]['thumb']['file_id']
+                image_det = True            
+
         elif content_type != "text":
             print( json.dumps(msg) )
             txt = "Thanks for the " + content_type + " but I do not need it for now."
             bot.sendMessage(chat_id,txt)
+
+        if image_det:            
+            fname = get_attachment(bot, fid)
+            (id, acc) = image_detect(fname, 'trainer.yml')
+            if id==0:
+                txt = "Not able to recognise this image."
+            else:
+                txt  =f"Telegram ID detected as {str(id)} , accuracy = {round(acc,2)}%"
+            bot.sendMessage(chat_id, txt)
+            os.remove(fname)
+            return
+
+        if train_img:
+            bot.sendMessage(chat_id, "video training in progress..")
+            try:
+                fname = get_attachment(bot, fid)
+                video_training(fname, chat_id)
+            except:
+                pass
+            txt = "video training completed."
+            bot.sendMessage(chat_id, txt)
+            self.menu_id = keys_dict[option_mainmenu]
+            os.remove(fname)
+            return
+
+        if video_det:
+            fname = get_attachment(bot, fid)
+            trainer = "trainer.yml"
+            (id, acc) = video_detect(fname, trainer)
+            txt = f"The identity found as {id} , {round(acc,2)}%"
+            bot.sendMessage(chat_id, txt)
+            self.menu_id = keys_dict[option_mainmenu]
+            os.remove(fname)
+            return
+
+        if (resp==option_back) and (self.menu_id  in [keys_dict[x] for x in [option_cv2, option_img]]):
+            bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
+            self.menu_id = keys_dict[option_mainmenu]
+            return
 
         if resp=='/end':
             endchat(bot, self.parentbot, chat_id)
@@ -261,30 +331,21 @@ class MessageCounter(telepot.helper.ChatHandler):
                 self.menu_id = keys_dict[option_chat]
             elif (resp == option_chat ) or (resp == '/chat'):
                 self.menu_id = livechat(bot, self.parentbot, chat_id, self.username)
-            elif resp == option_py :
-                txt = "You are now connected to Script mode.\nDo not use double quote \" for string quotation."
-                txt = banner_msg("Python Shell", txt)
-                bot_prompt(bot, chat_id, txt, [[option_back]])
-                self.menu_id = keys_dict[option_py]
-            elif resp == option_cmd :
-                txt = "You are now connected to Cmd mode.\nType cmd to list out the commands."
-                txt = banner_msg("Service Console", txt)
-                bot_prompt(bot, chat_id, txt, [[option_back]])
-                self.menu_id = keys_dict[option_cmd]
-            elif resp == option_edx :
-                if os.name == "nt":
-                    txt = "You are now connected to Sqlite database via SQL."
-                else:
-                    txt = "You are now connected to EdX database via SQL."
-                txt = banner_msg("SQL Console for EdX", txt)
-                bot_prompt(bot, chat_id, txt, [[option_back]])
-                self.menu_id = keys_dict[option_edx]
             elif resp == option_nlp :
                 txt = "This section maintain NLP corpus and trains model.\n"
                 txt += "You can test your NLP dialog from here."
                 txt = banner_msg("NLP", txt)
                 bot_prompt(bot, chat_id, txt, nlp_menu)
                 self.menu_id = keys_dict[option_nlp]
+            elif resp == option_face :
+                txt = "This section is for face recognition."
+                bot_prompt(bot, chat_id, txt, face_menu)
+                self.menu_id = keys_dict[option_face]                
+            elif resp == option_shell :
+                txt = "This section is for SQL commands, shell scripts or python codes"
+                txt = banner_msg("SHELL Mode", txt)
+                bot_prompt(bot, chat_id, txt, shell_menu)
+                self.menu_id = keys_dict[option_shell]
             elif resp == option_back :
                 endchat(bot, self.parentbot, chat_id)
                 self.logoff()
@@ -318,10 +379,46 @@ class MessageCounter(telepot.helper.ChatHandler):
                 else:                    
                     (retmsg,accuracy)  = omchat.get_response(resp)
 
-        elif self.menu_id == keys_dict[option_edx] :
+        elif self.menu_id == keys_dict[option_face] :
             if resp == option_back :
                 bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
                 self.menu_id = keys_dict[option_mainmenu]
+            elif resp == option_cv2 :
+                txt = "To train the image model, please upload video note of yourself."
+                bot.sendMessage(chat_id, txt)
+                self.menu_id = keys_dict[option_cv2]
+            elif resp == option_img :
+                txt = "To test the image detection, please upload a photo/video of yourself."
+                bot.sendMessage(chat_id, txt)
+                self.menu_id = keys_dict[option_img]
+
+        elif self.menu_id == keys_dict[option_shell] :
+            if resp == option_back :
+                bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
+                self.menu_id = keys_dict[option_mainmenu]
+            elif resp == option_py :
+                txt = "You are now connected to Script mode.\nDo not use double quote \" for string quotation."
+                txt = banner_msg("Python Shell", txt)
+                bot_prompt(bot, chat_id, txt, [[option_back]])
+                self.menu_id = keys_dict[option_py]
+            elif resp == option_cmd :
+                txt = "You are now connected to Cmd mode.\nType cmd to list out the commands."
+                txt = banner_msg("Service Console", txt)
+                bot_prompt(bot, chat_id, txt, [[option_back]])
+                self.menu_id = keys_dict[option_cmd]
+            elif resp == option_edx :
+                if os.name == "nt":
+                    txt = "You are now connected to Sqlite database via SQL."
+                else:
+                    txt = "You are now connected to EdX database via SQL."
+                txt = banner_msg("SQL Console for EdX", txt)
+                bot_prompt(bot, chat_id, txt, [[option_back]])
+                self.menu_id = keys_dict[option_edx]
+
+        elif self.menu_id == keys_dict[option_edx] :
+            if resp == option_back :
+                bot_prompt(bot, chat_id, "You are back in the main menu", shell_menu)
+                self.menu_id = keys_dict[option_shell]
             else:
                 fn = "sql_output" + str(chat_id) + ".html"
                 if edxsql(resp,fn)==0:
@@ -331,21 +428,21 @@ class MessageCounter(telepot.helper.ChatHandler):
 
         elif self.menu_id == keys_dict[option_py] :
             if resp == option_back :
-                bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
-                self.menu_id = keys_dict[option_mainmenu]
+                bot_prompt(bot, chat_id, "You are back in the main menu", shell_menu)
+                self.menu_id = keys_dict[option_shell]
             else:
                 retmsg = pycmd(resp, self.parentbot)
 
         elif self.menu_id == keys_dict[option_cmd] :
             if resp == option_back :
-                bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
-                self.menu_id = keys_dict[option_mainmenu]
+                bot_prompt(bot, chat_id, "You are back in the main menu", shell_menu)
+                self.menu_id = keys_dict[option_shell]
             else:
                 retmsg = shellcmd(resp)
 
         elif self.menu_id == keys_dict[option_chat]:
             if resp.lower() == 'bye':
-                endchat(bot, self.parentbot, chat_id)
+                endchat(bot, self.parentbot, chat_id)                
                 bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
                 self.menu_id = keys_dict[option_mainmenu]
             else:
@@ -385,8 +482,10 @@ class MessageCounter(telepot.helper.ChatHandler):
                 bot_prompt(bot, chat_id, txt, [['/start']])
                 self.menu_id = 0
 
-        if retmsg != '':
-            self.sender.sendMessage(retmsg)
+        while retmsg != "":
+            txt = retmsg[:4000]
+            retmsg = retmsg[4000:]
+            self.sender.sendMessage(txt)
         return
 
 def livechat(bot, parentbot, chat_id, user_name, sid = 0):
@@ -440,10 +539,7 @@ def do_main():
 
     svcbot = BotInstance(SvcBotToken)
     print(svcbot)
-    try:
-        svcbot.bot.sendMessage(adminchatid,"Click /start to connect the ServiceBot")
-    except:
-        pass
+    #svcbot.bot.sendMessage(adminchatid,"Click /start to connect the ServiceBot")
     while svcbot.bot_running:    
         time.sleep(3)
     try:
@@ -451,6 +547,7 @@ def do_main():
     except:
         err = 1
     return (err==0)
+
 
 #------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

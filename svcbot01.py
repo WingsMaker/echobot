@@ -16,6 +16,7 @@ import googletrans
 from googletrans import Translator
 from nltk.chat.iesha  import iesha_chatbot
 
+from vmlkhlib import *
 from vmsvclib import *
 
 EchoBotToken = "1231701118:AAGImKeF8SULGP5ktSnsjuUxD7Jg0RRo0Y4"  # @echochatbot
@@ -25,6 +26,7 @@ translator = Translator()
 adminchatid = 71354936
 max_duration = 28800
 max_rows = 20
+option_mainmenu = 'echobot_menu'
 option_back = "◀️"
 option_lang = "Language 🇸🇬"
 option_chat = "Chat 💬"
@@ -32,10 +34,11 @@ option_chatlist = "Chat List"
 option_chatempty = "Chat Empty"
 option_text2voice = "Text2Voice 🎧"
 option_voice2text = "Voice2Text 🎤"
-
-option_mainmenu = 'echobot_menu'
-
-echobot_menu = [[option_chat, option_lang, option_text2voice, option_voice2text, option_back]]
+option_face = "Face Recognition"
+echobot_menu = [[option_chat, option_lang, option_face],[option_text2voice, option_voice2text, option_back]]
+option_cv2 = "Train Image Model"
+option_img = "Image Detection"
+face_menu = [[option_cv2, option_img , option_back]]
 
 lang_opts = ['English', '简体中文','繁體中文','हिंदी','தமிழ்','বাংলা','Filipino','Indonesian', 'Malay',\
     'မြန်မာ','ไทย','Việt Nam','日本語','한국어', 'Nederlands','Français','Deutsch','Italiano','Español']
@@ -65,9 +68,10 @@ class BotInstance():
         self.keys_dict[option_mainmenu] = 1
         self.define_keys(echobot_menu, self.keys_dict[option_mainmenu])
         self.define_keys(lang_menu, self.keys_dict[option_lang])
+        self.define_keys(face_menu, self.keys_dict[option_face])
         self.keys_dict[option_chatlist] = (self.keys_dict[option_chat]*10) + 1
         self.keys_dict[option_chatempty] = (self.keys_dict[option_chat]*10) + 2
-        
+         
         #print("\n".join([ str(self.keys_dict[x]) + " "*(16-len(str({self.keys_dict[x]}))) + x for x in list(self.keys_dict)]))
 
         self.bot = telepot.DelegatorBot(Token, [
@@ -158,6 +162,9 @@ class MessageCounter(telepot.helper.ChatHandler):
         voice2txt = False
         img2txt = False
         pdf2txt = False
+        image_det = False
+        video_det = False
+        train_img = False
         if content_type == 'text':
             resp = msg['text'].strip()
             if 'from' in list(msg):
@@ -201,14 +208,21 @@ class MessageCounter(telepot.helper.ChatHandler):
 
         elif (content_type=="photo") :
             fid = msg[content_type][0]['file_id']
-            img2txt = True
+            if self.menu_id == keys_dict[option_img] :
+                image_det = True
+            else:
+                img2txt = True
+
         #elif (content_type=="video") and msg[content_type]['mime_type']=='video/mp4':
-        elif (content_type=="video") :
+        elif (content_type=="video_note") or (content_type=="video") :
             fid = msg[content_type]['file_id']
-            voice2txt = True
-        elif (content_type=="video_note") :
-            fid = msg[content_type]['file_id']
-            voice2txt = True
+            if self.menu_id == keys_dict[option_cv2] :
+                train_img = True
+            elif self.menu_id == keys_dict[option_img] :
+                video_det= True            
+            else:
+                voice2txt = True
+
         elif content_type != "text":
             print( json.dumps(msg) )
             txt = "Thanks for the " + content_type + " but I do not need it for now."
@@ -237,6 +251,46 @@ class MessageCounter(telepot.helper.ChatHandler):
                 print("Unable to understand the voice")
             else:
                 bot.sendMessage(chat_id, resp)
+
+        if image_det:            
+            fname = get_attachment(bot, fid)
+            (id, acc) = image_detect(fname, 'trainer.yml')
+            if id==0:
+                txt = "Not able to recognise this image."
+            else:
+                txt  =f"Telegram ID detected as {str(id)} , accuracy = {round(acc,2)}%"
+            bot.sendMessage(chat_id, txt)
+            self.menu_id = keys_dict[option_face]
+            os.remove(fname)
+            return
+
+        if train_img:
+            bot.sendMessage(chat_id, "video training in progress..")
+            try:
+                fname = get_attachment(bot, fid)
+                video_training(fname, chat_id)
+            except:
+                pass
+            txt = "video training completed."
+            bot.sendMessage(chat_id, txt, face_menu)
+            self.menu_id = keys_dict[option_face]
+            os.remove(fname)
+            return
+
+        if video_det:
+            fname = get_attachment(bot, fid)
+            trainer = "trainer.yml"
+            (id, acc) = video_detect(fname, trainer)
+            txt = f"The identity found as {id} , {round(acc,2)}%"
+            bot.sendMessage(chat_id, txt, face_menu)
+            self.menu_id = keys_dict[option_face]
+            os.remove(fname)
+            return
+
+        if (resp==option_back) and (self.menu_id  in [keys_dict[x] for x in [option_cv2, option_img]]):
+            bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
+            self.menu_id = keys_dict[option_mainmenu]
+            return
 
         if resp=='/end':
             endchat(bot, self.parentbot, chat_id)
@@ -301,6 +355,10 @@ class MessageCounter(telepot.helper.ChatHandler):
                 txt = "To recognise a voice and translated into following language :"
                 bot_prompt(bot, chat_id, txt, lang_v2t)
                 self.menu_id = keys_dict[option_voice2text]
+            elif resp == option_face :
+                txt = "This section is for face recognition."
+                bot_prompt(bot, chat_id, txt, face_menu)
+                self.menu_id = keys_dict[option_face]
             elif resp == option_back :
                 endchat(bot, self.parentbot, chat_id)
                 self.logoff()
@@ -390,6 +448,19 @@ class MessageCounter(telepot.helper.ChatHandler):
             bot_prompt(bot, chat_id, txt, self.mainmenu)
             self.menu_id = keys_dict[option_mainmenu]
 
+        elif self.menu_id == keys_dict[option_face] :
+            if resp == option_back :
+                bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
+                self.menu_id = keys_dict[option_mainmenu]
+            elif resp == option_cv2 :
+                txt = "To train the image model, please upload video note of yourself."
+                bot.sendMessage(chat_id, txt)
+                self.menu_id = keys_dict[option_cv2]
+            elif resp == option_img :
+                txt = "To test the image detection, please upload a photo/video of yourself."
+                bot.sendMessage(chat_id, txt)
+                self.menu_id = keys_dict[option_img]
+
         if retmsg != '':
             self.sender.sendMessage(retmsg)
         return
@@ -465,10 +536,7 @@ def do_main():
     err = 0
     echobot = BotInstance(EchoBotToken)
     print(echobot)
-    try:
-        echobot.bot.sendMessage(adminchatid,"Click /start to connect the ServiceBot")
-    except:
-        pass
+    #echobot.bot.sendMessage(adminchatid,"Click /start to connect the ServiceBot")
     while echobot.bot_running:
         time.sleep(3)
     try:
