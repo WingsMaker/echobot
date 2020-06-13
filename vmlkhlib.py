@@ -21,11 +21,17 @@ summary = """
 ║ readtxt_image      text recognition from a picture or image document        ║▒▒
 ║ readtxt_pdf        text recognition from pdf (limited support)              ║▒▒
 ║ text2voice         convert text to audo using google gTTS api               ║▒▒
-║ video_detect       video image detection with a give nmodel
+║ video_detect       video image detection with a give nmodel                 ║▒▒
 ║ video_training     train a model using video image                          ║▒▒
 ║ wav2txt            text recognition using google speech_recognition api     ║▒▒
 ╟─────────────────────────────────────────────────────────────────────────────╢▒▒
-║ python3.7 -m pip install opencv-contrib-python --upgrade                    ║▒▒
+║ python -m pip install opencv-contrib-python --upgrade                       ║▒▒
+║ apt-get install build-essential libpoppler-cpp-dev pkg-config               ║▒▒
+║ apt-get install libasound-dev portaudio19-dev libportaudio2                 ║▒▒
+║ sudo apt-get install python3.8-dev libportaudiocpp0 ffmpeg                  ║▒▒
+║ python -m pip install opencv-contrib-python --upgrade                       ║▒▒
+║ python -m pip install googletrans cv2 SpeechRecognition pytesseract         ║▒▒
+║ python -m pip install pillow pdftotext SpeechRecognition gtts pyaudio       ║▒▒
 ╚═════════════════════════════════════════════════════════════════════════════╝▒▒
  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
 """

@@ -314,6 +314,15 @@ class MessageCounter(telepot.helper.ChatHandler):
             bot_prompt(bot, chat_id, txt, self.mainmenu)
             self.parentbot.user_list[chat_id] = [self.username, self.lang]
 
+        elif resp == '/pw':
+            retmsg = "".join(random.sample(list(string.ascii_lowercase)+list(string.ascii_uppercase)+list(string.digits)+list(string.punctuation),8))
+
+        elif resp.startswith("/d:"):
+            retmsg = decrypt(resp[3:])
+
+        elif resp.startswith("/e:"):
+            retmsg = encrypt(resp[3:])
+
         elif chat_id in self.parentbot.chat_list and (resp.strip() != "") :
             tid = self.parentbot.chat_list[chat_id]
             if resp.lower() == 'bye':
