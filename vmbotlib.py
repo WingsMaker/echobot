@@ -984,7 +984,7 @@ class MessageCounter(telepot.helper.ChatHandler):
         if client_name == "":
             return (course_id_list, course_name_list)
         if stud==0:
-            qry = f"SELECT DISTINCT course_id, course_name FROM playbooks WHERE client_name='{self.client_name}';"    
+            qry = f"SELECT DISTINCT course_id, course_name FROM playbooks WHERE client_name='{self.client_name}';"
             df = rds_df(qry)
             if df is not None:            
                 df.columns = ['course_id','course_name']
@@ -999,8 +999,8 @@ class MessageCounter(telepot.helper.ChatHandler):
             url = f"{api_url}/user/fetch/{stud}"
             headers = self.parentbot.edx_api_header            
             userinfo = edxapi_getuser(headers, url)
-        if userinfo == {} :
-            (course_id_list, course_name_list) = rds_loadcourse(self.client_name, stud)
+        if userinfo == {} :            
+            (course_id_list, course_name_list) = rds_loadcourse(client_name, stud)
         else:
             course_id_list = [ x['course_id'] for x in userinfo['enrolments'] ]
             course_name_list = [ x['course_name'] for x in userinfo['enrolments'] ]                
