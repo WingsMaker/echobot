@@ -854,7 +854,6 @@ class MessageCounter(telepot.helper.ChatHandler):
 
     def update_stage(self, sid):
         if (sid <= 0) or (self.userdata is None):
-            print(890)
             return ""                 
         vars = load_vars(self.userdata, sid)            
         df = self.userdata.copy()        
@@ -1026,7 +1025,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             bot = self.bot
             self.chatid = chat_id
             keys_dict = vmbot.keys_dict
-            adminchatid = vmbot.adminchatid
+            adminchatid = vmbot.adminchatid            
         except:
             return
 
@@ -1054,7 +1053,8 @@ class MessageCounter(telepot.helper.ChatHandler):
             retmsg += "\nmenu id = " + str(self.menu_id) 
             retmsg += "\nmenu key : " + vmbot.get_menukey(self.menu_id) 
 
-        elif resp=='/demo':
+        #elif resp=='/demo':
+        elif resp=='/progress':
             if self.client_name == "":
                 print("client_name is empty")
                 return
@@ -1087,7 +1087,8 @@ class MessageCounter(telepot.helper.ChatHandler):
             syslog("system","telegram user " + str(chat_id) + " offine.")
             self.logoff()
             
-        elif resp=='/stop' and (chat_id in [adminchatid, 71354936]):
+        #elif resp=='/stop' and (chat_id in [adminchatid, 71354936]):
+        elif resp=='/stop' and (chat_id == adminchatid):
             vmbot.broadcast('System shutting down.')
             vmbot.bot_running = False
             txt = 'System already shutdown.'
@@ -1128,8 +1129,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                         else:
                             stud_courselist = [courseid]
                         self.list_courseids = stud_courselist
-                        n = len(stud_courselist)                        
-                        #if n > 1:
+                        n = len(stud_courselist)                                                
                         if n > 20:
                             date_today = datetime.datetime.now().date()
                             yrnow = str(date_today.strftime('%Y'))
@@ -1342,7 +1342,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                 usertype = rds_param(f"SELECT usertype FROM user_master WHERE studentid={resp} and client_name ='{self.client_name}';")
                 if usertype==3:
                     self.sender.sendMessage("Sorry your account is blocked, please contact the admin.")
-                    self.logoff()    
+                    self.logoff()
                 else:
                     self.check_student(sid, chat_id)
                     self.menu_id = keys_dict[lrn_student]
@@ -1361,10 +1361,22 @@ class MessageCounter(telepot.helper.ChatHandler):
                 txt = "Please select the course id from below:"
                 bot_prompt(self.bot, self.chatid, txt, btn_course_list)
                 self.menu_id = keys_dict[option_mycourse]
+                
             elif resp == option_updateprogress:
-                self.update_stage(self.student_id)
-                self.menu_id = keys_dict[lrn_student]
+                sid = self.student_id
+                courseid = self.courseid
+                cname = self.client_name
+                query = f"select stage from userdata where client_name = '{cname}' and studentid={sid} and courseid='{courseid}';"
+                stg = rds_param(query)
+                result = "stage:'_x_'".replace('_x_', stg)                
+                edit_fields(cname, courseid, "userdata", "studentid", sid, result)
+                self.stage_name = stg
+                self.student_id = sid
+                self.courseid = courseid
+                self.load_tables()
+                (txt, self.records ) = verify_student(self.userdata, sid)                
                 retmsg = display_progress(self.userdata, self.stage_name, self.records, self.client_name)                
+                self.menu_id = keys_dict[lrn_student]
             elif resp == option_faq:
                 txt = 'These are the FAQs :'
                 faq_menu = build_menu(ft_model.faq_list.copy(),1,option_back,[])
@@ -1441,22 +1453,14 @@ class MessageCounter(telepot.helper.ChatHandler):
                         query = updqry.replace(";", '')
                         query += ' and ' if ('where' in updqry.lower()) else ' where '
                         query += condqry + ';'
-                        rds_update(query)
-                        if 'studentid' in updqry:
-                            sidstr = updqry.replace("studentid","$").split('$')[1].replace('=','').replace(';','')
-                            sid = int(sidstr)
-                            try:
-                                (txt, self.records ) = verify_student(self.userdata, sid)
-                                txt = display_progress(self.userdata, self.records['stage'],self.records,self.client_name)
-                                [ bot.sendMessage(x, txt) for x in list(vmbot.user_list) if vmbot.user_list[x][1] == sid ]
-                            except:
-                                txt=''
+                        rds_update(query)                                                
+                    retmsg = f"you have select {resp}"
             else:
                 retmsg = "Your are now in demo mode, there will be no response to above statement."
 
         elif self.menu_id == keys_dict[option_bind] :            
             if "yes," in resptxt:
-                updqry = f"update user_master set chat_id = {str(self.chatid)} where client_name = '{self.client_name}' and studentid={str(self.student_id)};"
+                updqry = f"update user_master set chat_id = {str(self.chatid)}, courseid = '{self.courseid}' where client_name = '{self.client_name}' and studentid={str(self.student_id)};"
                 rds_update(updqry)
                 txt = "Auto-Login option enabled"
             elif "no," in resptxt:                
@@ -2227,8 +2231,8 @@ def load_progress(df, stg, vars, client_name):
     
     resp_dict = vmbot.resp_dict
     txt_hdr = resp_dict['stg0']
-    if "eoc" not in stagebyschedule.lower():        
-        txt_hdr += resp_dict['stg1']
+    #if "eoc" not in stagebyschedule.lower():        
+        #txt_hdr += resp_dict['stg1']
     if '{stage_desc}' in txt_hdr:
         txt_hdr = txt_hdr.replace('{stage_desc}' , stage_desc)
     if '{username}' in txt_hdr:

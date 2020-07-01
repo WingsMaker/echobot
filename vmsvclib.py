@@ -346,24 +346,26 @@ def rds_connector():
 def rds_df(query):
     global rdscon
     df = None
-    try:
-        rdscon = rds_connector()    
+    #try:
+    rdscon = rds_connector()    
+    if rdscon is None:
+        rdscon = rds_connector()
         if rdscon is None:
-            rdscon = rds_connector()
-            if rdscon is None:
-                #print("RDS connection unsuccessful !")
-                return
-        rdscur = rdscon.cursor()
-        rdscur.execute(query)
-        rows = rdscur.fetchall()
-        if len(rows) == 0:
-            #print("rds_df returns no data")
-            return None
-        else:
-            #print(rows)
-            df = pd.DataFrame.from_dict(rows)   
-    except:
-        pass
+            #print("RDS connection unsuccessful !")
+            return
+    rdscur = rdscon.cursor()
+    rdscur.execute(query)
+    rows = rdscur.fetchall()
+    rdscon.commit()
+    rdscon.close()
+    if len(rows) == 0:
+        #print("rds_df returns no data")
+        return None
+    else:
+        #print(rows)
+        df = pd.DataFrame.from_dict(rows)   
+    #except:
+    #    pass
     return df
 
 def rds_engine():
@@ -518,47 +520,5 @@ if __name__ == "__main__":
     global rdscon, rds_connstr
     rds_connstr = ""
     rdscon = None
-    #
-    query = "select studentid, username from userdata where courseid = 'course-v1:Lithan+FOS-1219A+04Dec2019';"    
-    #tbname = "userdata"
-    #rdsEngine = rds_engine()
-    #rdscon = rdsEngine.connect()    
-    #df.to_sql(tblname, con=rdsEngine, if_exists = 'append', index=False, chunksize = 1000)
-    #rdscur = rdscon.execute(query)        
-    #rows = rdscur.fetchall()
-    #rdscon.close()
-    #print(len(rows))
-    #df = pd.DataFrame.from_dict(rows)   
-    #df = rds_df(query)
-    #df.columns = ['studentid','username']    
-    #print(df)
-    #
-    query = "update user_master set usertype = 0 where studentid = 2"
-    #rds_update(query)
-    #
-    # =========== azure_config ============
-    #host="db-sambaashplatform-cluster-2a.mysql.database.azure.com"
-    #user = "omnimentor@db-sambaashplatform-cluster-2a"
-    #passwd = "omnimentor"
-    #conn_str =f"mysql+pymysql://{user}:{passwd}@{host}/omnimentor?ssl_ca=BaltimoreCyberTrustRoot.crt.pem"    
-    #conn_str = "mysql://omnimentor:omnimentor@db-sambaashplatform-cluster-1.cluster-cj4nqileqmph.ap-southeast-1.rds.amazonaws.com/omnimentor"
-    #print(conn_str)
-    #conn_info = conn_str.split(":")    
-    #user = conn_info[1].replace('/','')    
-    #pwhost = conn_info[2].split('/')[0].split('@')
-    #psw = pwhost[0]
-    #host = pwhost[1]
-    #print(user, psw , host)    
-    zz = """    
-    bot_info={}
-    bot_info['BotToken'] = ''
-    bot_info['client_name'] = 'Lithan'
-    bot_info['omdb']=conn_str    
-    with open("vmbot.json", 'w') as outfile:
-        json.dump(bot_info, outfile)    
-    with open("vmbot.json") as json_file:  
-        bot_info = json.load(json_file)
-    print(*bot_info.items(), sep = '\n')    
-    """
     #
     print("End of vmsvclib.py")
