@@ -13,19 +13,24 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore")
 
 import pandas as pd
-import string
+import string, os, re
 import fasttext
-import sqlite3
 import random
 import csv
 import pickle
 import nltk
-import re
 from sklearn.metrics.pairwise import cosine_similarity
 from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk.stem import WordNetLemmatizer
 from sklearn.feature_extraction.text import TfidfVectorizer
+import contextlib
 
+import vmsvclib
+from vmsvclib import *
+
+fasttext.FastText.eprint = print
+
+global rdsconnector
 # ▓▓▓▒▒▒▒▒▒▒░░░  FastText NLP Model  ░░░▒▒▒▒▒▒▒▓▓▓
 class NLP_Parser():
     def __init__(self):
@@ -63,22 +68,56 @@ class NLP_Parser():
             temp_string += ' '
         return temp_string  
 
-    def load_model(self, dumpfile, config):
-        try:
-            ok = 0
-            conn = sqlite3.connect(config)
-            self.corpus_df = pd.read_sql_query("select * from ft_corpus", conn)
-            self.qn_resp = pd.read_sql_query("select * from prompts", conn)
-            df1 = pd.read_sql_query("select * from faq", conn)    
-            df2 = pd.read_sql_query("select * from dictionary", conn)
-            df3 = pd.read_sql_query("select * from stopwords", conn)
-            conn.close()
+    def load_modelfile(self, dumpfile, client_name):
+        try:                
+            ok = 0                        
+            vmsvclib.rdscon=vmsvclib.rds_connector()
+            df = rds_df("select * from `omnimentor`.`prompts`;")
+            if df is None:
+                print("failed at prompts")
+                return 0
+            df.columns = ['questions', 'resp']            
+            self.qn_resp = df.copy()
+            #print(df.head(10))
+            
+            df = rds_df("select * from `omnimentor`.`ft_corpus`;")
+            if df is None:
+                print("failed at ft_corpus")
+                return 0
+            df.columns = ['label', 'prompt', 'response']            
+            self.corpus_df = df.copy()
+            #print(df.head(10))
+            
+            #df = rds_df("select * from `omnimentor`.`faq`;")
+            df1 = rds_df("select * from faq;")
+            if df1 is None:
+                return 0
+            df1.columns = ['questions']
+            #print(df1.head(10))
+            
+            df2 = rds_df("select * from `omnimentor`.`dictionary`;")
+            if df2 is None:
+                print("failed at dictionary")
+                return 0
+            df2.columns = ['keywords']            
+            #print(df2.head(10))
+
+            df3 = rds_df("select * from `omnimentor`.`stopwords`;")
+            if df3 is None:
+                print("failed at stopwords")
+                return 0
+            df3.columns = ['keywords']            
+            #print(df3.head(10))
+            
             self.faq_list = [ x for x in df1.questions ]
             self.regword_list = [x for x in df2.keywords]
+            #stopwords = [ x for x in df3.keywords ]
             stopwords = [ x for x in df3.keywords ]
             stopwords_processed = self.LemNormalize(self.stopwords_processor(stopwords))            
             TfidfVec = TfidfVectorizer(tokenizer=self.LemNormalize, stop_words=stopwords_processed, ngram_range=(1,2))
-            ft_model = fasttext.load_model(dumpfile)
+            with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
+                ft_model = fasttext.load_model(dumpfile)
+            #ft_model = fasttext.load_model(dumpfile)
             self.model = ft_model
             ok = 1
         except:
@@ -91,13 +130,11 @@ class NLP_Parser():
         return        
 
     def load_corpus(self, config):
-        conn = sqlite3.connect(config)
-        self.corpus_df = pd.read_sql_query("SELECT * FROM ft_corpus", conn)
-        conn.close()
+        self.corpus_df = rds_df("select * from ft_corpus")
 
     def create_prompts_corpus(self, input_text):
         if self.model is None:
-            print("model incomplete")
+            print("model is incomplete")
             return ""
         if '\n' in input_text:
             inp_txt = ' '.join([txt.strip() for txt in input_text.split('\n')])
@@ -265,19 +302,23 @@ class NLP_Parser():
         return ( err == 0)
 
 if __name__ == "__main__":
-    nlpconfig = "nlp-conf.db"
     try:
         z = nltk.punkt
     except:
         nltk.download('punkt')
         nltk.download('stopwords')
         nltk.download('wordnet')
+    rdsconnector = None
     ft_model = NLP_Parser()
     print(ft_model)    
+    with open("vmbot.json") as json_file:  
+        bot_info = json.load(json_file)
+    client_name = bot_info['client_name']
+    print(client_name)
     opts = [ 0 , 7 ]
     if 0 in opts :
         print("Loading model from pickle")
-        ft_model.load_model("ft_model.bin", nlpconfig)
+        ft_model.load_modelfile("ft_model.bin", client_name)
         faq_list = ft_model.faq_list
         print( str(faq_list[:5]))
     if 1 in opts :

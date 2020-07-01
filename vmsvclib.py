@@ -18,34 +18,30 @@ summary = """
 ║ banner_msg         create a string of text banner in a line                 ║▒▒
 ║ bot_prompt         bot response with text and optional menu buttons         ║▒▒
 ║ build_menu         build telegram reply-to menu buttons with a list         ║▒▒
-║ copydbtbl          import .db file into sqlite database(replace mode)       ║▒▒
-║ csv2sqldb          import .csv file into sqlite database(replace mode)      ║▒▒
+║ callgraph          generate flow diagram and save into png file             ║▒▒
+║ copydbtbl          append the dataframe into another table in RDS           ║▒▒ 
+║ copy2omdb          append the dataframe into another table in SQLite        ║▒▒ 
 ║ decrypt            to decrypt text using fernet cryptography                ║▒▒
+║ debug              to trace the arguments & return values, just add @debug  ║▒▒
 ║ edit_fields        update record based on a list of (key, value) pairs      ║▒▒
 ║ edit_records       list of (key, value) pairs in a string                   ║▒▒
-║ edx_connect        connect to EdX database client session                   ║▒▒
-║ edx_disconnect     disconnect from EdX database client session              ║▒▒
-║ edx_query          sql query from EdX database into HTML file               ║▒▒
-║ edxsql             edx_connect + edx_query + edx_disconnect                 ║▒▒
 ║ email_lookup       email address search when the field is encrypted         ║▒▒
 ║ encrypt            to encrypt text using fernet cryptography                ║▒▒
 ║ encrypt_email      to encrypt email address field on a database record      ║▒▒
 ║ get_attachment     download the telegram attachement file locally           ║▒▒
-║ list_table         output sql query into HTML table in picture format       ║▒▒
-║ load_data          output a table in SQLite database into dataframe/list    ║▒▒
-║ mass_encrypt_email to encrypt email address field across the entire folder  ║▒▒
+║ get_columns        product the dataframe header into python list            ║▒▒
 ║ pycmd              execute python codes via eval()                          ║▒▒
 ║ querydf            output sql query on SQLite database into dataframe       ║▒▒
+║ rds_connector      database connection to RDS database by type of client    ║▒▒
+║ rds_df             output sql query on RDS database into dataframe          ║▒▒
+║ rds_engine         mysql engine for connecting existing RDS database        ║▒▒
+║ rds_param          get a value from RDS parameters table with a key given   ║▒▒
+║ rds_update         perform SQL update query for RDS database                ║▒▒
 ║ render_table       output dataframe into HTML table in picture format       ║▒▒
 ║ shellcmd           to execute system commands from the server shell access  ║▒▒
-║ sql2var            extract a value from params table in sysconf.db          ║▒▒
-║ sqldb2xls          export a table in SQLite database into .xlsx             ║▒▒
-║ text2voice         convert text to audo using google gTTS api               ║▒▒
 ║ time_hhmm          local time in hhmm numeric format                        ║▒▒
-║ update_playbooklist add record into the playbooks table in the pbconfig.db  ║▒▒
-║ updatesql          perform SQL update query for SQLite database             ║▒▒
+║ update_playbooklist add record into the playbooks table in the RDS          ║▒▒
 ║ write2html         output dataframe content into HTML file                  ║▒▒
-║ xls2sqldb          import .xlsx file into sqlite database(replace mode)     ║▒▒
 ╚═════════════════════════════════════════════════════════════════════════════╝▒▒
  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
 """
@@ -66,22 +62,28 @@ import sqlite3
 import wget
 import json
 import cryptography
+import pickle
 from cryptography.fernet import Fernet
 import telepot
 from telepot.namedtuple import ReplyKeyboardMarkup
 import pymysql
 import pymysql.cursors
 import sqlite3
+from sqlalchemy import create_engine
+import functools
+from functools import wraps
+from pycallgraph import PyCallGraph
+from pycallgraph import Config
+from pycallgraph import GlobbingFilter
+from pycallgraph.output import GraphvizOutput
 
-global edxcon
+global edxcon, rdscon, rds_connstr
 
-sysconfig = "sysconf.db"
-pbconfig = "pbconfig.db"
-nlpconfig = "nlp-conf.db"
-option_back = "◀️"
+piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
+#matplotlib.use('Agg')             
 
 def banner_msg(banner_title, banner_msg):
-    txt = "▓▓▓▒▒▒▒▒▒▒░░░  " + banner_title + "  ░░░▒▒▒▒▒▒▒▓▓▓"
+    txt = "❚█══ " + banner_title + " ══█❚"
     txt += "\n" + banner_msg + "\n"  
     return txt
 
@@ -120,31 +122,49 @@ def build_menu(btn_list, btns_rows = 3, extra_btn='',toadd_btn=[]):
     results = [  btn_list[n*btns_rows:][:btns_rows] for n in range(rr) ]
     return results
 
-def copydbtbl(fn, sqldb, tblname):
+#def callgraph(profiling_result_path):
+#    def fn_decorator(fn):
+#        @wraps(fn)
+#        def fn_decorated(*args, **kwargs):
+#            graphviz = GraphvizOutput()
+#            graphviz.output_file = profiling_result_path
+#            with PyCallGraph(output=graphviz, config=None):
+#                fn(*args, **kwargs)
+#        return fn_decorated
+#    return fn_decorator
+
+def copydbtbl(df, tblname):
+    global rdscon
     try:
-        conn2 = sqlite3.connect(fn)        
-        df = pd.read_sql_query("SELECT * FROM " + tblname, conn2)
-        conn1 = sqlite3.connect(sqldb)
-        df.to_sql(tblname, conn1 , index=False, if_exists="replace")
-        conn1.commit()
-        conn1.close()
-        conn2.close()
+        df.reset_index()    
+        rdsEngine = rds_engine()
+        rdscon = rdsEngine.connect()
+        df.to_sql(tblname, con=rdsEngine, if_exists = 'append', index=False, chunksize = 1000)
+        rdscon.close()
         ok=True
     except:
         ok=False
-    return ok
+    return ok        
 
-def csv2sqldb(csv_data, sqldb, tblname):
-    try:
-        con = sqlite3.connect(sqldb)
-        df = pd.read_csv(csv_data)
-        df.to_sql(tblname, con , index=False, if_exists="replace")
-        ok = True
-        con.commit()
-        con.close()
-    except:
-        ok = False
-    return ok
+def copy2omdb(df, tbl):
+    sqldb = "omdb.db"
+    conn = sqlite3.connect(sqldb)
+    df.to_sql(tbl, con=conn,index=False, if_exists='replace') 
+    conn.close()        
+    return
+
+#def debug(func):
+#    @functools.wraps(func)
+#    def wrapper_debug(*args, **kwargs):
+#        print(f"▓▓▓▒▒▒▒▒▒▒░░░  {func.__name__}  ░░░▒▒▒▒▒▒▒▓▓▓")
+#        args_repr = [repr(a) for a in args]                      # 1
+#        kwargs_repr = [f"{k}={v!r}" for k, v in kwargs.items()]  # 2
+#        signature = ", ".join(args_repr + kwargs_repr)           # 3
+#        print(f"Calling {func.__name__}({signature})")
+#        value = func(*args, **kwargs)
+#        print(f"{func.__name__!r} returned {value!r}")           # 4
+#        return value
+#    return wrapper_debug
 
 def decrypt(msg):
     key = '4jYUFl-wbMZ4NIiI2kG3LMFD5KTTKiT5ZiE6Yhoshp0='
@@ -156,7 +176,8 @@ def decrypt(msg):
     resp = cto.decrypt(txt)
     return resp.decode()
 
-def edit_fields(sqldb, tbl, idx, sid, resp, edit_list=[]):
+def edit_fields(client_name, courseid, tbl, idx, sid, resp, edit_list=[]):
+    global vmbot
     if resp == "0":
         txt = "Nothing to update"
     else:
@@ -173,7 +194,8 @@ def edit_fields(sqldb, tbl, idx, sid, resp, edit_list=[]):
             else:
                 updqry += " where " + idx + " in (" + ','.join([str(x) for x in edit_list]) + ")"
             try:
-                updatesql(sqldb, updqry)
+                updqry += " and courseid = '" + courseid + "' and client_name ='" + client_name + "';"
+                rds_update(updqry)
             except:
                 txt = "unable to update the record !"
                 return txt
@@ -188,16 +210,18 @@ def edit_fields(sqldb, tbl, idx, sid, resp, edit_list=[]):
             txt = "unable to update the record !"
     return txt
 
-def edit_records(sqldb, tbl, idx, sid,  fld_prefix = ""):
+def edit_records(client_name, courseid, tbl, idx, sid,  fld_prefix = ""):
     txt = ""
-    if sid > 0:
-        txt = ""
-        df  = load_data(sqldb, tbl, idx, True)
+    if sid > 0:        
+        qry = "select * from " + tbl + " where client_name = '_c_' and courseid = '_x_';"
+        qry = qry.replace('_c_', client_name)
+        qry = qry.replace('_x_', courseid)
+        df = rds_df( qry)
+        if df is None:
+            return txt
+        df.columns = get_columns(tbl)            
         rec_match = ( df[idx] == sid ) 
-        if len(df[rec_match])==0:
-            rc = 0
-        else:
-            rc=1
+        if len(df[rec_match]) > 0:
             vars = []
             txt = ''
             rec_match = df[rec_match]
@@ -208,92 +232,20 @@ def edit_records(sqldb, tbl, idx, sid,  fld_prefix = ""):
                     txt += fldname + ":" + str(fldvar) + "\n"
     return txt
 
-def edx_connect(conn_str = ''):
-    global edxcon
-    def get_conn_str():
-        connect_string = sql2var(sysconfig, "select value from params where key = 'edxapp';", "")
-        # mysql://sambaash:bHyyZ3krZ4fguwcrAD7v@127.0.0.1:33306/edxapp
-        return connect_string
-    if conn_str == "":
-        conn_str = get_conn_str()
-    try:
-        host = conn_str.split('@')[1].split('/')[0]
-        user = conn_str.split('@')[0].split('/')[2].split(':')[0]
-        pw = conn_str.split('@')[0].split('/')[2].split(':')[1]
-        if ':' in host:
-            port=host.split(':')[1]
-            host=host.split(':')[0]
-        else:
-            port = "3306"
-        edxcon = pymysql.connect(host=host,
-                port=int(port),
-                user=user,
-                password=pw,
-                db='edxapp',
-                charset='utf8mb4',
-                cursorclass=pymysql.cursors.DictCursor)
-        edxcur = edxcon.cursor()
-        print("connected to EDX host : " + host)
-        return 1
-    except:
-        print("unable to connect to EDX\n",conn_str)
-        return 0
-
-def edx_disconnect():
-    global edxcon
-    try:
-        edxcon.commit()
-        edxcon.close()        
-        print("Disconnected from EDX")
-    except:
-        pass
-    return
-
-def edx_query(query, df_mode = False):
-    global edxcon
-    result = None
-    try:
-        edxcur = edxcon.cursor()    
-        edxcur.execute(query)
-        rows = edxcur.fetchall()
-        if df_mode:
-            result = pd.DataFrame.from_dict(rows)
-        else:
-            rr = dict(rows[0])
-            hdr = list(rr)[0]
-            result = rr[hdr]   
-    except:
-        pass
-    return result
-
-def edxsql(query, fn):    
-    stat=edx_connect()
-    if stat == 0:
-        df = sql2var(nlpconfig, query, "", True)
-        return 1
-    df = edx_query(query, True)
-    edx_disconnect()
-    ok = 0
-    if df is not None :
-        try:
-            write2html(df, title=query, filename=fn)
-            ok = 1
-        except:
-            pass
-    return ok
-
-def email_lookup(sqldb, email):
-    sid =  sql2var(sqldb, "select studentid from userdata where email = '" + email + "';", 0)
-    if sid == 0:        
-        qry = "select studentid, email from userdata;"
-        df = querydf(sqldb, qry)
-        student_list = [x for x in  df.studentid]
-        email_list = [decrypt(x) for x in  df.email]        
-        user_dict = dict(zip(email_list,student_list))
-        if email in email_list:
-            sid = user_dict[email]
-    sid_str = "" if sid==0 else str(sid)        
-    return sid_str
+def email_lookup(df, email):
+    student_list = [x for x in  df.studentid]
+    email_list = [x for x in  df.email]        
+    if email in email_list:
+        n = email_list.index(email)
+        sid = student_list[n]
+        return str(sid)
+    #email_list = [decrypt(x) for x in  df.email]
+    email_list = [x.lower() for x in  df.email]
+    user_dict = dict(zip(email_list,student_list))
+    if email in email_list:
+        sid = user_dict[email]
+        return str(sid)
+    return ""
 
 def encrypt(msg):
     key = '4jYUFl-wbMZ4NIiI2kG3LMFD5KTTKiT5ZiE6Yhoshp0='
@@ -301,29 +253,30 @@ def encrypt(msg):
     txt = cto.encrypt(msg.encode())
     return txt
 
-def encrypt_email(sqldb):
+def encrypt_email(clt):
     try:
-        qry = "select studentid, email from userdata;"
-        df = querydf(sqldb, qry)
+        qry = f"select studentid, email from user_master where client_name = '{clt}' ;"
+        df = rds_df(qry)
+        if df is None:
+            return
         student_list = [x for x in  df.studentid]
         email_list = [x for x in  df.email]
         user_dict = dict(zip(student_list,email_list))
-        qry = "update userdata set email = b'_x_' where studentid = _y_;"
         for sid in student_list:
             email_str = user_dict[sid]
             if email_str[:6]=='gAAAAA':
                 enc_email = email_str
             else:
                 enc_email = encrypt(user_dict[sid]).decode()
-            query = "update userdata set email = '" + enc_email + "' where studentid = " + str(sid) + ";"
+            query = f"update user_master set email = '{enc_email}' where client_name = '{clt}' and studentid = {sid};"
             try:
-                updatesql(sqldb, query)
+                rds_update(query)
                 #email_str = decrypt(enc_email)
                 #print(sid, email_str)
             except:                
                 #print(f"Error encrypting for #{sid}")
                 pass
-        print("Email fields encrypted")
+        #print("Email fields encrypted")
     except:
         pass
     return
@@ -333,38 +286,18 @@ def get_attachment(bot, fid):
     fn = "https://api.telegram.org/file/bot" + bot._token + "/"  + fpath
     fname = wget.download(fn)
     return fname
-
-def list_table(sqldb, query, title_name):
-    try:
-        df = pd.read_sql(query, con = sqlite3.connect(sqldb))
-        table = render_table(df, header_columns=0, col_width=3, title_name=title_name)
-    except:
-        return None
-    return table
-
-def load_data(fn, config, fld, df_mode):
-    try:
-        conn = sqlite3.connect(fn)
-        fn = fn.replace(".xlsx",".db")
-        query = "select * from " + config
-        df = pd.read_sql_query(query, conn)
-    except:
-        df = None
-    if df_mode:
-        return df
-    else:
-        try:
-            the_list = list(df[fld])
-        except:
-            the_list = []
-        return the_list
-
-def mass_encrypt_email():
-    df = querydf(pbconfig, "select userdata from playbooks;")
-    return [encrypt_email(x) for x in df.userdata]
+    
+def get_columns(tablename):
+    query = f"SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_NAME = '{tablename}';"
+    df = rds_df(query)
+    df.columns = ['COLUMN_NAME']
+    cols = [ x for x in df.COLUMN_NAME ]
+    del df
+    return cols
 
 def pycmd(resp, parentbot):
     vars = parentbot.vars
+    result = ""
     if 'print' in resp:
         resp = resp.replace('print','str')
     if '"' in resp:
@@ -391,6 +324,89 @@ def querydf(sqldb, query):
     except:
         pass
     return df
+
+def rds_connector():
+    global rds_connstr
+    if rds_connstr=="":
+        with open("vmbot.json") as json_file:  
+            bot_info = json.load(json_file)
+        rds_connstr = bot_info['omdb']
+    conn_info = rds_connstr.split(":")    
+    user = conn_info[1].replace('/','')    
+    pwhost = conn_info[2].split('/')[0].split('@')
+    passwd = pwhost[0]
+    host = pwhost[1]   
+    if 'azure' in host:
+        rdscon = pymysql.connect(host=host, port=3306, user=user,passwd=passwd,db='omnimentor',ssl={'ca': 'BaltimoreCyberTrustRoot.crt.pem'})   
+    else:
+        rdscon = pymysql.connect(host=host, port=3306, user=user,passwd=passwd,db='omnimentor')       
+    return rdscon
+
+#@debug
+def rds_df(query):
+    global rdscon
+    df = None
+    try:
+        rdscon = rds_connector()    
+        if rdscon is None:
+            rdscon = rds_connector()
+            if rdscon is None:
+                #print("RDS connection unsuccessful !")
+                return
+        rdscur = rdscon.cursor()
+        rdscur.execute(query)
+        rows = rdscur.fetchall()
+        if len(rows) == 0:
+            #print("rds_df returns no data")
+            return None
+        else:
+            #print(rows)
+            df = pd.DataFrame.from_dict(rows)   
+    except:
+        pass
+    return df
+
+def rds_engine():
+    global rds_connstr
+    if rds_connstr=="":
+        with open("vmbot.json") as json_file:  
+            bot_info = json.load(json_file)
+        rds_connstr = bot_info['omdb']
+    rdsEngine = create_engine(rds_connstr, pool_recycle=3600)    
+    return rdsEngine
+
+def rds_param(query, retval="", dfmode=False):
+    sqlvar = retval
+    try:
+        df = rds_df(query)
+        if df is None:
+            return retval
+        if dfmode :
+            sqlvar = df.copy()
+        else:            
+            sqlvar = list(df.iloc[0])[0]
+            #sqlvar = df[fld].iloc[0]
+            if type(retval) != type(sqlvar):                
+                sqlvar = eval( str(sqlvar) )
+    except:
+        pass
+    return sqlvar
+
+#@debug
+def rds_update(query):
+    global rdscon
+    rdscon = rds_connector()
+    df = None
+    if rdscon is None:
+        rdscon = rds_connector()
+        if rdscon is None:
+            #print("RDS connection unsuccessful !")
+            return
+    rdscur = rdscon.cursor()
+    rdscur.execute(query)
+    rdscon.commit()
+    rdscon.close()
+    return 
 
 def render_table(data, col_width=3.0, row_height=0.625, font_size=14,
                     header_color='#40466e', row_colors=['#f1f1f2', 'w'], edge_color='w',
@@ -425,155 +441,124 @@ def shellcmd(cmd):
         output = ''
     return output
 
-def sql2var(fn, sql, retval, dfmode=False):
-    try:
-        conn = sqlite3.connect(fn)
-        cursor = conn.cursor()    
-        df = pd.read_sql_query(sql, conn)            
-        if dfmode :
-            sqlvar = df.copy()
-        else:
-            fld = list(df)[0]
-            sqlvar = df[fld].iloc[0]
-            if type(retval) != type(sqlvar):                
-                sqlvar = eval( str(sqlvar) )
-    except:
-        sqlvar = retval
-    finally:
-        cursor.close()
-        conn.close()
-    return sqlvar
-
-def sqldb2xls(fn, sqldb, tbl_list, ind_list):
-    try:
-        writer = pd.ExcelWriter(fn) 
-        conn = sqlite3.connect(sqldb)
-        for n in range(len(tbl_list)):
-            df = pd.read_sql_query(sql="SELECT * FROM " + tbl_list[n], con=conn,index_col=ind_list[n])
-            df.to_excel(writer, sheet_name=tbl_list[n])
-        writer.save()
-        writer.close()
-        ok = 1
-    except:
-        ok = 0
-    return ok
-
-#def text2voice(bot, chat_id, lang, resp):
-#    try:
-#        mp3 = 'echobot' + str(chat_id) + '.mp3'
-#        myobj = gTTS(text=resp, lang=lang, slow=False)
-#        myobj.save(mp3)
-#        fn = convert_audio(mp3, "ogg")
-#        if fn != "":
-#            bot.sendAudio(chat_id, (fn, open(fn, 'rb')), title='text to voice')
-#            os.remove(fn)
-#        os.remove(mp3)
-#    except:
-#        pass
-#    return
-
 def time_hhmm(gmt):
     hh = int(datetime.datetime.now().strftime('%H'))
     mm = int(datetime.datetime.now().strftime('%M'))
     hrs = (hh+gmt+24) % 24
     return hrs*100+mm
 
-def update_playbooklist(sqldb, course_id):
+def update_playbooklist(course_id, client_name, course_name, module_id):
     try:
-        conn = sqlite3.connect(pbconfig)
-        cursor = conn.cursor()
-        query = """delete from playbooks where course_id='_x_';"""
-        query = query.replace("_x_", course_id)
-        cursor.execute(query)
-        query = """insert into playbooks(course_id,userdata) values('_x_','_y_');"""
-        query = query.replace("_x_", course_id)
-        query = query.replace("_y_", sqldb)
-        cursor.execute(query)
-        conn.commit()
+        query = f"delete from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
+        rds_update(query)
+        cohort_id = piece(piece(course_id,':',1),'+',1)
+        module_code = piece(cohort_id,'-',0)
+        #query = """insert into playbooks(client_name,module_code,cohort_id,course_id,course_name,assignment,mcq) \
+        #        values('_c_', '_w_', '_x_', '_y_', '_z_', '{}', '{}');"""
+        query = "insert into playbooks(client_name,module_code,cohort_id,course_id,course_name) values('_c_', '_w_', '_x_', '_y_', '_z_');"                
+        query = query.replace("_c_", client_name)
+        query = query.replace("_w_", module_code)
+        query = query.replace("_x_", cohort_id)
+        query = query.replace("_y_", course_id)
+        query = query.replace("_z_", course_name)
+        rds_update(query)
     except:
-        print("Unable to update playbook list")
+        #print("Unable to update playbook list")
+        pass
     return
 
-def updatesql(sqldb, updqry):
-    try:
-        conn = sqlite3.connect(sqldb)
-        cursor = conn.cursor()
-        cursor.execute(updqry)
-        conn.commit()
-        cursor.close()
-        return True
-    except:
-        return False
-
 def write2html(df, title='', filename='report.html'):    
+    if df is None:
+        return
     result = '''
-<html>
-<head>
-<style>
+    <html>
+    <head>
+    <style>
+        h2 {
+            text-align: center;
+            font-family: Helvetica, Arial, sans-serif;
+        }
+        table { 
+            margin-left: auto;
+            margin-right: auto;
+        }
+        table, th, td {
+            border: 1px solid black;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 5px;
+            text-align: center;
+            font-family: Helvetica, Arial, sans-serif;
+            font-size: 90%;
+        }
+        table tbody tr:hover {
+            background-color: #dddddd;
+        }
+        .wide {
+            width: 90%; 
+        }
 
-    h2 {
-        text-align: center;
-        font-family: Helvetica, Arial, sans-serif;
-    }
-    table { 
-        margin-left: auto;
-        margin-right: auto;
-    }
-    table, th, td {
-        border: 1px solid black;
-        border-collapse: collapse;
-    }
-    th, td {
-        padding: 5px;
-        text-align: center;
-        font-family: Helvetica, Arial, sans-serif;
-        font-size: 90%;
-    }
-    table tbody tr:hover {
-        background-color: #dddddd;
-    }
-    .wide {
-        width: 90%; 
-    }
-
-</style>
-</head>
-<body>
-    '''
+    </style>
+    </head>
+    <body>
+        '''
+    result = '\n'.join([x[4:] for x in result.split('\n') ]) 
     result += '<h2> %s </h2>\n' % title
     if type(df) == pd.io.formats.style.Styler:
         result += df.render()
     else:
         result += df.to_html(classes='wide', escape=False)
-    result += '''
-</body>
-</html>
-'''
+    result += '''</body></html>'''
     with open(filename, 'w') as f:
         f.write(result)
     return
 
-def xls2sqldb(fn, sqldb):
-    try:
-        con = sqlite3.connect(sqldb)        
-        try:
-            wb = pd.ExcelFile(fn)
-            for sheet in wb.sheet_names:
-                    df = pd.read_excel(fn, sheet_name=sheet)
-                    df.to_sql(sheet, con , index=False, if_exists="replace")
-            ok = True
-        except:
-            ok = False
-        con.commit()
-        con.close()
-    except:
-        ok = False
-    return ok
-
 if __name__ == "__main__":
-    #encrypt_email("FOS-1219A.db")
-    fn = "edx_local.html"
-    query="""select * from course_overviews_courseoverview limit 5;"""
-    result = edxsql(query, fn)
-    print(result)
-    print("This is vmsvclib")
+    global rdscon, rds_connstr
+    rds_connstr = ""
+    rdscon = None
+    #
+    query = "select studentid, username from userdata where courseid = 'course-v1:Lithan+FOS-1219A+04Dec2019';"    
+    #tbname = "userdata"
+    #rdsEngine = rds_engine()
+    #rdscon = rdsEngine.connect()    
+    #df.to_sql(tblname, con=rdsEngine, if_exists = 'append', index=False, chunksize = 1000)
+    #rdscur = rdscon.execute(query)        
+    #rows = rdscur.fetchall()
+    #rdscon.close()
+    #print(len(rows))
+    #df = pd.DataFrame.from_dict(rows)   
+    #df = rds_df(query)
+    #df.columns = ['studentid','username']    
+    #print(df)
+    #
+    query = "update user_master set usertype = 0 where studentid = 2"
+    #rds_update(query)
+    #
+    # =========== azure_config ============
+    #host="db-sambaashplatform-cluster-2a.mysql.database.azure.com"
+    #user = "omnimentor@db-sambaashplatform-cluster-2a"
+    #passwd = "omnimentor"
+    #conn_str =f"mysql+pymysql://{user}:{passwd}@{host}/omnimentor?ssl_ca=BaltimoreCyberTrustRoot.crt.pem"    
+    #conn_str = "mysql://omnimentor:omnimentor@db-sambaashplatform-cluster-1.cluster-cj4nqileqmph.ap-southeast-1.rds.amazonaws.com/omnimentor"
+    #print(conn_str)
+    #conn_info = conn_str.split(":")    
+    #user = conn_info[1].replace('/','')    
+    #pwhost = conn_info[2].split('/')[0].split('@')
+    #psw = pwhost[0]
+    #host = pwhost[1]
+    #print(user, psw , host)    
+    zz = """    
+    bot_info={}
+    bot_info['BotToken'] = ''
+    bot_info['client_name'] = 'Lithan'
+    bot_info['omdb']=conn_str    
+    with open("vmbot.json", 'w') as outfile:
+        json.dump(bot_info, outfile)    
+    with open("vmbot.json") as json_file:  
+        bot_info = json.load(json_file)
+    print(*bot_info.items(), sep = '\n')    
+    """
+    #
+    print("End of vmsvclib.py")

@@ -18,10 +18,13 @@ warnings.filterwarnings("ignore")
 
 import pandas as pd
 import pandas.io.formats.style
+from pandas_profiling import ProfileReport
+
 import os, re, sys, time, datetime, string, random 
 import subprocess 
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtk
+import requests
 
 import telepot
 from telepot.loop import MessageLoop
@@ -29,27 +32,21 @@ from telepot.delegate import pave_event_space, per_chat_id, create_open, per_cal
 from telepot.namedtuple import ReplyKeyboardMarkup
 from telepot.helper import IdleEventCoordinator
 
-import sqlite3
 import wget
 import json
 
-import vmedxlib
 import vmnlplib
 import vmaiglib
+import vmffnnlib
 import vmmcqdlib
 import vmsvclib
+import vmedxlib
 from vmsvclib import *
 
-global vmbot, connect_string, match_score, max_duration, ft_model, dt_model, resp_dict, use_regexpr, mcq_analysis 
+global vmbot, ft_model, dt_model, nn_model, mcq_analysis 
+global rdscon, rds_connstr, edx_api_header, edx_api_url
 
 # following will be replaced by generic config without hardcoded.
-adminchatid = 1064466049
-#adminchatid = 71354936
-max_rows = 20
-sysconfig = "sysconf.db"
-nlpconfig = "nlp-conf.db"
-syslogdb  = "syslog.db"
-pbconfig = "pbconfig.db"
 btn_hellobot = "Hello OmniMentor 👩‍🎓 👨‍🎓🤖"
 option_back = "◀️"
 option_import = "Import 📦"
@@ -57,12 +54,14 @@ option_export = "Export 💾"
 option_mainmenu = "mainmenu"
 option_learners = "Learners 👩"
 option_faculty = "Faculty"
-option_admin = "Admin"
-option_2fa = "2FA"
+#option_admin = "Admin"
+#option_2fa = "2FA"
 option_demo = "Demo"
-mainmenu = [[option_learners, option_faculty , option_admin, option_back]]
+#mainmenu = [[option_learners, option_faculty , option_admin, option_back]]
+mainmenu = [[option_learners, option_faculty , option_back]]
 option_mycourse = "My course"
-option_myprogress = "My progress"
+#option_myprogress = "My progress"
+option_updateprogress = "Update progress"
 option_faq = "FAQ"
 option_mychat = "LiveChat"
 option_mychart = "Chart"
@@ -72,8 +71,7 @@ option_gethelp = "Contact me"
 option_info = "Info"
 lrn_start = "Learner Started"
 lrn_student = "Learner Verified"
-#learners_menu = []         # use this if demobot / testbot
-learners_menu = [[option_mycourse, option_myprogress, option_mychart],\
+learners_menu = [[option_mycourse, option_updateprogress, option_mychart],\
     [option_gethelp, option_mychat, option_faq], [option_binduser, option_info, option_back]]
 option_fct = "Faculty Admin 📚"
 option_pb = "Playbooks 📗📘📙"
@@ -83,14 +81,16 @@ option_sos = "Help 🆘"
 option_chart = "Chart 📊"
 option_chatlist = "Chat List"
 option_chatempty = "Chat Empty"
-mentor_menu = [[option_fct, option_pb], [option_analysis, option_chat, option_back]]
+option_bindadm = "Auto Sign-in 🔐"
+mentor_menu = [[option_fct, option_pb, option_analysis], [option_chat, option_bindadm, option_back]]
 fc_student = "Student Update"
 fc_cohlist = "Cohort Listing"
 fc_edx = "EdX Import"
 fc_assignment = "Update Assignment"
 fc_mcqtest = "Update MCQs"
 fc_schedule = "Schedule Update"
-faculty_menu = [[fc_student,fc_cohlist, fc_edx], [fc_assignment, fc_mcqtest, fc_schedule, option_back]]
+#faculty_menu = [[fc_student,fc_cohlist, fc_edx], [fc_assignment, fc_mcqtest, fc_schedule, option_back]]
+faculty_menu = [[fc_student, fc_cohlist, option_back]]
 fc_updstage = "Stage Update"
 fc_resetstage = "Stage Reset"
 fc_recupd = "Record Update"
@@ -103,17 +103,16 @@ faculty_submenu = [[fc_updstage, fc_resetstage, fc_recupd, option_back]]
 pb_config = "Configurator Playbook 📗"
 pb_userdata = "Persona Playbook 📙"
 playbook_menu= [[pb_config, pb_userdata, option_back]]
-pbk_config = "Configuration 💻"
-pbk_updcfg = "Update Configurator 💻"
-pbconfig_menu = [[pbk_config, pbk_updcfg],[option_import,option_export, option_back]]
 ps_userdata = "Userdata"
 ps_schedule = "Schedule 📅"
-ps_stage = "Edit Stage"
-course_menu = [[ps_userdata, ps_schedule, ps_stage ],[option_import, option_export, option_back]]
+#ps_stage = "Edit Stage"
+ps_stage = "Module Stage"
+course_menu = [[ps_userdata, ps_schedule, ps_stage, option_back]]
 an_mcq = "MCQ Analysis"
 an_chart = "Graph"
 an_mcqd = "MCQ Diff. Analysis"
 ml_grading = "AI Grading"
+opt_aig = "AI Grad Cohorts"
 analysis_menu = [[ml_grading, an_mcq, an_mcqd, an_chart, option_back]]  
 an_mcqavg = "By MCQ Average"
 an_avgatt = "By MCQ Attempts"
@@ -122,77 +121,52 @@ opt_mcqd = "MCQ Diff Cohorts"
 opt_pbusr = "Playbook Cohorts"
 opt_mcqavg = "MCQ Avg Cohorts"
 mcqdiff_menu = [[an_avgatt,an_avgscore,an_mcqavg,option_back]]
-option_syscfg = "System 🖥️"
-option_nlp = "NLP"
-option_ml = "Machine Learning"
-admin_menu = [[option_nlp, option_ml, option_syscfg, option_back]]
-cfg_syslog = "System Log"
-cfg_reload = "Load Config"
-cfg_bind = "Binded Users"
-cfg_map = "Mapping"
-cfg_progress = "Responses"
-option_cmd = "Cmd Mode"
-option_edx = "SQL Mode"
-option_py = "Script Mode"
-#syscfg_menu = [[cfg_syslog, cfg_bind, cfg_progress, cfg_reload, cfg_map],[option_cmd, option_edx, option_py, option_import, option_export,option_back]]
-syscfg_menu = [[cfg_syslog, cfg_bind, cfg_progress],[cfg_reload, cfg_map, option_edx],[option_cmd, option_py, option_back]]
-nlp_prompts = "Bot Prompts"
-nlp_dict = "Dictionary 📖"
-nlp_corpus = "Corpus"
-nlp_stopwords = "Stopwords"
-nlp_faq = "FAQ List"
-nlp_train = "Train NLP"
-nlp_menu = [[nlp_dict, nlp_prompts, nlp_corpus], [nlp_train, nlp_stopwords, nlp_faq],[option_import, option_export,option_back]]
-ml_data = "Model Data"
-ml_pipeline = "ML Pipeline"
-ml_report = "ML EDA"
-ml_train = "Train Model" 
-ml_graph = "ML Graph"
-opt_aig = "AI Grad Cohorts"
-ml_menu = [[ml_data,ml_pipeline,ml_report],[ml_graph,ml_train, option_back]]
-
 
 gen2fa = lambda : (''.join(random.choice( "ABCDEFGHJKLMNPQRTUVWXY0123456789" ) for i in range(32))).upper()
 string2date = lambda x,y : datetime.datetime.strptime(x,y).date()
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
+module_code = lambda x : piece(piece(piece(x,':',1),'+',1),'-',0)
+list_avg = lambda x : 0 if len(x)==0 else sum(x)/len(x)
+#callgraph = lambda x : vmsvclib.callgraph(x)
+#debug = lambda x : vmsvclib.debug(x)
 
 def do_main():
-    global vmbot, max_duration, dt_model
-    loadconfig()
-    gmt = sql2var(sysconfig,"select value from params where key='GMT';", 0)
-    edx_time = sql2var(sysconfig,"select value from params where key='edx_import';", 0)
-    if os.name == 'nt':
-        Token = "812577272:AAEgRcGYOGzkN9AoJQKLusspiowlUuGrtj0"  # @OmniMentor
-    else:
-        Token = sql2var(sysconfig, "select value from params where key = 'BotToken';", '')
-    edx_cnt = 0
-    err = 0    
-    vmbot = BotInstance(Token)
+    global vmbot, dt_model, nn_model
+    err = 0
+    vmsvclib.rds_connstr = ""
+    vmsvclib.rdscon = None
+    if not loadconfig():
+        print("error loading config")
+        return
+    vmbot = BotInstance()
     botname = vmbot.bot_name
-    vmbot.load_courselist()
-    if dt_model.model_name=="":
-        txt = "Ai grading model data file dt_model.bin is missing"
+    if dt_model.model_name=="" :
+        txt = "AI grading model data file dt_model.bin is missing"
         syslog('system', txt)
-        vmbot.bot.sendMessage(adminchatid, txt)
+        vmbot.bot.sendMessage(vmbot.adminchatid, txt)
+        vmbot.bot_running = False
+    elif nn_model.model_name=="" :
+        txt = "AI grading model data file ffnn_model.hdf5 is missing"
+        syslog('system', txt)
+        vmbot.bot.sendMessage(vmbot.adminchatid, txt)
         vmbot.bot_running = False
     else:
         print("running " + botname)
-        if os.name != 'nt':
-            try:
-                vmbot.bot.sendMessage(adminchatid, "Click /admin to access the admin mode\n/sys for system mode\n/demo for demo")
-            except:
-                pass
-    vmbot.client_name = sql2var(sysconfig, "select value from params where key = 'client_name';", "Sambaash")        
-    syslog('system',f"Bot {botname} started for client {vmbot.client_name} .")
+        #vmbot.bot.sendMessage(vmbot.adminchatid, "welcome to the bot")
+    syslog('system',f"Bot {botname} started.")
+    edx_cnt = 0
+    edx_time = vmbot.edx_time
+    gmt = vmbot.gmt    
+    #load_edxdata()
     while vmbot.bot_running :
-        try:
-            checkjoblist(vmbot.bot)
-            timenow = time_hhmm(gmt)
-            if (edx_time > 0) and (timenow==edx_time) and (edx_cnt==0):
+        try:        
+            checkjoblist(vmbot)
+            timenow = time_hhmm(gmt)            
+            if (edx_time > 0) and (timenow==edx_time) and (edx_cnt==0) :
                 edx_cnt = 1
-                syslog('system', 'edx_mass_import started')
-                vmedxlib.edx_mass_import()
-                syslog('system', 'edx_mass_import ended')
+                #job_request("ServiceBot",adminchatid,client_name,"edx_mass_import","")
+                load_edxdata()
+                time.sleep(60)
             if (edx_time > 0) and (timenow > edx_time) and (edx_cnt==1):
                 edx_cnt = 0
             time.sleep(3)
@@ -213,60 +187,84 @@ def do_main():
         print(txt)
     return (err==0)
 
+def load_edxdata():
+    global vmbot                
+    client_name = vmbot.client_name
+    date_today = datetime.datetime.now().date()
+    yrnow = str(date_today.strftime('%Y'))    
+    query = f"select DISTINCT courseid FROM userdata WHERE client_name = '{client_name}' " 
+    query += f" AND SUBSTRING(courseid,-4)='{yrnow}' ORDER BY courseid;"
+    df = rds_df(query)
+    if df is None:
+        course_list = []
+    else:
+        df.columns = ['courseid']
+        course_list= [x for x in df.courseid]                
+    qry = f"SELECT DISTINCT module_code FROM course_module WHERE client_name='{client_name}';"    
+    df = rds_df(qry)
+    df.columns = ['module_code']
+    if df is None:
+        mc_list = []
+    else:
+        mc_list = [x for x in df.module_code]
+        course_list = [ x for x in course_list if module_code(x) in mc_list ]
+    course_list = [ x for x in course_list if 'v1:lithan' not in x.lower() ]    
+    vmbot.updated_courses = []
+    # update existing courses on mcq,attempts,stage schedule
+    for course_id in course_list:       
+        #print(course_id)
+        vmedxlib.update_mcq(course_id, client_name)
+        vmedxlib.update_assignment(course_id, client_name)
+        vmedxlib.update_schedule(course_id, client_name)
+    vmbot.updated_courses = course_list       
+    course_list = vmedxlib.search_course_list(yrnow)
+    # new courses created recently , not found RDS
+    for course_id in [ x for x in course_list if x not in vmbot.updated_courses]:
+        #print(course_id)
+        vmedxlib.edx_import(course_id, client_name)
+    vmedxlib.mass_update_usermaster(client_name)    
+    return
+    
 def loadconfig():
-    global match_score, max_duration, use_regexpr, resp_dict, ft_model, dt_model, mcq_analysis
+    global ft_model, dt_model, nn_model, mcq_analysis, vmbot
     ok = True
     try:
-        ft = sql2var(sysconfig, "select value from params where key = 'ft_model';", "ft_model.bin")
+        dt = "dt_model.bin"
+        ft = "ft_model.bin"
+        ffnn = "ffnn_model.hdf5"
+        with open("vmbot.json") as json_file:  
+            bot_info = json.load(json_file)
+        #print(*bot_info.items(), sep = '\n')
+        client_name = bot_info['client_name']
         ft_model = vmnlplib.NLP_Parser()
-        ft_model.load_model(ft, nlpconfig)
+        ft_model.load_modelfile(ft, client_name)        
         dt_model = vmaiglib.MLGrader()
-        dt_model.load_model("dt_model.bin")
+        dt_model.load_model(dt)
         if dt_model.model_name == "":
+            print("Error loading dt_model")
+            ok = False
+        nn_model = vmffnnlib.NNGrader()
+        nn_model.model_loader(ffnn)
+        if nn_model.model_name == "":
+            print("Error loading nn_model")
             ok = False
         mcq_analysis = vmmcqdlib.MCQ_Diff()
-        max_duration = int(sql2var(sysconfig, "select value from params where key = 'max_duration';", 300))
-        match_score = sql2var(sysconfig, "select value from params where key = 'match_score';", 0.95)        
-        use_regexpr = int(sql2var(sysconfig, "select value from params where key = 'regexpr';", 0))
-        resp_dict=load_respdict()
     except:  
         ok = False  
-        pass
     return ok
 
-def checkjoblist(bot):
-    global vmbot
-    result = ""
-    if len(vmbot.job_list) > 0:
-        job_item = vmbot.job_list[0]        
-        result = runbotjob(bot, job_item)
-        vmbot.job_list = vmbot.job_list[1:]
-    return result
-
-def binduser(tid, sid=0, cohort_id=""):
-    try:
-        telegram_users = load_data(sysconfig, 'telegram', 'telegram_id', False)
-        if tid in telegram_users:
-            query = """update telegram set chat_id = _y_ where telegram_id = _x_,courseid = '_z_';"""
-        else:
-            query = """insert into telegram(telegram_id,chat_id,courseid) values(_x_,_y_,'_z_')"""
-        query = query.replace("_x_",str(tid))
-        query = query.replace("_y_",str(sid)) # set sid to 0 if unbind
-        query = query.replace("_z_",cohort_id)
-        updatesql(sysconfig, query)
-        query = """update telegram set chat_id = _y_ where courseid = '_x_';"""
-    except:
-        pass
-    return
-
 def load_respdict():
-    keys = load_data(sysconfig, 'progress', 'key', False)
-    resp = load_data(sysconfig, 'progress', 'response', False)
-    mydict=dict(zip(keys,resp))
+    mydict = dict()
+    df = rds_df("select * from progress;")
+    if df is not None:
+        df.columns = ['key','response']  
+        keys = [ x for x in df.key]
+        resp = [ x for x in df.response]
+        mydict=dict(zip(keys,resp))
     return mydict
 
 class BotInstance():
-    def __init__(self, Token):
+    def __init__(self):
         self.Token = ""
         self.bot_name = ""
         self.bot_id = ""
@@ -274,13 +272,8 @@ class BotInstance():
         self.bot_running = False
         self.bot = None
         self.user_list = {}
-        self.job_list = []
         self.chat_list = {}
-        self.code2fa_list = {}
-        self.list_courseid = []
-        self.list_coursename = []
-        self.list_datafile = []
-        self.list_students = []
+        self.job_items = {}
         self.vars = dict()
         self.cmd_dict = dict()
         self.keys_dict = dict()
@@ -299,7 +292,6 @@ class BotInstance():
         self.define_keys( faculty_menu, self.keys_dict[ option_fct ])
         self.define_keys( faculty_submenu , self.keys_dict[ fc_student ])
         self.define_keys( playbook_menu, self.keys_dict[ option_pb ])
-        self.define_keys( pbconfig_menu, self.keys_dict[ pb_config ])
         self.define_keys( course_menu, self.keys_dict[ pb_userdata ])
         self.define_keys( analysis_menu, self.keys_dict[ option_analysis ])
         self.define_keys( mcqdiff_menu, self.keys_dict[ an_mcqd ])
@@ -314,26 +306,64 @@ class BotInstance():
         self.keys_dict[ opt_mcqd ] = (self.keys_dict[ an_mcqd ]*10) + 1
         self.keys_dict[ opt_mcqavg ] = (self.keys_dict[ an_mcqavg ]*10) + 1
         self.keys_dict[ opt_aig ] = (self.keys_dict[ ml_grading ]*10) + 1
-        
-        # /sys
-        self.define_keys( admin_menu, self.keys_dict[option_admin])
-        self.define_keys( nlp_menu  , self.keys_dict[ option_nlp ])
-        self.define_keys( ml_menu  , self.keys_dict[ option_ml ])
-        self.define_keys( syscfg_menu  , self.keys_dict[ option_syscfg ])
-        self.keys_dict[option_2fa] = (self.keys_dict[ option_admin ] *10) + 1
 
         # print(*(self.keys_dict).items(), sep = '\n')
         # print(*(self.cmd_dict).items(), sep = '\n')
         #
+        with open("vmbot.json") as json_file:  
+            bot_info = json.load(json_file)
+        #print(*bot_info.items(), sep = '\n')
+        Token = bot_info['BotToken']
+        client_name = bot_info['client_name']                
+        
+        df = rds_df("select * from params where client_name = 'System';")
+        if df is None:                        
+            print("Unable to access params table from RDS")
+            return 
+        df.columns = ['client_name','key', 'value']
+        par_val = ['' + str(x) for x in df.value]
+        par_key = [x for x in df.key]
+        par_dict = dict(zip(par_key, par_val))            
+        self.adminchatid = int(par_dict['adminchatid'])
+        max_duration = int(par_dict['max_duration'])
+        self.match_score = eval(par_dict['match_score'])
+        self.use_regexpr = int(par_dict['regexpr'])
+        self.pass_rate = float(par_dict['pass_rate'])
+        self.gmt = int(par_dict['GMT'])
+        self.resp_dict = load_respdict()
+        if client_name=="":
+            client_name = par_dict['client_name']
+        self.client_name = client_name        
+        df = rds_df(f"select * from params where client_name = '{self.client_name}';")
+        if df is None:
+            print("Unable to access params table from RDS")
+            return 
+        df.columns = ['client_name','key', 'value']               
+        par_val = ['' + str(x) for x in df.value]
+        par_key = [x for x in df.key]
+        par_dict = dict(zip(par_key, par_val))
+        email_filter = par_dict['email_filter']
+        self.efilter = email_filter.split(',')
+        self.updated_courses = []
+        self.edx_time = int(par_dict['edx_import'])    
+        hdr = par_dict['edx_api_header']        
+        self.edx_api_header = eval(hdr)
+        self.edx_api_url = par_dict['edx_api_url']
+        vmedxlib.edx_api_url = self.edx_api_url
+        vmedxlib.edx_api_header = self.edx_api_header
+        if Token == "":
+            Token = par_dict['BotToken']
         try:
             self.bot = telepot.DelegatorBot(Token, [
                 pave_event_space()( [per_chat_id(), per_callback_query_chat_id()],
                 create_open, MessageCounter, timeout=max_duration, include_callback_query=True),
             ])
             info = self.bot.getMe()
+            print(info)
             self.bot_name = info['username']
             self.bot_id = info.get('id')
             self.Token = Token
+            print(self.bot_name)            
             print('Frontend bot : ', self.bot_id)
             msg = self.bot_name + ' started running. URL is https://t.me/' + self.bot_name
             print(msg)
@@ -345,6 +375,7 @@ class BotInstance():
             return
         except:
             pass
+        del par_dict, df, client_name 
         return
 
     def __str__(self):
@@ -367,46 +398,36 @@ class BotInstance():
                 self.keys_dict[menu_item] = menu_keys 
                 menu_keys += 1
         return 
-
-    def load_courselist(self):
-        df = querydf(pbconfig, "select * from playbooks;")
-        self.list_courseid = [ x for x in df.course_id]
-        self.list_coursename = [ "" for x in df.course_id]
-        self.list_datafile = [ x for x in df.userdata]
-        self.list_students = [ [] for x in df.course_id]
-        for n in range(len(self.list_courseid)):
-            fn = self.list_datafile[n] 
-            course_name = sql2var(fn, "select value from params where key = 'course_name';", " ")
-            if course_name.strip() != "":
-                self.list_coursename[n] = course_name
-            self.list_students[n] = load_data(fn, 'userdata', 'studentid', False)        
-        return
-
-    def find_course(self, stud):
-        return [self.list_courseid[n] for n in range(len(self.list_courseid)) if stud in self.list_students[n]]
+        
+    def get_menukey(self, val): 
+        for key, value in (self.keys_dict).items(): 
+             if val == value: 
+                 return key       
+        return "key doesn't exist"        
 
 class MessageCounter(telepot.helper.ChatHandler):    
     def __init__(self, *args, **kwargs):
         super(MessageCounter, self).__init__(*args, **kwargs)
         self.new_session = True
         self.is_admin = False
+        self.client_name = ""
         self.chatid = 0
         self.student_id = 0
         self.username = ""
         self.userdata = ''
         self.courseid = ''
         self.coursename = ''
+        self.stagetable = ''
         self.stage_name = ''
         self.stagedate = ''
+        self.stage_list = []
+        self.stage_days = []
         self.tablefields = ''
         self.edited = 0
         self.tableindex = 0
-        self.list_courseids = []
-        self.mcq_list = []
-        self.as_list  = []        
         self.tablerows = []
-        self.stage_list = []
-        self.stage_days = []
+        self.list_courseids = []
+        self.list_coursename = []
         self.records = dict()
         self.menu_id = 0
         self.menu_home = []
@@ -440,61 +461,66 @@ class MessageCounter(telepot.helper.ChatHandler):
     def student_progress(self):
         self.tablerows = []
         prev_stage = self.records['stage']
-        stage_list = load_data(self.userdata, 'stages', 'name', False)
-        stage_days = load_data(self.userdata, 'stages', 'days', False)
+        stage_list = list(self.stagetable['name'])
+        stage_days = list(self.stagetable['days'])
         self.stage_list = stage_list
         self.stage_days = stage_days
         self.records['username'] = self.username
+        self.courseid = self.records['courseid']        
         txt = 'Select the day # to check your progress :'
         btn_list = build_menu(["Day #" + str( stage_days[n] ) for n in range(len(stage_list))], 4, option_back)
         bot_prompt(self.bot, self.chatid, txt, btn_list)
         for stg in stage_list:                    
             result = "stage:'_x_'".replace('_x_', stg)
-            edit_fields(self.userdata, "userdata", "studentid", self.student_id, result)
+            edit_fields(self.client_name, self.courseid, "userdata", "studentid", self.student_id, result)
             self.stage_name = stg
-            (tt, self.mcq_list, self.as_list, self.records ) = verify_student(self.userdata, self.student_id)
-            tt = display_progress(self.userdata, stg, self.records)
+            (tt, self.records ) = verify_student(self.userdata, self.student_id)
+            tt = display_progress(self.userdata, stg, self.records, self.client_name)
             self.tablerows.append(tt)
         self.stage_name = prev_stage
         self.records['stage'] = prev_stage
         result = "stage:'_x_'".replace('_x_', prev_stage)
-        edit_fields(self.userdata, "userdata", "studentid", self.student_id, result)
-        self.parentbot.keys_dict[option_myprogress]
+        edit_fields(self.client_name, self.courseid, "userdata", "studentid", self.student_id, result)
+        #self.parentbot.keys_dict[option_myprogress]
+        self.parentbot.keys_dict[lrn_student]        
         return txt
 
     def mcqas_chart(self, groupcht = False ):
         try:
-            userdata  = load_data(self.userdata, 'userdata','studentid', True)
+            if self.userdata is None:                
+                return            
+            avg_list = dict()
             if groupcht:
-                cohort_id = piece(self.userdata, '.', 0)
+                condqry = f"client_name = '{self.client_name}' AND courseid = '{self.courseid}' "
+                cohort_id = piece(piece(self.courseid,':',1),'+',1)
                 fn = 'chart_' + cohort_id + '.png'
-                df1 = dict(userdata.mean(axis = 0, skipna = True))
-                df2 = pd.DataFrame({
-                    'Test/IU' : [ '#' + str(n) for n in range(1,14) ],    
-                    'mcq test' : [ df1['mcq_avg' + str(n)]*100 for n in range(1,14) ],
-                    'assignment test' : [ df1['as_avg' + str(n)]*100 for n in range(1,14) ]
-                })
                 title = f"MCQ and Assignment scores for cohort {cohort_id}"
             else:
                 sid = self.student_id
+                condqry = f"client_name = '{self.client_name}' AND courseid = '{self.courseid}' AND studentid = {sid} "
                 fn = 'chart_' + str(sid) + '.png'
-                df1 = userdata[userdata.studentid==sid]                
-                df2 = pd.DataFrame({
-                    'Test/IU' : [ '#' + str(n) for n in range(1,14) ],    
-                    'mcq test' : [ list(df1['mcq_avg' + str(n)])[0]*100 for n in range(1,14) ],
-                    'assignment test' : [ list(df1['as_avg' + str(n)])[0]*100 for n in range(1,14) ]
-                })
                 title = f"MCQ and Assignment scores for student #{sid}"                
-            
-            df2.plot(kind='bar',figsize=(10,4), rot = 90)            
+            avg_list = dict()
+            for avgopt in ['mcq_avg','as_avg']:
+                qry =",".join([ f" avg({avgopt}{x}) as avg{x} " for x in range(1,14) ])
+                query = f"select {qry} from userdata where " + condqry
+                df = rds_df(query)
+                df.columns = qry.split(',')
+                avg_list[avgopt] = [eval(str(x)) for x in df.values.tolist()[0]]
+            df = pd.DataFrame({
+                'Test/IU' : [ '#' + str(n) for n in range(1,14) ],    
+                'mcq test' : avg_list['mcq_avg'],
+                'assignment test' : avg_list['as_avg']
+            })
+            df.plot(kind='bar',figsize=(10,4), rot = 90)            
             plt.title(title)
             ax = plt.gca()
-            cols = [c for c in  df2.columns]
+            cols = [c for c in  df.columns]
             label_col = cols[0]
             xcol = cols[1]
-            label_list = [ x for x in df2[label_col] ]
+            label_list = [ x for x in df[label_col] ]
             width = 0.8
-            plt.xlim([-width, len(df2[xcol])-width])
+            plt.xlim([-width, len(df[xcol])-width])
             ax.set_xticklabels((label_list))
             ax.yaxis.set_major_formatter(mtk.PercentFormatter())
             plt.draw()
@@ -503,17 +529,17 @@ class MessageCounter(telepot.helper.ChatHandler):
             f = open(fn, 'rb')
             self.bot.sendPhoto(self.chatid, f)
             if groupcht:
-                df3 = pd.DataFrame({
+                df = pd.DataFrame({
                     'Test/IU' : [ '#' + str(n) for n in range(1,14) ],    
-                    'mcq test' : [ "{:.2%}".format(df1['mcq_avg' + str(n)]) for n in range(1,14) ],                    
-                    'assignment test' : [ "{:.2%}".format(df1['as_avg' + str(n)]) for n in range(1,14) ]
+                    'mcq test' : [ "{:.2%}".format(x) for x in avg_list['mcq_avg'] ],
+                    'assignment test' : [ "{:.2%}".format(x) for x in avg_list['as_avg'] ]
                 })
-                if render_table(df3, header_columns=0, col_width=6, title_name=title) is not None:
+                if render_table(df, header_columns=0, col_width=6, title_name=title) is not None:
                     plt.savefig(fn, dpi=100)
                     plt.clf()
                     f = open(fn, 'rb')
                     self.bot.sendPhoto(self.chatid, f)
-            del df0, df1, df2, df3
+            del df
         except:
             pass
         return 
@@ -532,9 +558,6 @@ class MessageCounter(telepot.helper.ChatHandler):
             if self.new_session:
                 txt += '\nsession already logged out.'
             else:
-                #tt = 'Who is online:\n'
-                #tt += '\n'.join(['     '.join([str(d) for d in vmbot.user_list[r]]) for r in vmbot.user_list if vmbot.user_list[r][0]==self.courseid])
-                #txt = tt + "\n" + txt
                 txt += '\nStudent id is ' + str(self.records['studentid'])
                 txt += '\nCohort ID : ' + self.courseid
                 txt += '\nCourse Name : ' + self.coursename
@@ -547,6 +570,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                 txt += '\nOutstanding Amount : ' + str(self.records['amt']) + "\n"
         txt += f"\nYour telegram username is {self.username}"
         txt += f"\nYour telegram chat_id is {self.chatid}"
+        txt += f"\nSystem client name is {self.client_name}"
         return txt
 
     def livechat(self, sid=0, telegram_id=0):
@@ -618,11 +642,13 @@ class MessageCounter(telepot.helper.ChatHandler):
         return chat_found
 
     def runfaq(self, resp):
-        global match_score, use_regexpr, ft_model, vmbot
+        global ft_model, vmbot
         accuracy = 0
+        match_score = vmbot.match_score
+        use_regexpr = vmbot.use_regexpr
         user_resp = resp.lower()
         txt = ""
-        if use_regexpr == 1 :  # sysconf.db params table regexpr field
+        if use_regexpr == 1 :
             txt = ft_model.match_resp(resp)
             syslog( "REG" , txt )
 
@@ -645,14 +671,14 @@ class MessageCounter(telepot.helper.ChatHandler):
         ## customized fullfillment with {variable} inside the response        
         if (txt != '') and re.search('.*\{.*', txt):
             stagedate = str(self.stagedate)
-            aslist = str(self.as_list)
-            mcqlist = str(self.mcq_list)
+            mcqlist = ""
+            aslist = ""
             amt = str( self.records['amt'] )
             mcqas_chart = ""
-            mcqdate = self.records['mcqdate']
-            asdate = self.records['asdate']
-            eldate = self.records['eldate']
-            fcdate = self.records['fcdate']
+            mcqdate = stagedate
+            asdate = stagedate
+            eldate = stagedate
+            fcdate = stagedate
             if '{lf}' in txt:
                 txt = txt.replace('{lf}' , '\n')
             if '{sos}' in txt:
@@ -693,22 +719,55 @@ class MessageCounter(telepot.helper.ChatHandler):
                 self.menu_id = vmbot.keys_dict[option_faq]
         return txt
 
+    def load_tables(self):
+        global vmbot                
+        if vmbot.edx_time > 0 and self.courseid not in vmbot.updated_courses:            
+            self.sender.sendMessage("Please wait for a while.")
+            vmedxlib.update_mcq(self.courseid,  self.client_name)
+            vmedxlib.update_assignment(self.courseid,  self.client_name)
+            vmedxlib.update_schedule(self.courseid,  self.client_name)
+            vmbot.updated_courses.append(self.courseid)        
+        qry = "select * from userdata where client_name = '_c_' and courseid = '_x_';"
+        qry = qry.replace('_c_', self.client_name)
+        qry = qry.replace('_x_', self.courseid)
+        df = rds_df( qry)
+        if df is None:            
+            self.userdata = None
+        else:            
+            df.columns = get_columns("userdata")
+            self.userdata = df                    
+        qry = "select * from stages where client_name = '_c_' and courseid = '_x_';"
+        qry = qry.replace('_c_', self.client_name)
+        qry = qry.replace('_x_', self.courseid)
+        df = rds_df( qry)
+        if df is None:            
+            self.stagetable = None
+        else:            
+            df.columns = get_columns("stages")        
+            self.stagetable = df                    
+        return 
+
     def load_courseinfo(self, resp):
-        global vmbot
-        resptxt = resp.lower()
-        menu_list = [ x.lower() for x in vmbot.list_courseid ]
-        n = -1
-        if resptxt in menu_list:
-            n = menu_list.index(resptxt)            
-            self.courseid = vmbot.list_courseid[n]
-            self.userdata = vmbot.list_datafile[n]
-            self.coursename = vmbot.list_coursename[n]
-            ok = 1
-        else:
+        if len(self.list_courseids)==0:
+            return 0
+        query = f"SELECT COUNT(course_id) AS cnt FROM playbooks WHERE course_id='{resp}' and client_name = '{self.client_name}';"
+        result = rds_param(query)
+        cnt = int("0" + str(result))        
+        if cnt == 0:
             self.courseid = ""
             self.userdata = ""
             self.coursename = ""
             ok = 0
+            if resp in self.list_courseids:
+                n = self.list_courseids.index(resp)
+                del (self.list_courseids)[n]
+                del (self.list_coursename)[n]
+        else:
+            n = self.list_courseids.index(resp)
+            self.coursename = self.list_coursename[n]
+            self.courseid = resp
+            self.load_tables()
+            ok = 1
         return ok
 
     def check_student(self, sid, chat_id):
@@ -716,24 +775,23 @@ class MessageCounter(telepot.helper.ChatHandler):
         txt = ''
         if self.new_session == False :
             return 
-        (txt, self.mcq_list, self.as_list, self.records ) = verify_student(self.userdata, sid)
+        if self.userdata is None:            
+            return
+        (txt, self.records ) = verify_student(self.userdata, sid)        
         err = 0        
         try:
             self.stage_name = self.records['stage']
             self.stagedate = self.find_stage_date("stagedate")
-            self.records['asdate'] = self.find_stage_date("asdate")
-            self.records['eldate'] = self.find_stage_date("eldate")
-            self.records['fcdate'] = self.find_stage_date("fcdate")
-            self.records['mcqdate'] = self.find_stage_date("mcqdate")
+            self.records['asdate'] = self.stagedate
+            self.records['eldate'] = self.stagedate
+            self.records['fcdate'] = self.stagedate
+            self.records['mcqdate'] = self.stagedate
         except:
             self.records=={}
         if (self.records=={}) or (self.stage_name==""):
             txt = "Hi, there is incomplete information at the moment, the session is not ready yet.\n\n"
             txt += "Please select the course from below list."
-            self.student_id = sid
-            stud_courselist = vmbot.find_course(sid)
-            self.list_courseids = stud_courselist
-            btn_course_list = build_menu(stud_courselist,1, option_back)
+            btn_course_list = build_menu(self.list_courseids,1)
             bot_prompt(self.bot, self.chatid, txt, btn_course_list)
             self.menu_id = self.parentbot.keys_dict[option_learners]
             return
@@ -741,8 +799,8 @@ class MessageCounter(telepot.helper.ChatHandler):
             self.is_admin = False
             self.student_id = sid
             self.new_session = False
-            vmbot.user_list[chat_id]=[self.courseid, self.student_id, self.username, chat_id, ""]
-            txt = display_progress(self.userdata, self.stage_name, self.records)
+            vmbot.user_list[chat_id]=[self.courseid, self.student_id, self.client_name, chat_id, ""]
+            txt = display_progress(self.userdata, self.stage_name, self.records, self.client_name)
             if txt == "":
                 txt = "Welcome back."
             bot_prompt(self.bot, self.chatid, txt, self.menu_home)
@@ -750,7 +808,7 @@ class MessageCounter(telepot.helper.ChatHandler):
         return 
 
     def find_stage_date(self, date_type):
-        stage_table = load_data(self.userdata, 'stages', 'name', True)
+        stage_table = self.stagetable
         if stage_table is None:
             return ''
         row_match = ( stage_table['name'] == self.stage_name ) 
@@ -759,7 +817,6 @@ class MessageCounter(telepot.helper.ChatHandler):
         df=stage_table[row_match]        
         result = list(df[date_type])[0]
         n = self.records['stage_names'].index(self.stage_name)
-        #stg_datestr = self.records['stage_dates'][n+1]
         stg_datestr = self.records['stage_dates'][n]
         if result is None:
             datestring = stg_datestr
@@ -786,9 +843,9 @@ class MessageCounter(telepot.helper.ChatHandler):
         fn = "https://api.telegram.org/file/bot" + bot._token + "/"  + fpath
         return (fname, fn)
 
-    def track_attempts(self):        
+    def track_attempts(self):
         vars = load_vars(self.userdata, self.student_id)
-        (t0, t1, vars) = load_progress(self.userdata, vars['stage'], vars)
+        (t0, t1, vars) = load_progress(self.userdata, vars['stage'], vars, self.client_name)
         if vars['mcq_att_balance'] == "":
             txt = "There is no outstand MCQs for futher attempts."
         else:
@@ -796,23 +853,24 @@ class MessageCounter(telepot.helper.ChatHandler):
         return txt
 
     def update_stage(self, sid):
-        if sid <= 0:
+        if (sid <= 0) or (self.userdata is None):
+            print(890)
+            return ""                 
+        vars = load_vars(self.userdata, sid)            
+        df = self.userdata.copy()        
+        client_name = list([x for x in df.client_name])[0]
+        courseid = list([x for x in df.courseid])[0]
+        condqry = f" client_name = '{client_name}' and courseid = '{courseid}';"
+        df = rds_df( "select * from stages where " + condqry)
+        if df is None:
             return ""
-        df = querydf(self.userdata,'select * from userdata where studentid=_x_;'.replace('_x_',str(sid)))
-        vars = dict()
-        vars = df.iloc[0].to_dict()
-        df = querydf(self.userdata,'select * from stages;')
-        tblsize = len(df)
-        if tblsize==0:
-            return ""
-        stage_dates = [x for x in df.stagedate]
-        stage_names = [x for x in df.name]
+        df.columns = get_columns("stages")
+        stage_dates = list(df['stagedate'])
+        stage_names = list(df['name'])
+        tblsize = len(stage_names)
         current_stage = ""
-        userdata = None
-        mcq_str = sql2var(self.userdata, "select value from params where key = 'mcq';", "")
-        as_str = sql2var(self.userdata, "select value from params where key = 'assignment';", "")
-        vars['mcq_due_dates'] = {} if mcq_str==' ' else eval(mcq_str)    
-        vars['as_due_dates'] = {} if as_str==' ' else eval(as_str)
+        vars['mcq_due_dates'] = []
+        vars['as_due_dates'] = []
         try:
             pass_stage = 0
             txt = ''
@@ -820,10 +878,10 @@ class MessageCounter(telepot.helper.ChatHandler):
                 try:
                     current_stage = stage_names[n]
                     vars['stage'] = current_stage
-                    (t1, t2, vars) = load_progress(self.userdata, current_stage, vars)
+                    (t1, t2, vars) = load_progress(self.userdata, current_stage, vars, self.client_name)
                     txt = t1 + t2
                     if vars['pass_stage'] == 0:
-                        pass_stage = 1
+                        pass_stage = 1                
                         break
                 except:
                     pass
@@ -832,73 +890,143 @@ class MessageCounter(telepot.helper.ChatHandler):
         if current_stage == "":
             return ""
         else:
-            updqry = """update userdata set stage = '_x_' WHERE studentid==_y_;"""
-            updqry = updqry.replace("_x_", current_stage)
-            updqry = updqry.replace("_y_", str(sid))
-            updatesql(self.userdata, updqry)            
+            updqry = f"update userdata set stage = '{current_stage}' where studentid = {str(sid)} and " 
+            updqry += condqry            
+            rds_update(updqry)
+            self.userdata.loc[ self.userdata.studentid == sid, "stage" ] = current_stage
+            self.stage_name = current_stage
         return current_stage
 
     def grad_prediction(self):
-        if dt_model.model_name == "":
+        global nn_model, dt_model
+        if dt_model.model_name == "" :
+            print("please load the model first")
+            return []
+        if nn_model.model_name == "":
+            print("please load the model first")
             return []
         txt = ""        
-        df = load_data(self.userdata, 'userdata', 'studentid', True)
+        df = self.userdata
+        if self.userdata is None:
+            print("there is no data")
         list_sid = [str(x) for x in df.studentid]
-        if list_sid == []:
+        if len(list_sid)==0:
             return []
+        client_name = list(df['client_name'])[0]
+        courseid = list(df['courseid'])[0]
         progress_df = dict()
         progress_tt = dict()
         tbl = []
-        try:
-            for n in range(len(list_sid)):
-                vv = list_sid[n]
-                sid = int(vv)
-                vars = load_vars(self.userdata, sid)
-                uu = vars['username']
-                fw = lambda u,v : f"\nTest Results for Student #{v} {u}\n    MCQ Tests\t\tAssignment Tests\n"
-                fx = lambda n : vars["mcq_avg"+str(n)]
-                fy = lambda n : vars["as_avg"+str(n)]
-                gx = lambda n : vars["mcq_attempts"+str(n)]
-                gy = lambda n : vars["as_attempts"+str(n)]
-                gz = lambda n : gx(n) + gy(n) if gx(n) is not None and  gy(n) is not None else 0
-                fz = lambda n : [ "#" + str(n) , "{:.2%}".format(fx(n)), str(gx(n)), "{:.2%}".format(fy(n)) , str(gy(n)) ]
-                mscores = [fx(n) for n in range(1,14) if gx(n) > 0]
-                ascores = [fy(n) for n in range(1,14) if gy(n) > 0]
-                mcnt = len(mscores)
-                acnt = len(ascores)
-                mavg = 0 if mcnt == 0 else sum(mscores) / mcnt
-                aavg = 0 if acnt == 0 else sum(ascores) / acnt                    
-                grad_pred = dt_model.predict(mavg , aavg, 13)
-                tbl.append( [vv , uu , "{:.2%}".format(grad_pred[0])] )
-                progress_list = [ fz(n) for n in range(1,14) if gz(n) > 0]
-                progress_list.append(['Avg', "{:.2%}".format(mavg) , " ",  "{:.2%}".format(aavg) , " "])
-                df =  pd.DataFrame( progress_list )
-                df.columns = ['Test #', 'MCQ', '#Attempts', 'Assignment', '# Attempts']                
-                progress_df[sid] = df
-                progress_tt[sid] = f"\nTest Results for Student #{vv} {uu}"
-            self.records['progress_df'] = progress_df
-            self.records['progress_tt'] = progress_tt
-            df1 =  pd.DataFrame( tbl )
-            df1.columns = ['Student ID#','Name', 'Prediction']
-            tt = "AI Grading for " + self.courseid
-            df1= df1.sort_values(by ='Prediction') 
-            if render_table(df1, header_columns=0, col_width=3, title_name=tt) is not None:
-                fn='gradpred_' + str(self.chatid) + '.png'
-                plt.savefig(fn, dpi=100)
-                plt.clf()
-                f = open(fn, 'rb')
-                self.bot.sendPhoto(self.chatid, f)
-        except:
-            pass
-        return list_sid
+        new_sidlist = []
+        for vv in list_sid:
+            sid = int(vv)
+            vars = load_vars(self.userdata, sid)
+            uu = vars['username']
+            fw = lambda u,v : f"\nTest Results for Student #{v} {u}\n    MCQ Tests\t\tAssignment Tests\n"
+            fx = lambda n : vars["mcq_avg"+str(n)]
+            fy = lambda n : vars["as_avg"+str(n)]
+            gx = lambda n : vars["mcq_attempts"+str(n)]
+            gy = lambda n : vars["as_attempts"+str(n)]
+            gz = lambda n : gx(n) + gy(n) if gx(n) is not None and  gy(n) is not None else 0
+            fz = lambda n : [ "#" + str(n) , "{:.2%}".format(fx(n)), str(gx(n)), "{:.2%}".format(fy(n)) , str(gy(n)) ]
+            mscores = [fx(n) for n in range(1,14) if gx(n) > 0]
+            ascores = [fy(n) for n in range(1,14) if gy(n) > 0]
+            mcnt = len(mscores)
+            acnt = len(ascores)
+            if mcnt+acnt==0:
+                continue
+            mavg = 0 if mcnt == 0 else sum(mscores) / mcnt
+            aavg = 0 if acnt == 0 else sum(ascores) / acnt
+            # current not working                
+            use_neural_network = False   # True or False
+            if use_neural_network:
+                mavgatt = sum([gx(n) for n in range(1,14)]) / 13
+                mmaxatt = max([gx(n) for n in range(1,14)])
+                as_avgatt = sum([gy(n) for n in range(1,14)]) / 13
+                as_maxatt = max([gy(n) for n in range(1,14)])
+                grad_pred = nn_model.pred(client_name,mavg,mavgatt,mmaxatt,aavg,as_avgatt,as_maxatt,acnt)
+                if grad_pred is None:
+                    continue                    
+            else:
+                grad_pred = dt_model.predict(mavg , aavg, mcnt) 
+            
+            tbl.append( [vv , uu , "{:.2%}".format(grad_pred[0])] )
+            progress_list = [ fz(n) for n in range(1,14) if gz(n) > 0]
+            progress_list.append(['Avg', "{:.2%}".format(mavg) , " ",  "{:.2%}".format(aavg) , " "])
+            
+            df =  pd.DataFrame( progress_list )
+            df.columns = ['Test #', 'MCQ', '#Attempts', 'Assignment', '# Attempts']                
+            progress_df[sid] = df
+
+            progress_tt[sid] = f"\nTest Results for Student #{vv} {uu}"
+            new_sidlist.append(str(sid))
+        self.records['progress_df'] = progress_df
+        self.records['progress_tt'] = progress_tt
+        df1 =  pd.DataFrame( tbl )
+        if len(df1) == 0:
+            self.sender.sendMessage("There is no data for this course id")
+            return []
+        df1.columns = ['Student ID#','Name', 'Prediction']
+        tt = "AI Grading for " + self.courseid
+        df1= df1.sort_values(by ='Prediction') 
+        if render_table(df1, header_columns=0, col_width=3, title_name=tt) is not None:
+            fn='gradpred_' + str(self.chatid) + '.png'
+            plt.savefig(fn, dpi=100)
+            plt.clf()
+            f = open(fn, 'rb')
+            self.bot.sendPhoto(self.chatid, f)
+        return new_sidlist
+
+    def find_course(self, stud):
+        client_name =  self.client_name        
+        course_id_list = []
+        course_name_list = []
+        if client_name == "":
+            return (course_id_list, course_name_list)
+        if stud==0:
+            qry = f"SELECT DISTINCT course_id, course_name FROM playbooks WHERE client_name='{self.client_name}';"    
+            df = rds_df(qry)
+            if df is not None:            
+                df.columns = ['course_id','course_name']
+                course_id_list = [x for x in df.course_id]
+                course_name_list = [x for x in df.course_name]
+            return (course_id_list, course_name_list)
+
+        api_url = self.parentbot.edx_api_url
+        if api_url == '':
+            userinfo = {}
+        else:
+            url = f"{api_url}/user/fetch/{stud}"
+            headers = self.parentbot.edx_api_header            
+            userinfo = edxapi_getuser(headers, url)
+        if userinfo == {} :
+            (course_id_list, course_name_list) = rds_loadcourse(self.client_name, stud)
+        else:
+            course_id_list = [ x['course_id'] for x in userinfo['enrolments'] ]
+            course_name_list = [ x['course_name'] for x in userinfo['enrolments'] ]                
+            qry = f"SELECT DISTINCT module_code FROM course_module WHERE client_name='{self.client_name}';"    
+            df = rds_df(qry)
+            if df is not None:
+                df.columns = ['module_code']
+                mc_list = [x for x in df.module_code]
+                m = len(course_id_list)
+                for n in range(m):
+                    k = m - 1 - n
+                    course_id = course_id_list[k]
+                    module_code = piece(piece(piece(course_id,':',1),'+',1),'-',0)
+                    if module_code not in mc_list:
+                        del course_id_list[k]
+                        del course_name_list[k]
+        return (course_id_list, course_name_list)
 
     def on_chat_message(self, msg):
-        global pbconfig, ft_model, dt_model, mcq_analysis, vmbot
+        global ft_model, dt_model, mcq_analysis, vmbot
         try:
             content_type, chat_type, chat_id = telepot.glance(msg)
             bot = self.bot
             self.chatid = chat_id
             keys_dict = vmbot.keys_dict
+            adminchatid = vmbot.adminchatid
         except:
             return
 
@@ -912,76 +1040,6 @@ class MessageCounter(telepot.helper.ChatHandler):
             if 'from' in list(msg):
                 username = msg['from']['first_name']                
                 self.records['username'] = self.username = username
-            if 'reply_to_message' in list(msg) and 'For your approval with 2FA code :' in str(msg):
-                err=0
-                try:
-                    msglist = str(msg).replace('"',"'").replace("'message_id':",chr(4644)).split(chr(4644))[3].split(',')
-                    reply_id = int([x for x in msglist if 'from' in x ][0].split(':')[2].strip())
-                    req_user = [x for x in msglist if 'first_name' in x ][0].replace("'",'').split(':')[1].strip()
-                    code2fa = [x for x in msglist if 'bot_command' in x ][0].split(' ')[-1].replace("'",'')
-                    txt = "Hi " + req_user + ", your 2FA code is : " + code2fa
-                    bot.sendMessage(reply_id,txt)
-                except:
-                    pass
-        elif content_type=="document":
-            (fname, fn) = self.getdoc(bot, msg)
-            syslog( str(chat_id) , fname )
-            retmsg = "Reading file " + fname + " ....\n"
-            retmsg += "file url is " + fn + "\n\n"
-            if self.menu_id == keys_dict[opt_pbusr]:
-                if (fn.lower())[-4:]==".csv":  
-                    statusok = map_and_update(self.userdata, fn)
-                elif (fn.lower())[-4:]==".xls":  
-                    statusok = xls2sqldb(fn, self.userdata)
-                elif (fn.lower())[-5:]==".xlsx": 
-                    statusok = xls2sqldb(fn, self.userdata)
-                elif (fn.lower())[-3:]==".db":
-                    fname = wget.download(fn)
-                    for tbl in ["userdata", "stages", "params"] : 
-                        statusok = copydbtbl(fname, self.userdata, tbl)
-            elif self.menu_id == keys_dict[pb_config]:
-                if (fn.lower())[-4:]==".csv":  # import only playbooks table
-                    statusok=csv2sqldb(fn, pbconfig, "playbooks")
-                elif (fn.lower())[-4:]==".xls":
-                    statusok = xls2sqldb(fn, pbconfig)
-                elif (fn.lower())[-5:]==".xlsx":
-                    statusok = xls2sqldb(fn, pbconfig)
-                elif (fn.lower())[-3:]==".db":
-                    fname = wget.download(fn)
-                    statusok = copydbtbl(fname, pbconfig, "playbooks")
-                else:
-                    statusok = False
-            elif self.menu_id == keys_dict[option_syscfg]:
-                if (fn.lower())[-4:]==".csv": 
-                    statusok = import_keydict(fn, sysconfig)
-                elif (fn.lower())[-4:]==".xls":
-                    statusok = xls2sqldb(fn, sysconfig)
-                elif (fn.lower())[-5:]==".xlsx":
-                    statusok = xls2sqldb(fn, sysconfig)
-                elif (fn.lower())[-3:]==".db":
-                    fname = wget.download(fn)
-                    statusok = copydbtbl(fname, sysconfig, "dictionary")
-            elif self.menu_id == keys_dict[option_nlp]:
-                if (fn.lower())[-4:]==".csv": 
-                    statusok = import_keydict(fn, nlpconfig)
-                elif (fn.lower())[-4:]==".xls":
-                    statusok = xls2sqldb(fn, nlpconfig)
-                elif (fn.lower())[-5:]==".xlsx":
-                    statusok = xls2sqldb(fn, nlpconfig)
-                elif (fn.lower())[-3:]==".db":
-                    fname = wget.download(fn)
-                    statusok = copydbtbl(fname, nlpconfig, "ft_corpus")
-            else:                    
-                txt = "Thanks for the document but I do not know what to do with it."
-                self.sender.sendMessage(txt)
-                return
-
-            if statusok:
-                txt += "file has been imported."
-            else:
-                txt += "Unable to import this file correctly. Please check the file."
-            sent = bot.sendMessage(self.chatid, txt)                
-            resp = ""
         elif content_type != "text":
             txt = "Thanks for the " + content_type + " but I do not need it for now."
             self.sender.sendMessage(txt)
@@ -989,47 +1047,47 @@ class MessageCounter(telepot.helper.ChatHandler):
         else:
             syslog( content_type , str(msg) )
 
-        # for demo/testbot only
-        if resp in ["/bind","/unbind"]:
-            resp = option_binduser
-        elif resp == "/chat":
-            resp = option_mychat
-        elif resp == "/faq":
-            resp = option_faq
-        elif resp == "/plot":
-            resp = option_mychart
-        elif resp == "/progress":
-            resp = option_myprogress
-
-        syslog(str(self.chatid),f"response = {resp}")
+        if resp not in list(keys_dict):
+            syslog(str(self.chatid),f"response = {resp}")
         if resp=='/?':
             retmsg = self.session_info()
-            retmsg += "\nmenu id = " + str(self.menu_id)
+            retmsg += "\nmenu id = " + str(self.menu_id) 
+            retmsg += "\nmenu key : " + vmbot.get_menukey(self.menu_id) 
 
         elif resp=='/demo':
-            sqldb = "demo.db"
-            try:
-                df = querydf(sqldb,'select distinct steps from user_stories order by id;')
-                demo_list = [] if df is None else [x for x in df.steps]
-                self.tablerows = demo_list
-                demo_menu = build_menu(demo_list, 3, 'exit', ['/start','/end'])
-                txt = 'Select from the following journey events:\nType exit to get out from demo mode'
-                txt = bot_prompt(self.bot, self.chatid, txt, demo_menu )
-                self.new_session = True
-                self.chatid = 0
-                self.student_id = 0
-                self.reset  
-                self.menu_id = keys_dict[option_demo]
-            except:
-                pass
-    
+            if self.client_name == "":
+                print("client_name is empty")
+                return
+            if self.client_name == "Demo" :
+                #try:
+                df = rds_df('select distinct steps from user_stories order by id;')
+                if df is None:
+                    retmsg = "The demo system is not ready yet"
+                else:                    
+                    #df.columns = get_columns("stages")
+                    df.columns = ['steps']
+                    demo_list = [x for x in df.steps]
+                    self.tablerows = demo_list
+                    demo_menu = build_menu(demo_list, 3, 'exit', ['/start','/end'])
+                    txt = 'Select from the following journey events:\nType exit to get out from demo mode'
+                    txt = bot_prompt(self.bot, self.chatid, txt, demo_menu )
+                    self.new_session = True
+                    self.chatid = 0
+                    self.student_id = 0
+                    self.reset  
+                    self.menu_id = keys_dict[option_demo]
+                #except:
+                #    pass
+            else:                
+                retmsg = "Sorry /demo is only supported for client Demo."
+        
         elif resp=='/end':
             self.endchat()
             self.is_admin = (chat_id == adminchatid)
             syslog("system","telegram user " + str(chat_id) + " offine.")
             self.logoff()
             
-        elif resp=='/stop' and (chat_id==adminchatid):
+        elif resp=='/stop' and (chat_id in [adminchatid, 71354936]):
             vmbot.broadcast('System shutting down.')
             vmbot.bot_running = False
             txt = 'System already shutdown.'
@@ -1042,68 +1100,76 @@ class MessageCounter(telepot.helper.ChatHandler):
             self.is_admin = (chat_id == adminchatid)
             self.parentbot = vmbot
             self.menu_home = learners_menu
+            self.edited = 0
+            self.client_name = vmbot.client_name
             if chat_id > 0 :
                 self.endchat()
                 syslog("system","telegram user " + str(chat_id) + " online.")
-                if len(vmbot.list_courseid) == 0:
-                    txt = 'There is no playbooks found at the moment. Please contact the admin.'
-                    self.logoff(txt)
-                else:
-                    query = "select chat_id from telegram where telegram_id =" + str(chat_id)
-                    result = sql2var(sysconfig, query , 0)
-                    sid = int(result)
-                    self.student_id = sid
-                    if sid > 0:
-                        query = "select courseid from telegram where telegram_id =" + str(chat_id)
-                        cohort_id = sql2var(sysconfig, query , "")
-                        if cohort_id=="":
-                            stud_courselist = vmbot.find_course(sid)
+                query = "select usertype from user_master where chat_id =" + str(chat_id) + \
+                    " and client_name = '" + self.client_name + "';"
+                result = rds_param(query)
+                usertype = int("0" + str(result))                
+                query = "select studentid from user_master where chat_id =" + str(chat_id) + \
+                    " and client_name = '" + self.client_name + "';"
+                result = rds_param(query)
+                sid = int("0" + str(result))
+                query = "select username from user_master where studentid =" + str(self.student_id) + \
+                    " and client_name = '" + self.client_name + "';"
+                self.username = rds_param(query)
+                self.student_id = sid                
+                if sid > 0:  # binded users found
+                    if usertype == 1:
+                        query = "select courseid from user_master where chat_id =" + str(chat_id) + \
+                            " and client_name = '" + self.client_name + "';"
+                        courseid = rds_param(query)                        
+                        (self.list_courseids, self.list_coursename) = self.find_course(sid)                        
+                        if courseid=="":
+                            stud_courselist = self.list_courseids                                
                         else:
-                            stud_courselist = [cohort_id]
+                            stud_courselist = [courseid]
                         self.list_courseids = stud_courselist
-                        n = len(stud_courselist)
-                        if n > 1:                            
-                            btn_course_list = build_menu(stud_courselist,1, option_back)
+                        n = len(stud_courselist)                        
+                        #if n > 1:
+                        if n > 20:
+                            date_today = datetime.datetime.now().date()
+                            yrnow = str(date_today.strftime('%Y'))
+                            course_list = [x for x in stud_courselist if x[-4:]==yrnow]                        
+                            btn_course_list = build_menu(course_list,1)
                             txt = "Please select the course id from below:"
                             bot_prompt(self.bot, self.chatid, txt, btn_course_list)
                             self.menu_id = keys_dict[option_learners]
+                        elif n > 1:
+                            btn_course_list = build_menu(stud_courselist,1)
+                            txt = "Please select the course id from below:"
+                            bot_prompt(self.bot, self.chatid, txt, btn_course_list)
+                            self.menu_id = keys_dict[option_learners]                        
                         elif len(stud_courselist) == 1:
-                            resp = stud_courselist[0]
-                            msg = "You are in course:\n" + resp
-                            self.courseid = resp
-                            idx = vmbot.list_courseid.index(resp)
-                            self.userdata = vmbot.list_datafile[idx]
+                            query = f"select course_name from playbooks where course_id ='{courseid}' and client_name='{self.client_name}';"
+                            coursename = rds_param(query)                            
+                            msg = "You are in course:\n" + courseid
+                            self.courseid = courseid
+                            self.load_tables()
                             bot.sendMessage(chat_id, msg)
                             self.check_student(self.student_id, self.chatid)
+                        return
+                    elif usertype == 11:
+                        self.is_admin = True
+                        self.menu_id = 1
+                        txt = banner_msg("Welcome " + self.username,"You are now connected to Mentor mode.")
+                        self.menu_home = mentor_menu                            
+                        (self.list_courseids, self.list_coursename) = self.find_course(0)
+                        bot_prompt(self.bot, self.chatid, txt, self.menu_home)
+                        return
                     else:
-                        self.list_courseids = []
-                        txt = 'My name is OmniMentor, I am your friendly learning facilitator at ' + vmbot.client_name + '.\n'
-                        txt += "\nplease enter your student id or email address :"                        
-                        bot_prompt(self.bot, self.chatid, txt, [])
-                        self.menu_id = keys_dict[option_learners]
-                
-        elif resp.startswith('/admin') or resp.startswith('/sys'):
-            if chat_id in [adminchatid , 71354936, 56381493, 263090563]:
-                self.is_admin = True
-                self.menu_id = 1
-                if resp.startswith('/admin'):
-                    txt = banner_msg("Welcome","You are now connected to Mentor mode.")                    
-                    self.menu_home = mentor_menu
+                        self.sender.sendMessage("Sorry your account is blocked, please contact the admin.")
+                        self.logoff()    
+                        return
                 else:
-                    txt = banner_msg("Welcome","You are now connected to Admin mode.")                    
-                    self.menu_home = admin_menu
-                bot_prompt(self.bot, self.chatid, txt, self.menu_home)
-            else:
-                self.is_admin = False
-                self.edited = 1 if resp.startswith('/admin') else 2
-                txt = "Following user requesting for admin access :\n"
-                txt += f"Command of request : {resp} \n\n"
-                txt += json.dumps(msg)
-                vmbot.code2fa_list[chat_id] = gen2fa()
-                txt += "\n\nFor your approval with 2FA code : " + vmbot.code2fa_list[chat_id]
-                bot.sendMessage(adminchatid, txt)  
-                retmsg = "Please enter the 2FA code :"
-                self.menu_id = keys_dict[option_2fa]
+                    self.list_courseids = []
+                    txt = 'My name is OmniMentor, I am your friendly learning facilitator at ' + self.client_name + '.\n'
+                    txt += "\nplease enter your student id or email address :"                        
+                    bot_prompt(self.bot, self.chatid, txt, [])
+                    self.menu_id = keys_dict[option_learners]
 
         elif self.menu_id == keys_dict[option_mainmenu]:
             if resp == option_fct :
@@ -1114,63 +1180,130 @@ class MessageCounter(telepot.helper.ChatHandler):
                 txt = 'You are in playbooks maintainence mode.'
                 bot_prompt(self.bot, self.chatid, txt, playbook_menu)
                 self.menu_id = keys_dict[option_pb]
-            elif resp == option_syscfg :
-                txt = 'You are in system config mode.'
-                bot_prompt(self.bot, self.chatid, txt, syscfg_menu)
-                self.menu_id = keys_dict[option_syscfg]
-            elif resp == option_nlp :
-                txt = 'You are in NLP options.'
-                bot_prompt(self.bot, self.chatid, txt, nlp_menu)
-                self.menu_id = keys_dict[option_nlp]
-            elif resp == option_ml :                
-                txt = 'You are in ML options.'
-                bot_prompt(self.bot, self.chatid, txt, ml_menu)
-                self.menu_id = keys_dict[option_ml]
             elif resp == option_chat :
                 self.livechat()
             elif resp == option_analysis :
                 txt = 'You are in Analysis options.'
                 bot_prompt(self.bot, self.chatid, txt, analysis_menu)
                 self.menu_id = keys_dict[option_analysis]
-            elif resp == option_back :
+            elif resp == option_bindadm:
+                txt += "\nDo you want me to activate auto-login without entering admin id each time ?"
+                opt_yes = "Yes, enable auto-login"
+                opt_no = "No, I would like to login manually each time"
+                yesno_menu = build_menu([opt_yes,opt_no],1,option_back)
+                bot_prompt(self.bot, self.chatid, txt, yesno_menu)
+                txt = ""
+                self.menu_id = self.parentbot.keys_dict[option_bind]
+            elif (resp == option_back) or (resp == "0"):
                 self.endchat()
                 syslog("system","telegram user " + str(chat_id) + " offine.")
                 self.logoff()
 
         elif self.menu_id == keys_dict[option_learners] :
-            if resp == option_back:
+            if (resp == option_back) or (resp == "0"):
                 self.logoff
                 bot_prompt(self.bot, self.chatid, "End of session.", [[btn_hellobot]])
                 return
             if '@' in resp :
-                for sqldb in vmbot.list_datafile:
-                    result = email_lookup(sqldb, resptxt)
-                    if result != "":
-                        resp = result
-                        break
+                if self.edited == 0:                        
+                    df = rds_df( "select distinct studentid, email from user_master order by email")
+                    if df is not None:
+                        df.columns = ['studentid','email']
+                        result = email_lookup(df, resptxt)
+                        if result != "":
+                            resp = result
+                            self.edited = int("0" + str(result))
+                if self.edited > 0:
+                    sid = self.edited
+                    condqry = f" WHERE studentid={str(sid)} and lower(email)='{resptxt}' and client_name = '{self.client_name}';"
+                    result = rds_param("SELECT email FROM user_master " + condqry)
+                    if result == "":
+                        self.sender.sendMessage("Sorry your account is not found, please contact the admin.")
+                        self.logoff()
+                        return
+                    result = rds_param("SELECT courseid FROM user_master " + condqry)
+                    self.courseid = result
+                    qry = "select * from userdata where client_name = '_c_' and courseid = '_x_';"
+                    qry = qry.replace('_c_', self.client_name)
+                    qry = qry.replace('_x_', self.courseid)
+                    df = rds_df( qry )
+                    if df is None:
+                        self.sender.sendMessage("Sorry the system has no complete data yet.")
+                        self.logoff()
+                        return
+                    df.columns = get_columns('userdata')
+                    self.userdata = df
+                    self.courseids = [x for x in df.courseid]
+                    self.coursename =  rds_param(f"SELECT course_name FROM playbooks where course_id = '{self.courseid}'")
+                    self.load_tables()
+                    self.check_student(sid, chat_id)
+                    txt = "Welcome " + self.username
+                    self.menu_id = keys_dict[lrn_student]
+                    bot_prompt(self.bot, self.chatid, txt, self.menu_home)
+                    self.edited = 0
+                    return
+                else:
+                    return
             if resp.isnumeric():
                 sid = int(resp)
+                query=f"SELECT COUNT(*) AS cnt FROM user_master WHERE studentid={resp} and client_name ='{self.client_name}';"
+                result = rds_param(query)
+                cnt = int("0" + str(result))
+                if cnt == 0:
+                    self.sender.sendMessage("Sorry your account is not found, please contact the admin.")
+                    self.logoff()
+                    return
+                usertype = rds_param(f"SELECT usertype FROM user_master WHERE studentid={resp} and client_name ='{self.client_name}';")
+                query = "select username from user_master where studentid =" + resp + \
+                    " and client_name = '" + self.client_name + "';"
+                self.username = rds_param(query)                
+                if usertype == 11:
+                    self.is_admin = True
+                    self.menu_id = 1
+                    self.student_id = sid
+                    txt = banner_msg("Welcome " + self.username,"You are now connected to Mentor mode.")
+                    self.menu_home = mentor_menu
+                    (self.list_courseids, self.list_coursename) = self.find_course(0)
+                    bot_prompt(self.bot, self.chatid, txt, self.menu_home)
+                    return
+                elif usertype not in [1,2]:
+                    self.sender.sendMessage("Sorry your account is blocked, please contact the admin.")
+                    self.logoff()    
+                    return                
                 if sid in vmbot.user_list:
                     txt = "Sorry you can't logon using another telegram account\nPlease try again later."
                     self.logoff(txt)
-                    return
-                stud_courselist = vmbot.find_course(sid)
+                    return                
+                (self.list_courseids, self.list_coursename) = self.find_course(sid)
+                stud_courselist = self.list_courseids                
                 slen = len(stud_courselist)
-                self.student_id = sid
+                self.student_id = sid                
                 if (slen == 0) :
                     txt = "Sorry, we are not unable to find your record.\nPlease contact the course admin."
                     self.logoff(txt)
                     return                
-                self.list_courseids = stud_courselist
                 if slen == 1:
                     self.chatid = chat_id
-                    self.courseid = stud_courselist[0]
-                    n = vmbot.list_courseid.index( self.courseid )
-                    self.coursename = vmbot.list_coursename[n]
-                    self.userdata = vmbot.list_datafile[n]
-                    self.check_student(self.student_id, chat_id)
+                    self.courseid = self.list_courseids[0]
+                    self.coursename = self.list_coursename[0]                    
+                    self.load_tables()
+                    if self.userdata is None:
+                        self.sender.sendMessage(f"we do not have any data for course id\n{self.courseid}")
+                        return
+                    else:
+                        self.update_stage(sid)
+                        self.check_student(self.student_id, chat_id)
+                elif slen < 20:
+                    btn_course_list = build_menu(stud_courselist, 1) 
+                    txt = "Please select the course id from below:"
+                    bot_prompt(self.bot, self.chatid, txt, btn_course_list)
+                    self.menu_id = keys_dict[option_learners]
                 else:
-                    btn_course_list = build_menu(stud_courselist, 1)
+                    #btn_course_list = build_menu(stud_courselist, 1)
+                    date_today = datetime.datetime.now().date()
+                    yrnow = str(date_today.strftime('%Y'))
+                    course_list = [x for x in stud_courselist if x[-4:]==yrnow]
+                    btn_course_list = build_menu(course_list, 1) 
                     txt = "Please select the course id from below:"
                     bot_prompt(self.bot, self.chatid, txt, btn_course_list)
                     self.menu_id = keys_dict[option_learners]
@@ -1178,50 +1311,60 @@ class MessageCounter(telepot.helper.ChatHandler):
                 if self.load_courseinfo(resp) == 0:
                     txt = 'Your selection is not available !\n'
                     txt += 'Please select the course from below list'
-                    stud_courselist = vmbot.find_course(self.student_id)
-                    btn_course_list  = build_menu(stud_courselist, 1)
+                    date_today = datetime.datetime.now().date()
+                    yrnow = str(date_today.strftime('%Y'))
+                    #course_list = [x for x in self.list_courseids if x[-4:]==yrnow and resptxt in x.lower()]
+                    course_list = [x for x in self.list_courseids if resptxt in x.lower()]
+                    btn_course_list  = build_menu(course_list, 1)
                     bot_prompt(self.bot, self.chatid,  txt, btn_course_list )
-                else:                    
+                else:
                     self.chatid = chat_id
                     if self.student_id == 0 or self.chatid == 0 :
-                        txt = 'My name is OmniMentor, I am your friendly learning facilitator at ' + vmbot.client_name + '.\n'
+                        txt = 'My name is OmniMentor, I am your friendly learning facilitator at ' + self.client_name + '.\n'
                         txt += "\nplease enter your student id or email address :"
                         bot_prompt(self.bot, self.chatid, txt, [])
                         txt = ''
                         self.menu_id = keys_dict[lrn_start]                        
                     else:
                         sid = self.student_id
-                        ch_id = self.chatid
+                        ch_id = self.chatid                        
+                        self.load_tables()
+                        self.update_stage(sid)
                         self.check_student(sid, ch_id)
 
         elif self.menu_id == keys_dict[lrn_start] :
-            userdata = load_data(self.userdata, 'userdata', 'email', True)
-            if userdata is None:        
-                retmsg = 'Unable to load course data : ' + self.userdata                    
-            else:
-                if self.new_session and '@' in resp :
-                    resptxt = email_lookup(self.userdata, resptxt)
-                    resp = resp if resptxt=="" else resptxt
-                if resp.isnumeric() and self.new_session :
-                    sid = int(resp)
+            userdata = self.userdata
+            if self.new_session and '@' in resp :
+                resptxt = email_lookup(self.userdata, resptxt)
+                resp = resp if resptxt=="" else resptxt
+            if resp.isnumeric() and self.new_session :                
+                sid = int(resp)                
+                usertype = rds_param(f"SELECT usertype FROM user_master WHERE studentid={resp} and client_name ='{self.client_name}';")
+                if usertype==3:
+                    self.sender.sendMessage("Sorry your account is blocked, please contact the admin.")
+                    self.logoff()    
+                else:
                     self.check_student(sid, chat_id)
                     self.menu_id = keys_dict[lrn_student]
-                else:
-                    retmsg = "please enter your student id or email address :"
+            else:
+                retmsg = "please enter your student id or email address :"
 
-        elif self.menu_id == keys_dict[lrn_student] and resp in [option_mycourse, option_myprogress, \
+        elif self.menu_id == keys_dict[lrn_student] and resp in [option_mycourse, option_updateprogress, \
             option_faq, option_mychat, option_mychart, option_binduser, option_gethelp, option_info, option_back]:
-            if resp == option_back:
+            if (resp == option_back) or (resp == "0"):
                 self.logoff()            
             elif resp == option_mycourse:
-                #btn_course_list = build_menu(self.list_courseids, 1, option_back)
-                btn_course_list = build_menu(self.list_courseids, 1)
+                date_today = datetime.datetime.now().date()
+                yrnow = str(date_today.strftime('%Y'))
+                course_list = [x for x in self.list_courseids if x[-4:]==yrnow]
+                btn_course_list = build_menu(course_list, 1)
                 txt = "Please select the course id from below:"
                 bot_prompt(self.bot, self.chatid, txt, btn_course_list)
                 self.menu_id = keys_dict[option_mycourse]
-            elif resp == option_myprogress:
-                self.student_progress()
-                self.menu_id = keys_dict[option_myprogress]
+            elif resp == option_updateprogress:
+                self.update_stage(self.student_id)
+                self.menu_id = keys_dict[lrn_student]
+                retmsg = display_progress(self.userdata, self.stage_name, self.records, self.client_name)                
             elif resp == option_faq:
                 txt = 'These are the FAQs :'
                 faq_menu = build_menu(ft_model.faq_list.copy(),1,option_back,[])
@@ -1249,39 +1392,26 @@ class MessageCounter(telepot.helper.ChatHandler):
                 retmsg = self.session_info()
 
         elif self.menu_id == keys_dict[option_mycourse] :
-            if resp == option_back:
+            if (resp == option_back) or (resp == "0"):
                 txt = "You are back to this cohort : " + self.courseid
                 bot_prompt(self.bot, self.chatid, txt, self.menu_home)
                 self.menu_id = keys_dict[lrn_student]
             elif resp in self.list_courseids:
+                n = self.list_courseids.index( resp )
                 self.courseid = resp
-                n = vmbot.list_courseid.index( self.courseid )
-                self.coursename = vmbot.list_coursename[n]
-                self.userdata = vmbot.list_datafile[n]
-                txt = "You are back to this cohort : " + self.courseid
+                self.coursename = self.list_coursename[n]
+                self.load_tables()
+                self.check_student(self.student_id, chat_id)                
+                txt = "You are now with this cohort : " + self.courseid
                 bot_prompt(self.bot, self.chatid, txt, self.menu_home)
                 self.menu_id = keys_dict[lrn_student]
                 self.new_session = True
-                self.check_student(self.student_id, chat_id)                
             else:
-                btn_course_list = build_menu(self.list_courseids, 1, option_back)
+                btn_course_list = build_menu(self.list_courseids, 1)
                 txt = "Please select the course id from below:"
                 bot_prompt(self.bot, self.chatid, txt, btn_course_list)
                 self.menu_id = keys_dict[option_mycourse]
                 self.new_session = True
-            
-        elif self.menu_id == keys_dict[option_myprogress] :
-            stage_list = self.stage_list
-            stage_days = self.stage_days
-            if resp.startswith("Day #"):
-                numstr = int(resp[5:])
-                n = stage_days.index(numstr) 
-                retmsg = self.tablerows[n]
-                self.stage_name = stage_list[n]
-            elif resp == option_back:
-                txt = 'Do you have any more questions?'
-                bot_prompt(self.bot, self.chatid, txt, self.menu_home)
-                self.menu_id = keys_dict[lrn_student]
 
         elif self.menu_id == keys_dict[option_demo] :
             if resp in ['0', 'exit']:
@@ -1289,105 +1419,118 @@ class MessageCounter(telepot.helper.ChatHandler):
                 txt = bot_prompt(self.bot, self.chatid, txt)
                 self.menu_id = keys_dict[lrn_student]
             elif resp in self.tablerows:
-                sid = 4477
-                demodb  = "demo.db"
-                query = "select sql from user_stories where steps = '_x_' order by id;"
+                sid = 1000
+                df = rds_df("select * from userdata where client_name ='Demo';")
+                if df is None:
+                    retmsg =  "There is no demo data found"
+                client_name = "Demo"
+                df.columns = get_columns("userdata")
+                courseid = list(df['courseid'])[0]
+                condqry = f" courseid = '{courseid}' and client_name ='Demo' "
+                self.userdata = df
+                query = "select * from user_stories where steps = '_x_' order by id;"
                 query = query.replace('_x_', resp)
-                df = querydf(demodb,query)
-                sql_list = [x for x in df.sql]
-                for updqry in sql_list:
-                    updatesql(demodb, updqry)
-                    if 'studentid' in updqry:
-                        sidstr = updqry.replace("studentid","$").split('$')[1].replace('=','').replace(';','')
-                        sid = int(sidstr)
-                        try:
-                            (txt, self.mcq_list, self.as_list, self.records ) = verify_student(demodb, sid)
-                            txt = display_progress( demodb, self.records['stage'], self.records)
-                            [ bot.sendMessage(x, txt) for x in list(vmbot.user_list) if vmbot.user_list[x][1] == sid ]
-                        except:
-                            txt=''
+                df = rds_df(query)
+                if df is None:
+                    print("user_stories table has incomplete data.")
+                    return
+                else:
+                    df.columns = get_columns("user_stories")
+                    sql_list = [x for x in df.sql]                    
+                    for updqry in sql_list:
+                        query = updqry.replace(";", '')
+                        query += ' and ' if ('where' in updqry.lower()) else ' where '
+                        query += condqry + ';'
+                        rds_update(query)
+                        if 'studentid' in updqry:
+                            sidstr = updqry.replace("studentid","$").split('$')[1].replace('=','').replace(';','')
+                            sid = int(sidstr)
+                            try:
+                                (txt, self.records ) = verify_student(self.userdata, sid)
+                                txt = display_progress(self.userdata, self.records['stage'],self.records,self.client_name)
+                                [ bot.sendMessage(x, txt) for x in list(vmbot.user_list) if vmbot.user_list[x][1] == sid ]
+                            except:
+                                txt=''
             else:
                 retmsg = "Your are now in demo mode, there will be no response to above statement."
 
-        elif self.menu_id == keys_dict[option_bind] :
-            #if resptxt=="yes":
+        elif self.menu_id == keys_dict[option_bind] :            
             if "yes," in resptxt:
-                binduser(chat_id, self.student_id,self.courseid)
-                #txt = f"telegram account {chat_id} and student id has been binded to {self.student_id}."
+                updqry = f"update user_master set chat_id = {str(self.chatid)} where client_name = '{self.client_name}' and studentid={str(self.student_id)};"
+                rds_update(updqry)
                 txt = "Auto-Login option enabled"
-            elif "no," in resptxt:
-            #    binduser(chat_id, 0)
-            #    txt = f"telegram account {chat_id} and student id has been unbinded to {self.student_id}."
-            #elif resptxt=="skip":
-                updqry = """delete from telegram where telegram_id = _x_;"""
-                updqry = updqry.replace("_x_", str(self.chatid) )
-                updatesql(sysconfig, updqry)
-                #txt = f"telegram account {chat_id} removed from our records."
+            elif "no," in resptxt:                
+                updqry = f"update user_master set chat_id = 0 where client_name = '{self.client_name}' and studentid={str(self.student_id)};"
+                rds_update(updqry)
                 txt = "Auto-Login option disabled"
-            elif resp == option_back:
+            elif (resp == option_back) or (resp == "0"):
                 txt = "you are back to main menu"
             bot_prompt(self.bot, self.chatid, txt, self.menu_home)
             syslog(str(self.chatid),txt)
             self.menu_id = keys_dict[lrn_student]
 
         elif self.menu_id == keys_dict[option_fct]:
-            btn_course_list = build_menu(vmbot.list_courseid.copy(), 1, option_back, [])
+            df = rds_df(f"SELECT DISTINCT courseid FROM userdata WHERE client_name = '{self.client_name}' ORDER BY courseid;")
+            if df is None:
+                course_list = self.list_courseids
+            else:
+                df.columns = ['courseid']
+                userdata_courseids = [ x for x in df.courseid ]
+                course_list = [ x for x in self.list_courseids if x in userdata_courseids ]
+            btn_course_list = build_menu( course_list , 1)
             if resp == fc_student:
-                if len(vmbot.list_datafile)==0:
-                    retmsg = 'There is no data being loaded.'
-                else:
-                    self.menu_id = keys_dict[fc_student]
-                    txt = "This determine the learning stage of a learner\n"
-                    txt += "test data to be used:\n\n"
-                    bot_prompt(self.bot, self.chatid, txt,btn_course_list)
-            elif resp == fc_assignment :
-                if vmbot.list_courseid == []:
-                    retmsg = 'There is no data being loaded.'
-                else:
-                    self.menu_id = keys_dict[fc_assignment]
-                    txt = "This option imports assignments scores from Edx datasource.\nEnter * for mass update"
-                    bot_prompt(self.bot, self.chatid, txt,btn_course_list)
-            elif resp == fc_mcqtest :
-                if vmbot.list_courseid == []:
-                    retmsg = 'There is no data being loaded.'
-                else:
-                    self.menu_id = keys_dict[fc_mcqtest]
-                    txt = "This option imports mcq tests scores from Edx datasource.\nEnter * for mass update"
-                    bot_prompt(self.bot, self.chatid, txt,btn_course_list)
-            elif resp == fc_edx :
-                if vmbot.list_courseid == []:
-                    retmsg = 'There is no data being loaded.'
-                else:
-                    self.menu_id = keys_dict[fc_edx]
-                    txt = "This option imports userdata from Edx datasource.\nEnter * if mass import"
-                    bot_prompt(self.bot, self.chatid, txt,btn_course_list)
+                self.menu_id = keys_dict[fc_student]
+                txt = "This determine the learning stage of a learner\n"
+                txt += "test data to be used:\n\n"
+                bot_prompt(self.bot, self.chatid, txt, btn_course_list)
             elif resp == fc_cohlist :
                 txt = "Search course-id by keywords:\n"
                 txt += "Example :  FOS\n"
                 txt += "Enter 0 to exit"
                 bot_prompt(self.bot, self.chatid, txt, [])
                 self.menu_id = keys_dict[fc_cohlist]
-            elif resp == fc_schedule :
-                if vmbot.list_courseid == []:
-                    retmsg = 'There is no data being loaded.'
-                else:
-                    self.menu_id = keys_dict[fc_schedule]
-                    txt = "This option updates the course schedule and due-dates.\nEnter * for mass update"
-                    bot_prompt(self.bot, self.chatid, txt,btn_course_list)
-            elif resp == option_back :
+            elif (resp == option_back) or (resp == "0"):
                 txt = 'Please select the following mode:'
                 bot_prompt(self.bot, self.chatid, txt, self.menu_home)
                 self.menu_id = 1
 
-        elif self.menu_id == keys_dict[fc_student]:            
-            if resp in vmbot.list_courseid:
-                df = load_data(pbconfig, 'playbooks', 'course_id', True)            
-                tbl = df[df.course_id == resp].iloc[0].to_dict()
-                self.courseid = tbl['course_id']
-                self.userdata = tbl['userdata']
-                query = "select studentid,username,amt,grade,stage,f2f from userdata"
-                cohort_id = piece(self.userdata, '.', 0)
-                if list_table(self.userdata, query, "List of learners from " + cohort_id) is not None:
+        elif self.menu_id == keys_dict[fc_student]:
+            if (resp == option_back) or (resp == "0"):
+                txt = "You are back to the faculty menu."
+                bot_prompt(self.bot, self.chatid, txt, faculty_menu)
+                self.menu_id = keys_dict[option_fct]                
+                return
+            if resp in self.list_courseids:
+                if vmbot.edx_time > 0 and resp not in vmbot.updated_courses:
+                    self.sender.sendMessage("Please wait for a while.")
+                    client_name = self.client_name                    
+                    vmedxlib.update_assignment(resp, client_name)
+                    vmedxlib.update_mcq(resp, client_name)
+                    vmedxlib.update_schedule(resp, client_name)   
+                    vmbot.updated_courses.append(resp)            
+                self.courseid = resp
+                cohort_id = piece(piece(resp,':',1),'+',1)
+                condqry = " where client_name = '" + self.client_name + "' and courseid = '" + resp + "';"
+                query = "select * from userdata " + condqry                
+                df = rds_df( query )
+                if df is None:
+                    self.userdata = None
+                    retmsg = "There is no data for this course id"                    
+                    self.sender.sendMessage(retmsg)
+                    return
+                else:
+                    df.columns = get_columns('userdata')
+                    self.userdata = df                    
+                query = "select studentid,username,amt,grade,stage,f2f from userdata " + condqry
+                df = rds_df( query)
+                if df is None:
+                    retmsg = "There is no data for this course id"                    
+                    self.sender.sendMessage(retmsg)
+                    returnclea
+                else:
+                    df.columns = "studentid,username,amt,grade,stage,f2f".split(",")                    
+                title_name = "List of learners from " + cohort_id                
+                if render_table(df, header_columns=0, col_width=3, title_name=title_name) is not None:
                     fn='userdata' + str(self.chatid) + '.png'
                     plt.savefig(fn, dpi=100)
                     plt.clf()
@@ -1397,10 +1540,9 @@ class MessageCounter(telepot.helper.ChatHandler):
                 bot_prompt(self.bot, self.chatid, txt, faculty_submenu)
                 self.menu_id = keys_dict[fc_studentsub]
             else:
-                newlist = [[x] for x in vmbot.list_courseid if resptxt in x.lower()]
-                if len(newlist)>0:
+                if self.list_courseids != []:
                     txt = "select the course id below:"
-                    btn_list = build_menu([[x] for x in vmbot.list_courseid if resptxt in x.lower()],1,option_back,[])
+                    btn_list = build_menu([x for x in self.list_courseids if resptxt in x.lower()],1)
                     bot_prompt(self.bot, self.chatid, txt,btn_list)
                     return
                 else:
@@ -1427,17 +1569,18 @@ class MessageCounter(telepot.helper.ChatHandler):
                 txt = "Enter student id for update:\n"
                 txt += "(Enter 0 to exit)"
                 bot_prompt(self.bot, self.chatid, txt, [])
-                self.menu_id = keys_dict[opt_recupd]
-            elif resp == option_back :
+                self.menu_id = keys_dict[fc_recupd]
+            elif (resp == option_back) or (resp == "0"):
                 txt = 'Please select the following mode:'
                 bot_prompt(self.bot, self.chatid, txt, faculty_menu)
                 self.menu_id = keys_dict[option_fct]
 
-        elif self.menu_id == keys_dict[fc_updstage] :            
+        elif self.menu_id == keys_dict[fc_updstage] :
             if resp == "0":
-                txt = "there is nothing to update"
+                txt = "there is nothing to update"            
             else:
-                students_list = load_data(self.userdata, 'userdata', 'studentid', False)
+                df = self.userdata
+                students_list = [x for x in df.studentid]
                 if resp == "*":
                     selection = students_list
                 else:
@@ -1448,20 +1591,26 @@ class MessageCounter(telepot.helper.ChatHandler):
                 if selection==[]:
                     txt = "There is nothing to update."
                 else:
+                    cnt = 0
                     for sid in [x for x in students_list if x in selection]:
                         self.update_stage(sid)
-                    txt = "the stages for the following has been updated:\n" + self.courseid 
+                        cnt += 1
+                    if cnt == 0:
+                        txt = "There is nothing to update."
+                    else:
+                        txt = "the stages for the following has been updated:\n" + self.courseid 
             bot_prompt(self.bot, self.chatid, txt, faculty_submenu)
             self.menu_id = keys_dict[fc_studentsub]
 
-        elif self.menu_id == keys_dict[fc_resetstage]:            
+        elif self.menu_id == keys_dict[fc_resetstage]:
             if resp == '0':
                 txt = "there is nothing to update"
                 bot_prompt(self.bot, self.chatid, txt, faculty_submenu)
                 self.menu_id = keys_dict[fc_studentsub]
                 self.tablerows = []
             elif resp == '*':
-                self.tablerows = load_data(self.userdata, 'userdata', 'studentid', False)
+                df = self.userdata
+                self.tablerows = [x for x in df.studentid]
             else:
                 if "," in resp:
                     try:
@@ -1475,11 +1624,18 @@ class MessageCounter(telepot.helper.ChatHandler):
                 bot_prompt(self.bot, self.chatid, txt, faculty_submenu)
                 self.menu_id = keys_dict[fc_studentsub]
             else:                
-                stage_list = load_data(self.userdata, 'stages', 'name', False)
-                txt = "Please select the stage:\nType exit to get out from the list"            
-                btn_list = build_menu(stage_list, 4, 'exit', [])
-                bot_prompt(self.bot, self.chatid, txt, btn_list)
-                self.menu_id = keys_dict[opt_resetstage]
+                #df = self.stagetable 
+                query = f"select name from stages where client_name = '{self.client_name}' and courseid = '{self.courseid}';"
+                df = rds_df(query)
+                if df is None:
+                    retmsg = "The learning stage table information is incomplete"
+                else:
+                    df.columns = ['name']
+                    stage_list = list( df['name'] )
+                    txt = "Please select the stage:\nType exit to get out from the list"            
+                    btn_list = build_menu(stage_list, 4, 'exit', [])
+                    bot_prompt(self.bot, self.chatid, txt, btn_list)
+                    self.menu_id = keys_dict[opt_resetstage]
 
         elif self.menu_id == keys_dict[opt_resetstage] :
             if resp == 'exit':
@@ -1490,7 +1646,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                 try:
                     if len(self.tablerows) > 0:
                         for sid in self.tablerows:
-                            txt = edit_fields(self.userdata, "userdata", "studentid", sid, result, self.tablerows)
+                            txt = edit_fields(self.client_name, self.courseid, "userdata", "studentid", sid, result, self.tablerows)
                             self.tablerows = []
                     else:
                         txt = 'nothing to update'
@@ -1508,14 +1664,13 @@ class MessageCounter(telepot.helper.ChatHandler):
                 stage_id = int(resp)
                 txt = ""
                 for fld in ["amt","mcq_avg","as_avg","f2f"]:
-                    txt += edit_records(self.userdata, 'userdata', 'studentid', stage_id, fld)
+                    txt += edit_records(self.client_name, self.courseid, 'userdata', 'studentid', stage_id, fld)
                 if txt == "" :
                     txt = "there is nothing to update"
                     bot_prompt(self.bot, self.chatid, txt, faculty_submenu)
                     self.menu_id = keys_dict[fc_studentsub]
                 else:
                     bot_prompt(self.bot, self.chatid, txt, [])
-
                     self.menu_id = keys_dict[opt_recupd]
             else:
                 txt = "there is nothing to update"
@@ -1524,145 +1679,79 @@ class MessageCounter(telepot.helper.ChatHandler):
 
         elif self.menu_id == keys_dict[opt_recupd] :
             if ':' in resp :
-                txt = edit_fields(self.userdata, "userdata", "studentid", self.student_id, resp)
+                txt = edit_fields(self.client_name, self.courseid, "userdata", "studentid", self.student_id, resp)
             else:
                 txt = "there is nothing to update"
             bot_prompt(self.bot, self.chatid, txt, faculty_submenu)
             self.menu_id = keys_dict[fc_studentsub]
 
-        elif self.menu_id in [ keys_dict[x] for x in [fc_assignment,fc_mcqtest,fc_edx] ]:
-            if resp in ['0', 'exit']:
-                txt = "You are back to the faculty menu."
-            elif resp == "*":
-                botname = (self.bot.getMe())['username']
-                idx = [ keys_dict[x] for x in [fc_assignment,fc_mcqtest,fc_edx] ].index(self.menu_id)
-                func_req = ["mass_update_assignment", "mass_update_mcq", "edx_mass_import"][idx]
-                txt = "@" + botname + "\n" + str(chat_id) + "\n12\n" + func_req + "\n\n"
-                job_item = txt.split("\n")
-                vmbot.job_list.append(job_item)
-                txt = 'Sending request edx_bot'
-            elif resp in vmbot.list_courseid:
-                self.courseid = resp
-                n = vmbot.list_courseid.index(resp)
-                self.userdata = vmbot.list_datafile[n]
-                idx = [ keys_dict[x] for x in [fc_assignment,fc_mcqtest,fc_edx] ].index(self.menu_id)
-                func_req_list = ["assignment","mcq","update"]
-                func_req = "Cohort_" + func_req_list[idx]
-                botname = (self.bot.getMe())['username']
-                txt = "@" + botname + "\n" + str(self.chatid) + "\n12\n" + func_req + "\n" + resp + "\n" + self.userdata
-                job_item = txt.split("\n")
-                vmbot.job_list.append(job_item)
-                txt = 'Sending request edx_bot'            
-            else:
-                newlist = [[x] for x in vmbot.list_courseid if resptxt in x.lower()]
-                if len(newlist)>0:
-                    txt = "select the course id below:"
-                    btn_list = build_menu([[x] for x in vmbot.list_courseid if resptxt in x.lower()],1,option_back,[])
-                    bot_prompt(self.bot, self.chatid, txt,btn_list)
-                    return
-                else:
-                    txt = "course id not found."
-            bot_prompt(self.bot, self.chatid, txt, faculty_menu)
-            self.edited = 0
-            self.menu_id = keys_dict[option_fct]
-
         elif self.menu_id == keys_dict[fc_cohlist]:
-            if os.name == "nt":
-                resp = "0"
             if resp == "0":
                 txt = "there is nothing to search"
                 bot_prompt(self.bot, self.chatid, txt, faculty_menu)
                 self.menu_id = keys_dict[option_fct]
             else:
-                try:
-                    if vmedxlib.edx_connect()==0:
-                        course_list = []
-                        txt = "there is nothing to show"
-                    else:
-                        course_list = vmedxlib.search_course_list(resp)
-                        vmedxlib.edx_disconnect()
-                        df = pd.DataFrame(course_list, columns=['course_id'])
-                        fn = "course_list.html"
-                        write2html(df, title='COURSE LIST', filename=fn)
-                        bot.sendDocument(chat_id, document=open(fn, 'rb'))
-                        txt = "You are now at faculty menu"
-                    bot_prompt(self.bot, self.chatid, txt, faculty_menu)
-                    self.menu_id = keys_dict[option_fct]
-                except:
-                    pass
-
-        elif self.menu_id == keys_dict[fc_schedule]:
-            if resp in ['0', 'exit']:
-                txt = "You are back to the faculty menu."
-            elif resp == "*":
-                botname = (self.bot.getMe())['username']
-                txt = "@" + botname + "\n" + str(chat_id) + "\n12\nmass_update_schedule\n\n"
-                job_item = txt.split("\n")
-                vmbot.job_list.append(job_item)
-                txt = 'Sending request edx_bot'
-            else:
-                pbconfig = sql2var(sysconfig, "select value from params where key = 'pbconfig';", "pbconfig.db")
-                self.userdata = sql2var(pbconfig, "select userdata from playbooks where course_id = '" + resp + "'", resp + ".db")
-                course_id = sql2var(self.userdata, "select courseid from userdata limit 1;", resp)
-                self.courseid = resp
-                vmedxlib.update_schedule(self.userdata, course_id)
-                txt = "course schedule and due dates has been updated."
-            bot_prompt(self.bot, self.chatid, txt, faculty_menu)
-            self.menu_id = keys_dict[option_fct]
+                result = '%%'.join([w for w in resp.split(' ')  if w != ''])
+                result = result.upper()
+                course_list = []
+                course_list = vmedxlib.search_course_list(result)
+                df = pd.DataFrame(course_list, columns=['course_id'])
+                fn = "course_list.html"
+                write2html(df, title='COURSE LIST', filename=fn)
+                bot.sendDocument(chat_id, document=open(fn, 'rb'))
+                txt = "You are now at faculty menu"
+                bot_prompt(self.bot, self.chatid, txt, faculty_menu)
+                self.menu_id = keys_dict[option_fct]
 
         elif self.menu_id == keys_dict[option_pb]:
             if resp==pb_config:
-                txt = "show the list of playbooks"
-                bot_prompt(self.bot, self.chatid, txt, pbconfig_menu)
-                self.menu_id = keys_dict[pb_config]
+                fn = "pbconfig.html"
+                qry = f"select * from playbooks where client_name = '{self.client_name}'"
+                df = rds_df( qry)
+                df.columns = get_columns('playbooks')
+                write2html(df, title='PLAYBOOKS LIST', filename=fn)
+                bot.sendDocument(chat_id, document=open(fn, 'rb'))
             elif resp == pb_userdata:
                 txt = "Let's take a look on the persona playbooks."
-                playbooklist_menu = [[x] for x in vmbot.list_courseid]
+                playbooklist_menu = [[x] for x in self.list_courseids]
                 playbooklist_menu.append([option_back])
                 bot_prompt(self.bot, self.chatid, txt, playbooklist_menu)
                 self.menu_id = keys_dict[pb_userdata]
-            elif resp == option_back:
+            elif (resp == option_back) or (resp == "0"):
                 txt = 'Please select the following mode:'
                 bot_prompt(self.bot, self.chatid, txt, self.menu_home)
                 self.menu_id = 1
-                
-        elif self.menu_id == keys_dict[pb_config]:
-            if resp == pbk_config :
-                fn = "pbconfig.html"
-                df = sql2var(pbconfig, "select * from playbooks;", "", True)
-                write2html(df, title='PLAYBOOKS LIST', filename=fn)
-                bot.sendDocument(chat_id, document=open(fn, 'rb'))
-            elif resp == pbk_updcfg :
-                mass_update_playbooklist()
-                self.sender.sendMessage('Playbook configurator has been updated.')
-            elif resp == option_import :
-                txt = "Please upload the configuration (existing data will be overwritten):"
-                bot_prompt(self.bot, self.chatid, txt, [[option_back]])
-            elif resp == option_export :
-                fn = "export_pbconfig.xlsx"
-                sqldb2xls(fn, pbconfig, ["playbooks"], ["course_id"])
-                retmsg = "configuration has been saved as : " + fn
-                bot.sendDocument(chat_id=self.chatid, document=open(fn, 'rb'))
-            elif resp == option_back:
-                txt = 'You are in playbooks maintainence mode.'
-                bot_prompt(self.bot, self.chatid, txt, playbook_menu)
-                self.menu_id = keys_dict[option_pb]
 
         elif self.menu_id == keys_dict[pb_userdata]:
-            if self.load_courseinfo(resp) == 1:                
-                resp = self.courseid 
+            if self.load_courseinfo(resp) == 1:
+                if vmbot.edx_time > 0 and resp not in vmbot.updated_courses:                
+                    self.sender.sendMessage("Please wait for a while.")
+                    client_name = self.client_name
+                    vmedxlib.update_assignment(resp, client_name)
+                    vmedxlib.update_mcq(resp, client_name)
+                    vmedxlib.update_schedule(resp, client_name)   
+                    vmbot.updated_courses.append(resp)
+                self.courseid = resp
+                cohort_id = piece(piece(resp,':',1),'+',1)
+                self.courseid = resp
                 query = "select studentid,username,amt,grade,stage,f2f from userdata"
-                cohort_id = piece(self.userdata, '.', 0)
-                if list_table(self.userdata, query, "List of learners from " + cohort_id) is not None:
-                    fn='userdata' + str(self.chatid) + '.png'
-                    plt.savefig(fn, dpi=100)
-                    plt.clf()
-                    f = open(fn, 'rb')
-                    self.bot.sendPhoto(self.chatid, f)
-                txt = "Which tables are you looking at for " + resp + " ?"
-                bot_prompt(self.bot, self.chatid, txt, course_menu)                
-                self.menu_id = keys_dict[opt_pbusr]
-            elif resp == option_back:
+                query += " where client_name = '" + self.client_name + "' and courseid = '" + resp + "';"
+                df = rds_df( query)
+                if df is None:
+                    retmsg = "There is information for this course at the moment"
+                else:
+                    df.columns = "studentid,username,amt,grade,stage,f2f".split(",")
+                    title_name = "List of learners from " + cohort_id
+                    if render_table(df, header_columns=0, col_width=3, title_name=title_name) is not None:
+                        fn='userdata' + str(self.chatid) + '.png'
+                        plt.savefig(fn, dpi=100)
+                        plt.clf()
+                        f = open(fn, 'rb')
+                        self.bot.sendPhoto(self.chatid, f)
+                    txt = "Which tables are you looking at for :\n" + resp + " ?"
+                    bot_prompt(self.bot, self.chatid, txt, course_menu)                
+                    self.menu_id = keys_dict[opt_pbusr]
+            elif (resp == option_back) or (resp == "0"):
                 txt = 'You are in playbook maintainence mode.'
                 bot_prompt(self.bot, self.chatid, txt, playbook_menu)
                 self.menu_id = keys_dict[option_pb]
@@ -1670,243 +1759,49 @@ class MessageCounter(telepot.helper.ChatHandler):
         elif self.menu_id == keys_dict[opt_pbusr]:
             if resp == ps_userdata :
                 fn = "userdata.html"
-                df = sql2var(self.userdata, "select * from userdata;", "", True)
-                write2html(df, title='LEARNERS INFO', filename=fn)
+                write2html(self.userdata, title='LEARNERS INFO', filename=fn)
                 bot.sendDocument(chat_id, document=open(fn, 'rb'))
             elif resp == ps_schedule :
                 fn = "schedule.html"
-                df = sql2var(self.userdata, "select * from stages;", "", True)
-                write2html(df, title='COURSE SCHEDULE', filename=fn)
-                bot.sendDocument(chat_id, document=open(fn, 'rb'))
+                if self.stagetable is None:
+                    retmsg = "The schedule information is not available"
+                else:
+                    write2html(self.stagetable, title='COURSE SCHEDULE', filename=fn)
+                    bot.sendDocument(chat_id, document=open(fn, 'rb'))
             elif resp == ps_stage  :
-                txt = "Enter Stage-id for update:\n"
-                txt += "(Enter 0 to exit)"
-                bot_prompt(self.bot, self.chatid, txt, [])
-                self.menu_id = keys_dict[ps_stage]
-            elif resp == option_import :
-                txt = "Please upload the userdata in the .csv format for importing:"
-                bot_prompt(self.bot, self.chatid, txt, [[option_back]])
-            elif resp == option_export :
-                fn = "export_" + self.courseid + ".xlsx"
-                sqldb2xls(fn, self.userdata, ["userdata","mcq_data","mcq_score","stages","params"], ["studentid","course_id","courseid","id","key"])
-                retmsg = "Existing playbooks already exported, filename is : "+fn 
-                bot.sendDocument(chat_id=self.chatid, document=open(fn, 'rb'))
-            elif resp == option_back :
+                fn = "stages_master.html"
+                query = f"select module_code,id,stage,name as stagename,days,f2f,mcq,assignment,flipclass,IU from stages_master where client_name = '{self.client_name}';"
+                df = rds_df(query)
+                if df is None:
+                    retmsg = "The module stage information is not available"
+                else:
+                    df.columns = "module_code,id,stage,stagename,days,f2f,mcq,assignment,flipclass,IU".split(",")
+                    write2html(df, title='Module Stage Information', filename=fn)
+                bot.sendDocument(chat_id, document=open(fn, 'rb'))
+            elif (resp == option_back) or (resp == "0"):
                 txt = 'You are in playbooks maintainence mode.'
                 bot_prompt(self.bot, self.chatid, txt, playbook_menu)
                 self.menu_id = keys_dict[option_pb]
 
-        elif self.menu_id == keys_dict[ps_stage]:
-            if resp == '0':
-                txt = "there is nothing to update"
-                bot_prompt(self.bot, self.chatid, txt, course_menu)
-                self.menu_id = keys_dict[opt_pbusr]
-            elif resp.isnumeric():
-                stage_id = int(resp)
-                txt = edit_records(self.userdata, 'stages', 'id', stage_id, "f2f")
-                txt += edit_records(self.userdata, 'stages', 'id', stage_id, "mcq")
-                txt += edit_records(self.userdata, 'stages', 'id', stage_id, "assignment")
-                txt += edit_records(self.userdata, 'stages', 'id', stage_id, "flipclass")
-                txt += edit_records(self.userdata, 'stages', 'id', stage_id, "IU")
-                if txt == "" :
-                    txt = "there is nothing to update"
-                    bot_prompt(self.bot, self.chatid, txt, course_menu)
-                    self.menu_id = keys_dict[opt_pbusr]
-                else:
-                    bot_prompt(self.bot, self.chatid, txt, [])
-                    self.menu_id = keys_dict[opt_stage]
-            else:
-                txt = "there is nothing to update"
-                bot_prompt(self.bot, self.chatid, txt, course_menu)
-                self.menu_id = keys_dict[opt_pbusr]
-
         elif self.menu_id == keys_dict[opt_stage] :
-            txt = edit_fields(self.userdata, "stages", "stage", self.student_id, resp)
+            txt = edit_fields(self.client_name, self.courseid, "stages", "stage", self.student_id, resp)
             bot_prompt(self.bot, self.chatid, txt, course_menu)
             self.menu_id = keys_dict[opt_pbusr]
 
-        elif self.menu_id == keys_dict[option_syscfg]:
-            if resp == cfg_syslog :
-                fn = "syslog.html"
-                df = sql2var(syslogdb, "select * from syslog;", "", True)
-                write2html(df, title='SYSLOG', filename=fn)
-                bot.sendDocument(chat_id, document=open(fn, 'rb'))
-            elif resp == cfg_progress  :
-                fn = "progress.html"
-                df = sql2var(sysconfig, "select * from progress;", "", True)
-                write2html(df, title='RESPONSE TEXT', filename=fn)
-                bot.sendDocument(chat_id, document=open(fn, 'rb'))
-            elif resp == cfg_bind  :
-                fn = "bindusers.html"
-                df = sql2var(sysconfig, "select * from telegram;", "", True)
-                write2html(df, title='BINDED USERS', filename=fn)
-                bot.sendDocument(chat_id, document=open(fn, 'rb'))
-            elif resp == cfg_reload :
-                loadconfig()
-                vmbot.load_courselist()
-                txt = "System configuration reloaded."
-            elif resp == cfg_map :
-                fn = "mapping.html"
-                df = sql2var(sysconfig, "select * from mapping;", "", True)
-                write2html(df, title='FIELDS MAPPING', filename=fn)
-                bot.sendDocument(chat_id, document=open(fn, 'rb'))
-            elif resp == option_import :
-                txt = "Please upload the system configuration in the .csv format (are you sure?):"
-                bot_prompt(self.bot, self.chatid, txt, [[option_back]])
-            elif resp == option_export :
-                fn = "export_sysconf.xlsx"
-                sqldb2xls(fn, sysconfig, ["dictionary","faq","prompts","stopwords"], ["keywords","questions","questions","keywords"])
-                retmsg = "System configuration has been saved as : " + fn                
-                bot.sendDocument(chat_id=self.chatid, document=open(fn, 'rb'))
-            elif resp == option_cmd :
-                txt = "You are now connected to Cmd mode.\nType cmd to list out the commands."
-                txt = banner_msg("Service Console", txt)
-                bot_prompt(self.bot, self.chatid, txt, [[option_back]])
-                self.menu_id = keys_dict[option_cmd]
-            elif resp == option_py :
-                txt = "You are now connected to Script mode.\nDo not use double quote \" for string quotation."
-                txt = banner_msg("Python Shell", txt)
-                bot_prompt(self.bot, self.chatid, txt, [[option_back]])
-                self.menu_id = keys_dict[option_py]
-            elif resp == option_edx :
-                if os.name == "nt":
-                    txt = "You are now connected to Sqlite database via SQL."
-                else:
-                    txt = "You are now connected to EdX database via SQL."
-                txt = banner_msg("SQL Console for EdX", txt)
-                bot_prompt(self.bot, self.chatid, txt, [[option_back]])
-                self.menu_id = keys_dict[option_edx]
-            elif resp == option_back:
-                txt = 'Please select the following mode:'
-                bot_prompt(self.bot, self.chatid, txt, self.menu_home)
-                self.menu_id = 1
-
-        elif self.menu_id == keys_dict[option_cmd] :
-            if resp == option_back:
-                txt = 'Please select the following mode:'
-                bot_prompt(self.bot, self.chatid, txt, syscfg_menu)
-                self.menu_id = keys_dict[option_syscfg]
-            else:
-                retmsg = shellcmd(resp)
-
-        elif self.menu_id == keys_dict[option_py] :
-            if resp == option_back:
-                txt = 'Please select the following mode:'
-                bot_prompt(self.bot, self.chatid, txt, syscfg_menu)
-                self.menu_id = keys_dict[option_syscfg]
-            else:
-                retmsg = pycmd(resp, vmbot)
-
-        elif self.menu_id == keys_dict[option_edx] :
-            if resp == option_back:
-                txt = 'Please select the following mode:'
-                bot_prompt(self.bot, self.chatid, txt, syscfg_menu)
-                self.menu_id = keys_dict[option_syscfg]
-            else:
-                fn = "sql_output" + str(chat_id) + ".html"
-                if edxsql(resp,fn)==0:
-                    retmsg =  "Unable to execute the query."
-                else:
-                    bot.sendDocument(chat_id, document=open(fn, 'rb'))
-
-        elif self.menu_id == keys_dict[option_nlp]:
-            retmsg = "The section handle all the natural language processing matters."
-            if resp == nlp_dict :
-                fn = "dictionary.html"
-                df = sql2var(nlpconfig, "select * from dictionary;", "", True)
-                write2html(df, title='DICTIONARY TABLE', filename=fn)
-                bot.sendDocument(chat_id, document=open(fn, 'rb'))
-            elif resp == nlp_prompts :
-                fn = "prompts.html"
-                df = sql2var(nlpconfig, "select * from prompts;", "", True)
-                ft_model.qn_resp
-                df["resp"] = df["resp"].apply(lambda x: x.replace(chr(157), "_"))
-                write2html(df, title='RESPONSES TABLE', filename=fn)
-                bot.sendDocument(chat_id, document=open(fn, 'rb'))
-            elif resp == nlp_corpus  :
-                fn = "ft_corpus.html"
-                df = sql2var(nlpconfig, "select * from ft_corpus;", "", True)
-                write2html(df, title='FASTTEXT CORPUS', filename=fn)
-                bot.sendDocument(chat_id, document=open(fn, 'rb'))
-            elif resp == nlp_stopwords :
-                fn = "stopwords.html"
-                df = sql2var(nlpconfig, "select * from stopwords;", "", True)
-                write2html(df, title='STOPWORDS TABLE', filename=fn)
-                bot.sendDocument(chat_id, document=open(fn, 'rb'))
-            elif resp == nlp_faq:
-                fn = "faq.html"
-                df = sql2var(nlpconfig, "select * from faq;", "", True)
-                write2html(df, title='FAQ TABLE', filename=fn)
-                bot.sendDocument(chat_id, document=open(fn, 'rb'))
-            elif resp == nlp_train :
-                if ft_model.train_model() :
-                    retmsg = "NLP model using the corpus table has been trained with model file saved as ft_model.bin"
-                else:
-                    retmsg = "NLP model using the corpus table was not trained properly"
-            elif resp == option_import :
-                txt = "Please upload the NLP corpus data file:"
-                bot_prompt(self.bot, self.chatid, txt, [[option_back]])
-            elif resp == option_export :
-                fn = "export_nlpconf.xlsx"
-                sqldb2xls(fn, nlpconfig, ["ft_corpus"], ["label"])
-                retmsg = "System configuration has been saved as : " + fn                
-                bot.sendDocument(chat_id=self.chatid, document=open(fn, 'rb'))
-            elif resp == option_back:
-                txt = 'Please select the following mode:'
-                bot_prompt(self.bot, self.chatid, txt, self.menu_home)
-                self.menu_id = 1
-
-        elif self.menu_id == keys_dict[option_ml]:
-            txt = "The section handle all the machine learning related processes."
-            self.sender.sendMessage(txt)
-            if resp == ml_data :
-                fn = "mcqas_info.html"
-                df = sql2var("mcqinfo.db", "select * from mcqas_info limit " + str(max_rows), "", True)
-                cols = "studentid,grade,mcq_avgscore,mcq_avgattempts,mcq_maxattempts,mcq_cnt".split(',')
-                for c in cols:
-                    df[c] = df[c].apply(lambda x: str(x))
-                write2html(df, title='ML Model Data', filename=fn)
-                retmsg = "Due to data too large, only " + str(max_rows) + " records being displayed."
-                bot.sendDocument(chat_id, document=open(fn, 'rb'))
-            elif resp == ml_pipeline :
-                botname = (self.bot.getMe())['username']
-                txt = "@" + botname + "\n" + str(chat_id) + "\n16\ngenerate_mcq_as\nFOS\nmcqinfo.db"
-                job_item = txt.split("\n")
-                vmbot.job_list.append(job_item)
-                retmsg = 'Sending request edx_bot'
-            elif resp == ml_report :
-                retmsg = "Generating profiler report for quick data analysis."
-                fn="mcqas_info.html"
-                if dt_model.profiler_report("mcqinfo.db", fn)==1:
-                    bot.sendDocument(chat_id=self.chatid, document=open(fn, 'rb'))
-            elif resp == ml_graph  :
-                retmsg = "Generating decision tree graph to explain the model."
-                fn = 'mcqas_info.jpg'
-                if dt_model.tree_graph(fn)==1:
-                    f = open(fn, 'rb')
-                    bot.sendPhoto(self.chatid, f)
-            elif resp == ml_train :                
-                retmsg = dt_model.train_model("mcqinfo.db", "dt_model.bin")
-            elif resp == option_back:
-                txt = 'Please select the following mode:'
-                bot_prompt(self.bot, self.chatid, txt, self.menu_home)
-                self.menu_id = 1
-
         elif self.menu_id == keys_dict[option_analysis]:
-            if resp == option_back:
+            if (resp == option_back) or (resp == "0"):
                 txt = 'Please select the following mode:'
                 bot_prompt(self.bot, self.chatid, txt, self.menu_home)
                 self.menu_id = 1
             elif resp in [ an_mcqd , an_chart , an_mcq , ml_grading]:
                 idx = [ an_mcqd , an_chart , an_mcq , ml_grading ].index(resp)
                 txt = "Let's take a look on the following courses."
-                courseid_menu = [[x] for x in vmbot.list_courseid]
-                courseid_menu.append([option_back])
+                courseid_menu = build_menu([x for x in self.list_courseids],1)
                 bot_prompt(self.bot, self.chatid, txt, courseid_menu)
                 self.menu_id = keys_dict[[ an_mcqd , an_chart , an_mcq , ml_grading ][idx]]
 
         elif self.menu_id == keys_dict[an_mcqd]:
-            if resp == option_back:
+            if (resp == option_back) or (resp == "0"):
                 txt = 'Please select the following mode:'
                 bot_prompt(self.bot, self.chatid, txt, analysis_menu)
                 self.menu_id = keys_dict[option_analysis]
@@ -1915,10 +1810,10 @@ class MessageCounter(telepot.helper.ChatHandler):
                 txt = "MCQ Difficulty Analysis by:"
                 bot_prompt(self.bot, self.chatid, txt, mcqdiff_menu)
             else:  
-                newlist = [[x] for x in vmbot.list_courseid if resptxt in x.lower()]
+                newlist = [[x] for x in self.list_courseids if resptxt in x.lower()]
                 if len(newlist)>0:
                     txt = "Please select from the list of course id below:"
-                    btn_list = build_menu([[x] for x in vmbot.list_courseid if resptxt in x.lower()],1,option_back,[])
+                    btn_list = build_menu([x for x in self.list_courseids if resptxt in x.lower()],1)
                     bot_prompt(self.bot, self.chatid, txt,btn_list)
                     return
                 else:
@@ -1927,12 +1822,12 @@ class MessageCounter(telepot.helper.ChatHandler):
                     self.menu_id = keys_dict[option_analysis]
 
         elif self.menu_id == keys_dict[opt_mcqd]:
-            if resp == option_back:
+            if (resp == option_back) or (resp == "0"):
                 txt = 'Please select the following mode:'
                 bot_prompt(self.bot, self.chatid, txt, analysis_menu)
                 self.menu_id = keys_dict[option_analysis]
-            elif resp == an_avgatt:
-                mcq_analysis.load_mcqdata(self.userdata)                
+            elif resp == an_avgatt:            
+                mcq_analysis.load_mcqdata(self.userdata)
                 if mcq_analysis.top10attempts(self.userdata) is None:
                     retmsg = 'There is no data for this course.'                    
                 else:                    
@@ -1954,7 +1849,13 @@ class MessageCounter(telepot.helper.ChatHandler):
                     f = open(fn, 'rb')
                     self.bot.sendPhoto(chat_id, f)
             elif resp == an_mcqavg:
-                mcq_list = load_data(self.userdata, 'mcq_data', 'mcq', False)                
+                df = self.userdata
+                client_name = list(df['client_name'])[0]
+                course_id = list(df['courseid'])[0]
+                qry = f"select * from mcq_data where client_name = '{client_name}' and course_id = '{course_id}';"
+                df = rds_df(qry)
+                df.columns = get_columns("mcq_data")
+                mcq_list = [x for x in df.mcq]
                 sorted_list = sorted(list(set([int(x) for x in mcq_list]))) 
                 mcq_list = [str(x) for x in sorted_list ] + [option_back]
                 m = int((len(mcq_list)+4)/5)
@@ -1975,7 +1876,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                     plt.clf()
                     f = open(fn, 'rb')
                     self.bot.sendPhoto(chat_id, f)
-            elif resp == option_back:                    
+            elif (resp == option_back) or (resp == "0"):
                 self.menu_id = keys_dict[opt_mcqd]
                 txt = "MCQ Difficulty Analysis by:"
                 bot_prompt(self.bot, self.chatid, txt, mcqdiff_menu)
@@ -1983,17 +1884,18 @@ class MessageCounter(telepot.helper.ChatHandler):
         elif self.menu_id == keys_dict[an_chart]:
             if self.load_courseinfo(resp) == 1:
                 self.mcqas_chart(True)
-                #bot_prompt(self.bot, self.chatid, txt, analysis_menu)
+                txt = 'Please select the following mode:'
+                bot_prompt(self.bot, self.chatid, txt, analysis_menu)
                 self.menu_id = keys_dict[option_analysis]
-            elif resp == option_back:
+            elif (resp == option_back) or (resp == "0"):
                 txt = 'Please select the following mode:'
                 bot_prompt(self.bot, self.chatid, txt, analysis_menu)
                 self.menu_id = keys_dict[option_analysis]
             else:  
-                newlist = [[x] for x in vmbot.list_courseid if resptxt in x.lower()]
+                newlist = [[x] for x in self.list_courseids if resptxt in x.lower()]
                 if len(newlist)>0:
                     txt = "select the course id below:"
-                    btn_list = build_menu([[x] for x in vmbot.list_courseid if resptxt in x.lower()],1,option_back,[])
+                    btn_list = build_menu([x for x in self.list_courseids if resptxt in x.lower()],1)
                     bot_prompt(self.bot, self.chatid, txt,btn_list)
                     return
                 else:
@@ -2004,21 +1906,22 @@ class MessageCounter(telepot.helper.ChatHandler):
         elif self.menu_id == keys_dict[an_mcq]:
             txt = ""
             if self.load_courseinfo(resp) == 1:                
-                if vmedxlib.analyze_cohort(self.userdata, resp) is not None:
+                if analyze_cohort(self.client_name, resp) is not None:                    
                     fn='analyze_cohort_' + str(self.chatid) + '.png'
                     plt.savefig(fn, dpi=100)
                     plt.clf()
                     f = open(fn, 'rb')
                     self.bot.sendPhoto(self.chatid, f)
-            elif resp == option_back:
+            elif (resp == option_back) or (resp == "0"):
                 txt = 'You are back to the analysis menu:'
                 bot_prompt(self.bot, self.chatid, txt, analysis_menu)
                 self.menu_id = keys_dict[option_analysis]
             else:
-                newlist = [[x] for x in vmbot.list_courseid if resptxt in x.lower()]
+                newlist = [[x] for x in self.list_courseids if resptxt in x.lower()]
                 if len(newlist)>0:
-                    txt = "select the course id below:"
-                    bot_prompt(self.bot, self.chatid, txt,[[x] for x in vmbot.list_courseid if resptxt in x.lower()])
+                    txt = "select the course id below:"                    
+                    btn_list = build_menu([x for x in self.list_courseids if resptxt in x.lower()],1)
+                    bot_prompt(self.bot, self.chatid, txt, btn_list)
                     return
             txt = 'You are back to the analysis menu:' if txt=="" else txt
             bot_prompt(self.bot, self.chatid, txt, analysis_menu)
@@ -2027,6 +1930,7 @@ class MessageCounter(telepot.helper.ChatHandler):
         elif self.menu_id == keys_dict[ml_grading]:
             txt = ""
             if self.load_courseinfo(resp) == 1:
+                self.courseid = resp                
                 sid_list = self.grad_prediction()
                 btn_list = build_menu( sid_list, 4, option_back, [])
                 self.records['progress_sid'] = sid_list
@@ -2034,16 +1938,16 @@ class MessageCounter(telepot.helper.ChatHandler):
                 bot_prompt(self.bot, self.chatid, txt, btn_list)
                 self.menu_id = keys_dict[opt_aig]
                 return
-            elif resp == option_back:
+            elif (resp == option_back) or (resp == "0"):
                 txt = 'Select your option:'
                 bot_prompt(self.bot, self.chatid, txt, analysis_menu)
                 self.menu_id = keys_dict[option_analysis]
                 return
             else:
-                newlist = [[x] for x in vmbot.list_courseid if resptxt in x.lower()]
+                newlist = [[x] for x in self.list_courseids if resptxt in x.lower()]                
                 if len(newlist)>0:
                     txt = "select the course id below:"
-                    btn_list = build_menu([[x] for x in vmbot.list_courseid if resptxt in x.lower()],1,option_back,[])
+                    btn_list = build_menu([x for x in self.list_courseids if resptxt in x.lower()],1)
                     bot_prompt(self.bot, self.chatid, txt,btn_list)
                     return
             txt = txt = 'Select your option:' if txt=="" else txt
@@ -2062,7 +1966,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                     plt.clf()
                     f = open(fn, 'rb')
                     self.bot.sendPhoto(self.chatid, f)
-            elif resp == option_back:
+            elif (resp == option_back) or (resp == "0"):
                 txt = 'Select your option:'
                 bot_prompt(self.bot, self.chatid, txt, analysis_menu)
                 self.menu_id = keys_dict[option_analysis]
@@ -2086,7 +1990,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                         else:
                             sid = int(sid)
                             self.livechat(sid,tid)
-                elif resp == option_back:
+                elif (resp == option_back) or (resp == "0"):
                     if self.is_admin :
                         bot_prompt(self.bot, self.chatid, "You are back in the main menu", mentor_menu)
                         self.menu_id = 1
@@ -2118,26 +2022,6 @@ class MessageCounter(telepot.helper.ChatHandler):
                 else:
                     bot_prompt(self.bot, self.chatid, 'Live chat has been ended.', self.menu_home)
                     self.menu_id = keys_dict[lrn_student]
-
-        elif self.menu_id == keys_dict[option_2fa]:
-            code2FA = vmbot.code2fa_list[chat_id]
-            if code2FA == resp:
-                self.is_admin = True
-                if self.edited == 1:
-                    txt = banner_msg("Welcome","You are now connected to Mentor mode.")
-                    self.menu_home = mentor_menu
-                else:
-                    txt = banner_msg("Welcome","You are now connected to Admin mode.")
-                    self.menu_home = admin_menu
-                bot_prompt(self.bot, self.chatid, txt, self.menu_home)
-                self.menu_id = 1
-                vmbot.code2fa_list.pop(chat_id)
-            else:
-                txt  = "Sorry the 2FA code is invalid, please try again."
-                self.is_admin = False
-                bot_prompt(self.bot, self.chatid, txt, [['/end']])
-                self.edited = 0
-                self.menu_id = keys_dict[option_learners]
 
         elif chat_id in vmbot.chat_list and (resp.strip() != "") :            
             if resp.lower() == 'bye':
@@ -2173,184 +2057,44 @@ class MessageCounter(telepot.helper.ChatHandler):
         return
 
 def syslog(msgtype, message):
+    global vmbot
     if message == "":
         return
     date_now = time.strftime('%Y%m%d', time.localtime() )
     time_now = time.strftime('%H%M%S', time.localtime() )
     try:
-        conn = sqlite3.connect(syslogdb)
-        cursor = conn.cursor()
         query = """insert into syslog(date,time,type,message) values(_d,"_t","_x","_y");"""
         query = query.replace('_d',date_now)
         query = query.replace('_t',str(time_now))
         query = query.replace('_x',msgtype)
         query = query.replace('_y',message)
-        cursor.execute(query)
-        cursor.close()
-        conn.commit()
-        conn.close()
+        rds_update(query)
     except:
         print("Error for ", msgtype, message)
     return
-
-def import_keydict(fn, sqldb):
-    try:
-        conn = sqlite3.connect(sqldb)
-        df = pd.read_csv(fn)        
-        df.to_sql("dictionary", conn , index=False, if_exists="replace")
-        conn.commit()
-        conn.close()
-        return True
-    except:
-        return False
-
-def getmapping():
-    mapping_table = dict()
-    try:
-        df = load_data(sysconfig, 'mapping', 'key', True)
-        result = df.to_dict()    
-        for x in result['key']:
-            key = result['key'][x]
-            fld = result['value'][x]
-            mapping_table[key.lower()] = fld
-    except:
-        pass
-    return mapping_table
    
-def map_and_update(sqldb, csv_data):
-    tbl = "userdata"
-    try:
-        conn = sqlite3.connect(sqldb)
-        cursor = conn.cursor()
-    except:
-        return False
-    df1 = load_data(sqldb, tbl, 'studentid', True)
-    col_list=list(df1.columns)
-    df1 = None
-    try:
-        mapping = getmapping()
-        df2 = pd.read_csv(csv_data)
-    except:
-        cursor.close()
-        return False
-    csv_dict = df2.to_dict()
-    csv_map = list(csv_dict)
-    df2index = list(df2.index)
-    sid = 0
-    for idx2 in df2index:        
-        sql = ""
-        for fld in csv_map:
-            fld2 = fld.lower()
-            if re.search("^mcq.*:",fld2):
-                fld2=(fld2.split(":"))[0] + ":"
-            x = csv_dict[fld][idx2]
-            if fld2 in list(mapping):
-                y = mapping[fld2]
-            elif fld2 in col_list:
-                y = fld2
-            else:
-                y = ''
-            if y != '':
-                if y == "studentid":
-                    sid = x
-                else:
-                    if type(x)==str:
-                        sql = sql + "," + y + " = '" + x + "'"
-                    else:
-                        sql = sql + "," + y + " = " + str(x)
-        sql = "update " + tbl + " set " + sql[1:] + " where studentid = " + str(sid)    
-        try:
-            cursor.execute(sql)
-        except:
-            sql = ''
-        
-    conn.commit()
-    cursor.close()
-    return True
-
-def runbotjob(bot, svr_req):
-    global connect_string
-    connect_string = sql2var(sysconfig, "select value from params where key = 'edxapp';", "")
-    n = len(svr_req)
-    if n >= 6:        
-        bot_req = svr_req[0]
-        sysid = int( svr_req[1] )
-        reply_menu_id = int( svr_req[2] )
-        func_req = svr_req[3]
-        func_param = svr_req[4]
-        sqldb = svr_req[5]
-        txt = "@edxbot\n" + func_req + "\n" + func_param + "\nTask " + sqldb
-        syslog('system',txt)
-        func_req_list = ["Cohort_assignment", "Cohort_mcq", "Cohort_update"]        
-        if func_req == "generate_mcq_as":
-            try:
-                syslog('system', f"calling generate_mcq_as({func_param})" )
-                vmedxlib.generate_mcq_as(func_param)
-                txt += " completed successfully."
-                syslog('system', 'job completed')
-            except:
-                txt += " failed."               
-        elif func_req in ["edx_mass_import", "mass_update_assignment", "mass_update_mcq", "mass_update_schedule"]:
-            try:
-                syslog('system', "calling " + func_req )
-                func_svc = "vmedxlib." + func_req + "()"
-                status = eval(func_svc)
-                txt += " completed successfully."
-                syslog('system', 'job completed')
-            except:
-                txt += " failed."
-
-        elif func_req in func_req_list :
-            func_svc_list = ["update_assignment" , "update_mcq" , "edx_import"]
-            idx = func_req_list.index(func_req)
-            func_svc = func_svc_list[idx] 
-            course_id = func_param              
-            try:
-                if vmedxlib.edx_connect() == 1:
-                    syslog('system', "calling " + func_svc + " with course id = " + course_id)
-                    func_svc = "vmedxlib." + func_svc + "(sqldb, course_id)"
-                    status = eval(func_svc)
-                    if status:
-                        txt += " completed successfully."
-                    else:
-                        txt += " failed."
-                    vmedxlib.edx_disconnect()
-                    syslog('system', 'job completed')
-                else:
-                    txt += " failed."
-            except:
-                txt += " failed."
-        else:
-            return ""
-        try:
-            bot.sendMessage(sysid, txt)            
-        except:
-            print(f"Unable to reply message due to this bot was blocked by the user {sysid}")            
-    return txt
-
-def verify_student(sqldb, student_id):
+def verify_student(userdata, student_id):
+    vars = dict()
+    amt = 0
+    if userdata is None:
+        return (msg, vars)
     student_name = ''
     stage = ''
     stype = -1
-    mcqlist = []
-    aslist = []    
     sid = int(student_id)
-    vars = dict()
-    amt = 0
-    userdata = load_data(sqldb, 'userdata', 'studentid', True)
-    if userdata is None:        
-        msg = 'Unable to load userdata : ' + sqldb
-        return (msg, mcqlist, aslist, vars)
+    client_name = list(userdata['client_name'])[0]
+    courseid = list(userdata['courseid'])[0]    
     learners = [int(x) for x in userdata.studentid]
+    condqry = f" client_name = '{client_name}' and courseid = '{courseid}'"
     if sid not in learners:
         msg = 'Student id not found. Please try again'        
-        return (msg, mcqlist, aslist, vars)
+        return (msg, vars)
 
-    student_match = ( userdata['studentid'] == sid ) 
+    student_match = ( userdata['studentid'] == sid )     
     
     if len(userdata[student_match])==0:
         msg = 'Sorry, we do not have your records. Please come back again some time.'
-        return (msg, mcqlist, aslist, vars)
+        return (msg, vars)
     
     student_record = userdata[student_match]
     for fld in list(student_record):
@@ -2358,26 +2102,28 @@ def verify_student(sqldb, student_id):
         try:
             if fldname=='amt':
                 vars[fldname] = float(list(student_record[fld])[0])+0
+            elif fldname=='grade':
+                vars[fldname] = float(list(student_record[fld])[0])+0
             else:
                 vars[fldname] = list(student_record[fld])[0]
+                if ("_avg" in fldname) or ("_attempts" in fldname):                    
+                    vars[fldname] = int(list(student_record[fld])[0])
         except:
-            vars[fldname] = 0
+            vars[fldname] = 0    
     amt = vars['amt']
     student_name = vars['username']
     stage = vars['stage']
     grade = vars['grade']    
 
-    mcq_str = sql2var(sqldb, "select value from params where key = 'mcq';", " ")
-    as_str = sql2var(sqldb, "select value from params where key = 'assignment';", " ")
-    vars['mcq_due_dates'] = {} if mcq_str==' ' else eval(mcq_str)    
-    vars['as_due_dates'] = {} if as_str==' ' else eval(as_str)
+    vars['mcq_due_dates'] = []
+    vars['as_due_dates'] = []
 
-    bptype = stype = 0
-    stage_table = load_data(sqldb, 'stages', 'name', True)
+    query = "select * from stages where " + condqry 
+    stage_table = rds_df(query)    
     if stage_table is None:        
-        msg = 'Unable to load userdata : ' + sqldb
-        return (msg, mcqlist, aslist, vars)
-
+        msg = f'Unable to load stage table for course-id {courseid}' 
+        return (msg, vars)
+    stage_table.columns = get_columns("stages")
     stage_list = [x for x in stage_table.name]
     date_list = [x for x in stage_table.stagedate]    
     vars['stage_dates'] = date_list
@@ -2387,19 +2133,17 @@ def verify_student(sqldb, student_id):
         stage = stage_list[0]
         vars['stage'] = stage
     msg += 'You are currently on stage ' + stage + "\n\n"
-    return (msg, mcqlist, aslist, vars)
+    return (msg, vars)
 
-def get_stage_name(sqldb):
+def get_stage_name(df):
     today_date = time.strftime('%Y-%m-%d', time.localtime() )
-    stage_dates = load_data(sqldb, 'stages', 'stagedate', False)
-    stage_names = load_data(sqldb, 'stages', 'name', False)
-    stage_descriptions = load_data(sqldb, 'stages', 'name', False)
-    stage_daysnum = load_data(sqldb, 'stages', 'days', False)
+    stage_dates = [x for x in df.stagedate]
+    stage_names = [x for x in df.name]
+    stage_daysnum = [x for x in df.days]
     cnt = len( stage_names )
     if cnt==0:
         return ""
     stage_name = ""
-    stage_desc = ""
     stage_days = ""
     if cnt > 0:
         k = 0
@@ -2410,33 +2154,32 @@ def get_stage_name(sqldb):
                 n = m - 1
                 stage_name = stage_names[n]
                 stage_date = stage_dates[n]
-                stage_desc = stage_descriptions[n]
                 stage_days = str(stage_daysnum[n])
                 if stage_found==0 and today_date >= stage_date:
                     next_stage_date = stage_dates[m]
                     if next_stage_date >= today_date:
                         k = n
-        if stage_found==0:
+        if stage_found==0:            
             if today_date > stage_dates[-1]:
                 k = cnt - 1
             stage_name = stage_names[k]
-            stage_desc = stage_descriptions[k]
             stage_days = str(stage_daysnum[k])
-        result = stage_name + " ( " +stage_desc+" ) on days #" + stage_days
+        result = stage_name + " ( " + stage_name +" ) on days #" + stage_days
     return result
 
-def evaluate_progress(vars,iu_list,duedate_list,passingrate,var_prefix,var_title):
+def evaluate_progress(vars,iu_list,passingrate,var_prefix,var_title):    
     avg_prefix = var_prefix + "_avg"
     att_prefix = var_prefix + "_attempts"
-    scoredate = ' '*10 ; score_zero = [] ; iu_score = [] ; iu_attempts = []
+    #scoredate = ' '*10 ; 
+    score_zero = [] ; iu_score = [] ; iu_attempts = []
     score_avg = 0 ; tt = '' ; iu_cnt = 0 ; attempts_balance = ""
-    if iu_list != '0' and len(duedate_list) > 0:
+    if iu_list != '0' :
         iu_vars = [int(x) for x in iu_list.split(',')]
-        scoredate = max([ duedate_list[x] for x in iu_vars])
         score_pass = [ x for x in iu_vars if vars[avg_prefix + str(x)]>=passingrate]
         score_failed = [ x for x in iu_vars if vars[avg_prefix + str(x)] < passingrate and vars[avg_prefix + str(x)] > 0]
         score_zero = [ x for x in iu_vars if vars[avg_prefix + str(x)] == 0]
-        iu_score = [ vars[x] for x in [ avg_prefix + x for x in iu_list.split(',') ]]        
+        iu_score = [ vars[x] for x in [ avg_prefix + x for x in iu_list.split(',') ]]  
+        iu_score = [ eval(str(x)) for x in iu_score]
         score_avg = sum(iu_score)/len(iu_score) if iu_score != [] else 0
         iu_attempts = [ vars[x] for x in [ att_prefix + x for x in iu_list.split(',') ]]
 
@@ -2452,39 +2195,37 @@ def evaluate_progress(vars,iu_list,duedate_list,passingrate,var_prefix,var_title
         attempts_balance = "".join([ ("\n" + var_title + ' #'+str(x) + " has " + str(m-vars[att_prefix + str(x)])+" attempts left"  ) for x in iu_vars \
             if vars[avg_prefix + str(x)] < passingrate ])
         tt += attempts_balance 
-    return (tt, score_avg, scoredate, score_zero, iu_score , iu_attempts, iu_cnt, attempts_balance)
+    return (tt, score_avg, score_zero, iu_score , iu_attempts, iu_cnt, attempts_balance)
 
-def load_progress(sqldb, stg, vars):    
-    global resp_dict
-    if len(stg)==0:
+def load_progress(df, stg, vars, client_name):
+    global vmbot    
+    resp_dict = vmbot.resp_dict
+    if ( len(stg) == 0) or (df is None) or (vars == {}):
         return ("", "", vars)
+    courseid = list(df['courseid'])[0]
+    condqry = f" client_name = '{client_name}' and courseid = '{courseid}';"
+    pass_rate = vmbot.pass_rate
+
     seperator = re.compile('[a-zA-Z0-9\ ]').sub('',stg)    
     if 'soc' in stg.lower() and seperator=='':
         stage = 'SOC'
-    else:
+    else:        
         stg_list = [x.strip() for x in stg.split(seperator)]    
         stage = stg_list[1] if len(stg_list)>=2 else stg_list[0]
-    query = "select _y_ from stages s where s.stage = '_x_' ;"    
-    mcq_qry = query.replace("_x_", stage).replace("_y_", "s.mcq")
-    assignment_qry = query.replace("_x_", stage).replace("_y_", "s.assignment")
-    f2f_qry = query.replace("_x_", stage).replace("_y_", "s.f2f")
-    mcqvars = sql2var(sqldb, mcq_qry, "0")
-    asvars = sql2var(sqldb, assignment_qry, "0")
-    f2f_qry = "select s.f2f from stages s where s.stage= '_x_' ;"
-    f2f_qry = f2f_qry.replace("_x_", stage)
-    f2fvars = sql2var(sqldb, f2f_qry, "0")
-    desc_qry = query.replace("_x_", stage).replace("_y_", "s.desc")
-    stage_desc = sql2var(sqldb, desc_qry, "")
-    pass_rate = sql2var(sysconfig, "select value from params where key = 'pass_rate';", 0.7)
-    stagebyschedule = get_stage_name(sqldb)
-    #soc_date = sql2var(sqldb, "select s.stagedate from stages s where s.id=1;", " "*10)
-    stg_date = sql2var(sqldb, "select s.stagedate from stages s where s.stage= '_x_' ;".replace("_x_", stage), " "*10)
-    
-    try:  # if undefined, then defined it
-        resp_dict 
-    except: 
-        resp_dict = load_respdict()
 
+    query = "select * from stages where stage = '" + stage + "' and " + condqry 
+    stagedf = rds_df(query)    
+    if stagedf is None:        
+        return ("", "", vars)
+    stagedf.columns = get_columns("stages")
+    stagebyschedule = get_stage_name(stagedf)
+    mcqvars = [x for x in stagedf.mcq][0]
+    asvars = [x for x in stagedf.assignment][0]
+    f2fvars = [x for x in stagedf.f2f][0]
+    stage_desc = [x for x in stagedf.desc][0]
+    stg_date = [x for x in stagedf.stagedate][0]    
+    
+    resp_dict = vmbot.resp_dict
     txt_hdr = resp_dict['stg0']
     if "eoc" not in stagebyschedule.lower():        
         txt_hdr += resp_dict['stg1']
@@ -2501,16 +2242,17 @@ def load_progress(sqldb, stg, vars):
 
     mcqas_list = [] ; list_attempts = [] ; f2f_limit = int(f2fvars) ; txt = "" ; t1 = '' ; t2 = ''
     mcnt = 0 ; mcqdate = '' ; mcq_avg = 0 ; mcq_zero = [] ; mcq_att_balance = ""
-    acnt = 0 ; asdate = '' ; as_avg = 0 ; as_zero = [] ; as_att_balance = ""
-    mcq_duedate_list = vars['mcq_due_dates']    
-    (t1, mcq_avg, mcqdate, mcq_zero, mcqas_list1 , mcq_attempts, mcnt, mcq_att_balance) = \
-        evaluate_progress(vars, mcqvars, mcq_duedate_list, pass_rate, 'mcq','MCQ')
+    acnt = 0 ; asdate = '' ; as_avg = 0 ; as_zero = [] ; as_att_balance = ""    
+    mcqdate = stg_date
+    (t1, mcq_avg, mcq_zero, mcqas_list1 , mcq_attempts, mcnt, mcq_att_balance) = \
+        evaluate_progress(vars, mcqvars, pass_rate, 'mcq','MCQ')
+
     txt += t1
     mcqas_list += mcqas_list1
     list_attempts += mcq_attempts
-    as_duedate_list = vars['as_due_dates']    
-    (t2, as_avg, asdate, as_zero, mcqas_list2 , as_attempts, acnt, as_att_balance) = \
-        evaluate_progress(vars, asvars, as_duedate_list, pass_rate, 'as','Assignment')
+    asdate = stg_date
+    (t2, as_avg, as_zero, mcqas_list2 , as_attempts, acnt, as_att_balance) = \
+        evaluate_progress(vars, asvars, pass_rate, 'as','Assignment')
     txt += t2
     mcqas_list += mcqas_list2
     list_attempts += as_attempts
@@ -2521,18 +2263,10 @@ def load_progress(sqldb, stg, vars):
     avg_score  = sum(mcqas_list)/len(mcqas_list) if mcqas_list != [] else 0
     mcqas_complete = 1 if len([n+1 for n in range(len(list_attempts)) if list_attempts[n]==0])==0 else 0
     max_attempts = 0 if len(list_attempts)==0 else max(list_attempts)
-    if mcqdate.strip() == "":
-        mcqdate = stg_date
-    else:
-        if string2date(stg_date,"%d/%m/%Y") >= string2date(mcqdate,"%d/%m/%Y") :
-            mcqdate = stg_date
-    if asdate.strip() == "":
-        asdate = stg_date
-    else:
-        if string2date(stg_date,"%d/%m/%Y") >= string2date(asdate,"%d/%m/%Y") :
-            asdate = stg_date
-    eldate = mcqdate
-    fcdate = max( [mcqdate, asdate] )
+    mcqdate = stg_date
+    asdate  = stg_date
+    eldate  = stg_date
+    fcdate  = stg_date
     f2f = vars['f2f']
     amt = vars['amt']
 
@@ -2548,14 +2282,19 @@ def load_progress(sqldb, stg, vars):
     stage = stg
     for vv in ['stage', 'mcqdate', 'asdate', 'eldate', 'fcdate', 'avg_score', 'mcqas_complete', \
             'has_score', 'pass_stage', 'max_attempts', 'mcqas_list', 'mcq_zero', 'mcq_avg', \
-            'mcnt', 'acnt', 'as_avg', 'as_zero', 'f2f_limit', 'pass_rate', 'stage_desc', 'mcq_attempts', \
-                'mcq_att_balance', 'as_att_balance'] :
+            'mcnt', 'acnt', 'as_avg', 'as_zero', 'f2f_limit', 'stage_desc', 'mcq_attempts', \
+                'mcq_att_balance', 'as_att_balance', 'as_attempts'] :
         vars[vv] = eval(vv)
     return (txt_hdr, txt, vars)
 
-def display_progress(sqldb, stg, vars):
-    global vmbot, dt_model, resp_dict
-    (txt1, txt2, vars) = load_progress(sqldb, stg, vars)
+def display_progress(df, stg, vars, client_name):
+    global vmbot, dt_model , nn_model
+    
+    if vars == {}:
+        return "Your information is incomplete, please do not proceed and inform you faculty admin."
+    resp_dict = vmbot.resp_dict
+    pass_rate = vmbot.pass_rate
+    (txt1, txt2, vars) = load_progress(df, stg, vars, client_name)
     txt = txt1 + txt2
     if txt == "":
         return "Your information is incomplete, please do not proceed and inform you faculty admin."
@@ -2564,7 +2303,7 @@ def display_progress(sqldb, stg, vars):
         chatid = telegram_ids[0]
     else:
         chatid = 0
-
+    
     try:
         if vars['has_score'] == 1:
             txt += resp_dict['avg_score']
@@ -2583,16 +2322,16 @@ def display_progress(sqldb, stg, vars):
             resp0 = resp_dict['resp0']
             txt += resp0 + "\n\n"
 
-    if vars['mcqas_complete']==1 and vars['avg_score']>= vars['pass_rate'] :
+    if vars['mcqas_complete']==1 and vars['avg_score']>= pass_rate :
         resp1 = resp_dict['resp1']
         txt += resp1 + "\n\n"
     if len(vars['mcq_zero']) > 0 and vars['avg_score'] == 0 :
         resp2 = resp_dict['resp2']
         txt += resp2 + "\n\n"
-    if len(vars['mcqas_list'])>0 and vars['avg_score'] < vars['pass_rate'] and vars['max_attempts'] < 4 :
+    if len(vars['mcqas_list'])>0 and vars['avg_score'] < pass_rate and vars['max_attempts'] < 4 :
         resp3 = resp_dict['resp3']
         txt += resp3 + "\n\n"
-    if len(vars['mcqas_list'])>0 and vars['avg_score'] > 0 and vars['avg_score'] < vars['pass_rate'] \
+    if len(vars['mcqas_list'])>0 and vars['avg_score'] > 0 and vars['avg_score'] < pass_rate \
         and vars['max_attempts'] >= 4 :
         resp4 = resp_dict['resp4']
         txt += resp4 + "\n\n"
@@ -2636,78 +2375,311 @@ def display_progress(sqldb, stg, vars):
     else:
         txt += "You have not passed this stage yet."
 
-    if (dt_model.model_name != "") and ((vars['mcnt'] + vars['acnt']) >0):
-        grad_pred = dt_model.predict(vars['mcq_avg'] , vars['as_avg'], 13)
-        txt += "\n\nAI grading prediction : " +  "{:.2%}".format(grad_pred[0]) + "\n\n"        
+    use_neural_network = False # True or False
+    if use_neural_network:                    
+        if (nn_model.model_name != "") and ((vars['mcnt'] + vars['acnt']) >0):
+            mavg = vars['mcq_avg']
+            mcqavgatt = list_avg( vars['mcq_attempts'] )
+            mcqmaxatt = max( vars['mcq_attempts'] )
+            aavg = vars['as_avg'] 
+            acnt = vars['acnt']  
+            as_avgatt = list_avg( vars['as_attempts'] )
+            as_maxatt = max( vars['as_attempts'] )
+            grad_pred_nn = nn_model.pred(client_name,mavg,mcqavgatt,mcqmaxatt,aavg,as_avgatt,as_maxatt,acnt)
+            txt += "\n\nAI grading prediction : " +  "{:.2%}".format(grad_pred[0]) + "\n\n"
+    else:
+        if (dt_model.model_name != "") and ((vars['mcnt'] + vars['acnt']) >0):
+            grad_pred = dt_model.predict(vars['mcq_avg'] , vars['as_avg'], 13)
+            txt += "\n\nAI grading prediction : " +  "{:.2%}".format(grad_pred[0]) + "\n\n"        
     return txt
 
-def load_vars(sqldb, sid):
+def load_vars(df, sid):
     vars = dict()
+    client_name = list(df['client_name'])[0]
+    courseid = list(df['courseid'])[0]
+    ulist = [x for x in df.username ]
+    slist = [x for x in df.studentid]
+    udict = dict(zip(slist, ulist))
+    username = udict[sid]
+    stg = list(df['stage'])[0]
     def vars_addrec(r):
         if r !='':
             vars[ r.split(':')[0] ] = eval( r.split(':')[1] )
         return    
+   
     process_rec = lambda t : [ vars_addrec(r) for r in t.split('\n') if r != '']
-    process_rec( edit_records(sqldb,  'userdata', 'studentid', sid, "mcq_avg") )    
-    process_rec( edit_records(sqldb,  'userdata', 'studentid', sid, "mcq_attempts") )    
-    process_rec( edit_records(sqldb,  'userdata', 'studentid', sid, "as_avg") )    
-    process_rec( edit_records(sqldb,  'userdata', 'studentid', sid, "as_attempts") )    
-    process_rec( edit_records(sqldb,  'userdata', 'studentid', sid, "f2f") )    
-    process_rec( edit_records(sqldb,  'userdata', 'studentid', sid, "amt") )    
+    process_rec( edit_records(client_name, courseid,  'userdata', 'studentid', sid, "mcq_avg") )    
+    process_rec( edit_records(client_name, courseid,  'userdata', 'studentid', sid, "mcq_attempts") )    
+    process_rec( edit_records(client_name, courseid,  'userdata', 'studentid', sid, "as_avg") )    
+    process_rec( edit_records(client_name, courseid,  'userdata', 'studentid', sid, "as_attempts") )    
+    process_rec( edit_records(client_name, courseid,  'userdata', 'studentid', sid, "f2f") )    
+    process_rec( edit_records(client_name, courseid,  'userdata', 'studentid', sid, "amt") )    
 
-    courseid = sql2var(sqldb, "select courseid from userdata where studentid = " + str(sid), "")    
-    vars['courseid'] = courseid
-    username = sql2var(sqldb, "select username from userdata where studentid = " + str(sid), "learner")
-    vars['username'] = username
-    vars['studentid'] = sid
-    mcq_str = sql2var(sqldb, "select value from params where key = 'mcq';", " ")
-    as_str = sql2var(sqldb, "select value from params where key = 'assignment';", " ")    
-    vars['mcq_due_dates'] = {} if mcq_str==' ' else eval(mcq_str)    
-    vars['as_due_dates'] = {} if as_str==' ' else eval(as_str)
-    stg = sql2var(sqldb, "select stage from userdata where studentid = " + str(sid), "SOC Days")
+    vars['mcq_due_dates'] = []
+    vars['as_due_dates'] = []
     vars['stage'] = stg
     vars['f2f'] = 1
     vars['amt'] = 0
+    vars['client_name'] = client_name    
+    vars['courseid'] = courseid    
+    vars['username'] = username
+    vars['studentid'] = sid
+    #print(*vars.items(), sep = '\n')
     return vars
 
-def test_display_progress(sqldb, sid):
-    # test_display_progress("FOS-1219A.db",4477)
-    global vmbot, resp_dict, dt_model
-    dt_model = vmaiglib.MLGrader()
-    dt_model.load_model("dt_model.bin")
-    resp_dict = load_respdict()
-    vmbot.user_list = []
-    vars = load_vars(sqldb, sid)
-    stg = vars['stage']
-    txt = display_progress(sqldb, stg, vars)
-    print(txt)
+def job_request(bot_req,chat_id,client_name,func_req,func_param):
+    if func_req == "":
+        return
+    gen_job_id = lambda : (''.join(random.choice( "ABCDEFGHJKLMNPQRTUVWXY0123456789" ) for i in range(12))).upper()    
+    date_now = time.strftime('%Y%m%d', time.localtime() )
+    time_now = time.strftime('%H%M%S', time.localtime() )
+    job_id = gen_job_id()
+    try:
+        query = 'insert into job_list(date,time_start,time_end,job_id,client_name,chat_id,'
+        query += 'bot_req, func_req, func-param, status, message)'
+        query += ' values(_d, "_t", "0", "_j", "_c", _x, "_b", "_f", "_p","open","");'
+        query = query.replace('_d',date_now)
+        query = query.replace('_t',str(time_now))
+        query = query.replace('_j',job_id)
+        query = query.replace('_c',client_name)
+        query = query.replace('_x',str(chat_id))
+        query = query.replace('_b',bot_req)
+        query = query.replace('_f',func_req)
+        query = query.replace('_p',func_param)
+        query = query.replace('-p','_p')
+        rds_update(query)
+        #print(query)
+    except:
+        print(f"Error for job {job_id} on function {func_req}")
     return
 
-def mass_update_playbooklist():
-    for fn in os.listdir("."):
-        if (len(fn)>3) and (fn[-3:]==".db"):
-            try:
-                df = querydf(fn, "SELECT name FROM sqlite_master WHERE type ='table';")
-                tbl_names = [x for x in df.name if x=='stages' or x=='userdata']
-                if len(tbl_names)==2:                    
-                    course_id = sql2var(fn, "select value from params where key = 'course_id';", '')
-                    course_id = str(course_id).strip()
-                    if course_id != "":
-                        update_playbooklist(fn, course_id)
-            except:
-                pass
-    return 
+def edxapi_getuser(headers, url):
+    edx_info = {}
+    response = requests.get(url, headers=headers)
+    if response.status_code == 200:        
+        data = response.content.decode('utf-8')        
+        if len(data)>0:
+            edx_info = json.loads(data)
+    return edx_info
+
+def rds_loadcourse(client_name, stud):
+    course_id_list = []
+    course_name_list = []
+    qry0 = "SELECT DISTINCT ud.courseid, pb.course_name FROM userdata ud INNER JOIN playbooks pb "
+    qry0 += "ON ud.client_name=pb.client_name AND ud.courseid=pb.course_id "
+    qry = qry0 + f"WHERE ud.studentid={str(stud)} and ud.client_name='{client_name}';"            
+    df = rds_df(qry)
+    df.columns = ['courseid','course_name']
+    if df is not None:
+        course_id_list = [x for x in df.courseid]
+        course_name_list = [x for x in df.course_name]
+    return (course_id_list, course_name_list)
+
+def profiler_report(client_name, output_file):
+    try:
+        ok = 1
+        mcqinfo = rds_df( f"SELECT * FROM mcqas_info WHERE client_name='{client_name}';")
+        mcqinfo.columns = get_columns("mcqas_info")
+        features = ['mcq_avgscore', 'mcq_cnt', 'as_avgscore']
+        df = mcqinfo[['grade'] + features ]
+        pf = ProfileReport(df)
+        pf.to_file(output_file)
+    except:
+        ok = 0
+    return ok
+
+def mcq_avg_dict(client_name, course_id, xvar, rsum, avgmode = True):
+    if rsum < 1:
+        return {}
+    sep = '+' if avgmode else ','
+    updqry = sep.join([ xvar + str(x) for x in range( 1, rsum + 1 )])
+    if avgmode:
+        query = "select studentid, ((" + updqry + ") / " + str(rsum) +  ".0"
+        query += ") as xvar from userdata where courseid = '" + course_id + "' and client_name = '" + client_name + "';"
+        df = rds_df(query)
+        df.columns = ['studentid','xvar']
+    else:
+        query = "select studentid, " + updqry + " from userdata where courseid = '" + course_id + "' and client_name = '" + client_name + "';"
+        df = rds_df(query)
+        df.columns = ['studentid'] + [ xvar + str(x) for x in range( 1, rsum + 1 )]
+        updqry  =  ', '.join([ "x." + xvar + str(x) for x in range( 1, rsum + 1 ) ])
+        df_expr = "max(" + updqry + ")"
+        df["xvar"] = df.apply(lambda x : df_expr, axis=1)
+    if df is None:
+        rdict = dict()
+    else:
+        list1 = [ r for r in df.studentid ]
+        list2 = [ r for r in df.xvar ]
+        if list1==[]:
+            rdict = dict()
+        else:
+            rdict = dict(zip( list1 , list2))    
+    return rdict
+
+def analyze_cohort(client_name, course_id):
+    global dt_model
+    try:
+        x = dt_model.score
+    except:
+        dt_model = vmaiglib.MLGrader()
+        dt_model.load_model("dt_model.bin")
+    itemlist = lambda x,y : "\n".join([ ",".join(x[n*y:][:y]) for n in range(int((len(x)+y-1)/y))])
+    result_table = [ [' ' for m in range(4)] for n in range(18) ]
+    avgsum_list = vmedxlib.count_avg_cols(client_name, course_id, 13, "mcq_avg")
+    rr = [ 1 if r>0 else 0 for r in avgsum_list ]
+    rsum = sum(rr)
+    idx = 0
+    if rsum>0:
+        for n in range(13) :
+            if rr[n]>0:
+                result_table[idx][0] = '# ' + str(n+1)
+                result_table[idx][1] = "{:.2%}".format(avgsum_list[n])
+                idx+=1
+        rdict = mcq_avg_dict(client_name, course_id, "mcq_avg", rsum, True)
+        xdict = mcq_avg_dict(client_name, course_id, "mcq_attempts", rsum, True)
+        ydict = mcq_avg_dict(client_name, course_id, "mcq_attempts", rsum, False)
+        result_table[idx][0] = "Avg MCQ Score"
+        result_table[idx][1] = "Student #"
+        idx += 1
+        result_table[idx][0] = ">= 70%"
+        rlist = [str(r) for r in rdict if rdict[r] >= 0.7]
+        result_table[idx][1] = itemlist(rlist,7)
+        idx += 1
+        result_table[idx][0] = "between 30% & 70%"
+        rlist = [ str(r) for r in rdict if rdict[r] > 0.3 and rdict[r] < 0.7 ]
+        result_table[idx][1] = itemlist(rlist,7)
+        idx += 1
+        result_table[idx][0] = "below 30%"
+        rlist = [ str(r) for r in rdict if rdict[r] <= 0.3 ]
+        result_table[idx][1] = itemlist(rlist,7)
+        idx += 1
+        result_table[idx][0] = "Avg Attempts >= 2"
+        rlist = [ str(r) for r in xdict if xdict[r] >= 2 ]
+        result_table[idx][1] = itemlist(rlist,7)
+
+    avgsum_list = vmedxlib.count_avg_cols(client_name, course_id, 13, "as_avg")
+    rr = [ 1 if r>0 else 0 for r in avgsum_list ]
+    rsum = sum(rr)    
+    idx = 0
+    if rsum>0:        
+        for n in range(13) :
+            if rr[n]>0:
+                result_table[idx][2] = '# ' + str(n+1)
+                result_table[idx][3] = "{:.2%}".format(avgsum_list[n])
+                idx+=1
+        rdict = mcq_avg_dict(client_name, course_id, "as_avg", rsum, True)
+        xdict = mcq_avg_dict(client_name, course_id, "as_attempts", rsum, True)
+        ydict = mcq_avg_dict(client_name, course_id, "as_attempts", rsum, False)
+        result_table[idx][2] = "Avg Assignment Score"
+        result_table[idx][3] = "Student #"
+        idx += 1
+        result_table[idx][2] = ">= 70%"
+        rlist = [str(r) for r in rdict if rdict[r] >= 0.7]
+        result_table[idx][3] = itemlist(rlist,7)
+        idx += 1
+        result_table[idx][2] = "between 30% & 70%"
+        rlist = [ str(r) for r in rdict if rdict[r] > 0.3 and rdict[r] < 0.7 ]
+        result_table[idx][3] = itemlist(rlist,7)
+        idx += 1
+        result_table[idx][2] = "below 30%"
+        rlist = [ str(r) for r in rdict if rdict[r] <= 0.3 ]
+        result_table[idx][3] = itemlist(rlist,7)
+        idx += 1
+        result_table[idx][2] = "Avg Attempts >= 2"
+        rlist = [ str(r) for r in xdict if xdict[r] >= 2 ]
+        result_table[idx][3] = itemlist(rlist,7)
+    df =  pd.DataFrame( result_table )
+    df.columns = ['MCQ Test #', 'Average Score' , 'Assignment Test #', 'Average Score']
+    tt = "Assignment & MCQ Summary for " + course_id
+    tbl = render_table(df, header_columns=0, col_width=6, title_name=tt) 
+    return tbl
+
+def checkjoblist(vmbot):
+    client_name = vmbot.client_name
+    df = rds_df(f"select * from job_list where status='open' and client_name='{client_name}';")    
+    if df is None:
+        return
+    df.columns = get_columns(job_list)
+    jobitem = df.iloc[0].to_dict()
+    vmbot.job_items = jobitem
+    msg =  runbotjob(vmbot)
+    if msg == "":
+        msg = "job complete complete"
+    time_now = time.strftime('%H%M%S', time.localtime() )
+    time_end = str(time_now)
+    status = "completed"
+    job_id = jobitem['job_id']
+    updqry = f"update job_list set time_end = '{time_end}', status = '{status}', message = '{msg}' where job_id = '{job_id}';"
+    rds_update(updqry)
+    return
+
+def runbotjob(vmbot):
+    global edx_api_header, edx_api_url    
+    jobitem = vmbot.job_items
+    client_name = vmbot.client_name
+    print(*jobitem.items(), sep = '\n')            
+    job_id = jobitem['job_id']
+    #client_name = jobitem['client_name']
+    chat_id = int(jobitem['chat_id'])
+    bot_req = jobitem['bot_req']
+    func_req = jobitem['func_req']
+    func_param = jobitem['func_param']
+    func_svc_list = ["update_assignment" , "update_mcq" , "edx_import", "update_schedule"]    
+    edx_time = vmbot.edx_time
+    txt = "job "
+    updqry = f"update job_list set status = 'running', message = '' where job_id = '{job_id}';"
+    rds_update(updqry)
+    jobitem['status'] = 'running'
+    try:
+        vmbot.bot.sendMessage(chat_id,f"running job {job_id}")
+    except:
+        print(f"running job {job_id}")            
+    if func_req == "generate_mcq_as":
+        try:
+            vmedxlib.generate_mcq_as(func_param)
+            txt += " completed successfully."
+        except:
+            txt += " failed."               
+    elif func_req in ["edx_mass_import", "mass_update_assignment", "mass_update_mcq", "mass_update_schedule", "mass_update_usermaster"]:
+        try:
+            func_svc = "vmedxlib." + func_req + "(client_name)"
+            status = eval(func_svc)
+            txt += " completed successfully."
+        except:
+            txt += " failed."
+    elif func_req in func_svc_list :
+        course_id = func_param              
+        try:
+            func_svc = "vmedxlib." + func_req + "(course_id, client_name)"
+            status = eval(func_svc)
+            txt += " completed successfully."
+        except:
+            txt += " failed."
+    else:
+        try:
+            func_svc = func_req + "(" + func_param + ")"
+            status = eval(func_svc)
+            if status:
+                txt += " completed successfully."
+            else:
+                txt += " failed."
+        except:
+            txt += " failed."
+    try:        
+        vmbot.bot.sendMessage(chat_id,f"completed job {job_id}")
+    except:
+        print(f"completed job {job_id}")
+    jobitem['status'] = 'completed'
+    vmbot.job_items = {}
+    return txt
 
 #------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":        
     version = sys.version_info
     if version.major == 3 and version.minor >= 7:        
-        #do_main()
-        #test_display_progress("FOS-1219A.db",4477)
-        #encrypt_email("demo.db")
-        #mass_encrypt_email()        
-        #if list_table(sqldb = 'FOS-1219A.db', "select studentid,username,amt,grade,stage,f2f from userdata", "List of learners from FOS-1219A") is not None:
-        #    plt.savefig('userdata.png', dpi=100)
-        print("this is vmbotlib")
+        do_main()
+        #print("this is vmbotlib")
     else:
         print("Unable to use this version of python\n", version)
+
+        
