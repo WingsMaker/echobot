@@ -451,7 +451,7 @@ def edx_import(course_id, client_name):
             df['courseid'] = course_id
             df1 = df[['client_name','courseid', 'id', 'stage', 'name', 'desc', 'days', 'f2f', 'mcq', 'flipclass', 'assignment', 'IU', 'stagedate', 'fcdate', 'eldate', 'mcqdate', 'asdate']]
             copydbtbl(df1, "stages")
-
+            
     df = edx_userdata(course_id)
     nrows = len(df)
     if nrows == 0:
@@ -468,7 +468,8 @@ def edx_import(course_id, client_name):
 
     query = "delete from userdata where " + condqry
     rds_update(query)
-
+    
+    
     df['client_name'] = client_name
     df['module_id'] = module_id
     df['amt'] = 0
@@ -478,7 +479,7 @@ def edx_import(course_id, client_name):
     df.rename(columns={'course_id':'courseid','student_id':'studentid'} , inplace=True)
     df1 = df[['client_name', 'module_id', 'courseid', 'studentid', 'username', 'amt', 'grade', 'stage', 'f2f']]
     copydbtbl(df1,"userdata")
-
+    
     mcqcnt = edx_mcqcnt(course_id)
     ascnt = edx_ascnt(course_id)
     try:
@@ -948,18 +949,19 @@ def mass_update_schedule(client_name):
     return
 
 def mass_update_usermaster(client_name):
-    # old logic , not so efficicent
-    #edx_mass_update(update_usermaster,client_name)    
     userdf = edx_alluserdata()
     if len(userdf)==0:
         return    
     df = update_userdf(userdf, client_name)
+    if df is None:
+        print("Failed to perform user master update")
+        return
     query = "DELETE um.* FROM user_master um INNER JOIN userdata ud ON um.client_name=ud.client_name"
     query += f" AND um.studentid=ud.studentid where um.client_name = '{client_name}';"        
     rds_update(query)
     copydbtbl(df,"user_master")
     #
-    #print(f"mass_update_usermaster completed for {client_name}")        
+    print(f"mass_update_usermaster completed for {client_name}")        
     return
 
 def test_get_stage_list():

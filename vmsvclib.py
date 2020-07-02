@@ -137,10 +137,10 @@ def copydbtbl(df, tblname):
     global rdscon
     try:
         df.reset_index()    
-        rdsEngine = rds_engine()
-        rdscon = rdsEngine.connect()
+        rdsEngine = rds_engine()    
+        rdscon = rdsEngine.connect()    
         df.to_sql(tblname, con=rdsEngine, if_exists = 'append', index=False, chunksize = 1000)
-        rdscon.close()
+        #rdscon.close()
         ok=True
     except:
         ok=False
@@ -406,8 +406,8 @@ def rds_update(query):
             return
     rdscur = rdscon.cursor()
     rdscur.execute(query)
-    rdscon.commit()
-    rdscon.close()
+    #rdscon.commit()
+    #rdscon.close()
     return 
 
 def render_table(data, col_width=3.0, row_height=0.625, font_size=14,
