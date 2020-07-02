@@ -474,7 +474,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             result = "stage:'_x_'".replace('_x_', stg)
             edit_fields(self.client_name, self.courseid, "userdata", "studentid", self.student_id, result)
             self.stage_name = stg
-            (tt, self.records ) = verify_student(self.userdata, self.student_id)
+            (tt, self.records ) = verify_student(self.userdata, self.student_id, self.courseid)
             tt = display_progress(self.userdata, stg, self.records, self.client_name)
             self.tablerows.append(tt)
         self.stage_name = prev_stage
@@ -486,62 +486,70 @@ class MessageCounter(telepot.helper.ChatHandler):
         return txt
 
     def mcqas_chart(self, groupcht = False ):
-        try:
-            if self.userdata is None:                
-                return            
-            avg_list = dict()
-            if groupcht:
-                condqry = f"client_name = '{self.client_name}' AND courseid = '{self.courseid}' "
-                cohort_id = piece(piece(self.courseid,':',1),'+',1)
-                fn = 'chart_' + cohort_id + '.png'
-                title = f"MCQ and Assignment scores for cohort {cohort_id}"
-            else:
-                sid = self.student_id
-                condqry = f"client_name = '{self.client_name}' AND courseid = '{self.courseid}' AND studentid = {sid} "
-                fn = 'chart_' + str(sid) + '.png'
-                title = f"MCQ and Assignment scores for student #{sid}"                
-            avg_list = dict()
-            for avgopt in ['mcq_avg','as_avg']:
-                qry =",".join([ f" avg({avgopt}{x}) as avg{x} " for x in range(1,14) ])
-                query = f"select {qry} from userdata where " + condqry
-                df = rds_df(query)
-                df.columns = qry.split(',')
-                avg_list[avgopt] = [eval(str(x)) for x in df.values.tolist()[0]]
+        if self.userdata is None:            
+            return            
+        avg_list = dict()
+        if groupcht:
+            condqry = f"client_name = '{self.client_name}' AND courseid = '{self.courseid}' "
+            cohort_id = piece(piece(self.courseid,':',1),'+',1)
+            fn = 'chart_' + cohort_id + '.png'
+            title = f"MCQ and Assignment scores for cohort {cohort_id}"
+        else:            
+            sid = self.student_id
+            if sid == 0:
+                return 
+            courseid = self.courseid
+            cname = self.client_name
+            query = f"select * from userdata where client_name = '{cname}' and studentid={sid} and courseid='{courseid}';"
+            df = rds_df(query)
+            if df is not None:
+                df.columns = get_columns("userdata")
+                self.userdata = df                            
+            condqry = f"client_name = '{self.client_name}' AND courseid = '{self.courseid}' AND studentid = {sid} "
+            fn = 'chart_' + str(sid) + '.png'
+            title = f"MCQ and Assignment scores for student #{sid}"                
+        avg_list = dict()
+        for avgopt in ['mcq_avg','as_avg']:
+            qry =",".join([ f" avg({avgopt}{x}) as avg{x} " for x in range(1,14) ])
+            query = f"select {qry} from userdata where " + condqry
+            df = rds_df(query)
+            if df is None:                
+                return
+            df.columns = qry.split(',')
+            avg_list[avgopt] = [eval(str(x)) for x in df.values.tolist()[0]]
+        df = pd.DataFrame({
+            'Test/IU' : [ '#' + str(n) for n in range(1,14) ],    
+            'mcq test' : avg_list['mcq_avg'],
+            'assignment test' : avg_list['as_avg']
+        })
+        df.plot(kind='bar',figsize=(10,4), rot = 90)            
+        plt.title(title)
+        ax = plt.gca()
+        cols = [c for c in  df.columns]
+        label_col = cols[0]
+        xcol = cols[1]
+        label_list = [ x for x in df[label_col] ]
+        width = 0.8
+        plt.xlim([-width, len(df[xcol])-width])
+        ax.set_xticklabels((label_list))
+        ax.yaxis.set_major_formatter(mtk.PercentFormatter())
+        plt.draw()
+        plt.savefig(fn, dpi=100)
+        plt.clf()
+        f = open(fn, 'rb')
+        self.bot.sendPhoto(self.chatid, f)
+        if groupcht:
             df = pd.DataFrame({
                 'Test/IU' : [ '#' + str(n) for n in range(1,14) ],    
-                'mcq test' : avg_list['mcq_avg'],
-                'assignment test' : avg_list['as_avg']
+                'mcq test' : [ "{:.2%}".format(x) for x in avg_list['mcq_avg'] ],
+                'assignment test' : [ "{:.2%}".format(x) for x in avg_list['as_avg'] ]
             })
-            df.plot(kind='bar',figsize=(10,4), rot = 90)            
-            plt.title(title)
-            ax = plt.gca()
-            cols = [c for c in  df.columns]
-            label_col = cols[0]
-            xcol = cols[1]
-            label_list = [ x for x in df[label_col] ]
-            width = 0.8
-            plt.xlim([-width, len(df[xcol])-width])
-            ax.set_xticklabels((label_list))
-            ax.yaxis.set_major_formatter(mtk.PercentFormatter())
-            plt.draw()
-            plt.savefig(fn, dpi=100)
-            plt.clf()
-            f = open(fn, 'rb')
-            self.bot.sendPhoto(self.chatid, f)
-            if groupcht:
-                df = pd.DataFrame({
-                    'Test/IU' : [ '#' + str(n) for n in range(1,14) ],    
-                    'mcq test' : [ "{:.2%}".format(x) for x in avg_list['mcq_avg'] ],
-                    'assignment test' : [ "{:.2%}".format(x) for x in avg_list['as_avg'] ]
-                })
-                if render_table(df, header_columns=0, col_width=6, title_name=title) is not None:
-                    plt.savefig(fn, dpi=100)
-                    plt.clf()
-                    f = open(fn, 'rb')
-                    self.bot.sendPhoto(self.chatid, f)
-            del df
-        except:
-            pass
+            if render_table(df, header_columns=0, col_width=6, title_name=title) is not None:
+                plt.savefig(fn, dpi=100)
+                plt.clf()
+                f = open(fn, 'rb')
+                self.bot.sendPhoto(self.chatid, f)
+        del df
         return 
 
     def session_info(self):
@@ -559,7 +567,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                 txt += '\nsession already logged out.'
             else:
                 txt += '\nStudent id is ' + str(self.records['studentid'])
-                txt += '\nCohort ID : ' + self.courseid
+                txt += '\nCourse ID : ' + self.courseid
                 txt += '\nCourse Name : ' + self.coursename
                 cc = [x for x in self.list_courseids if self.courseid != x]
                 if len(cc)>0:
@@ -721,7 +729,7 @@ class MessageCounter(telepot.helper.ChatHandler):
 
     def load_tables(self):
         global vmbot                
-        if vmbot.edx_time > 0 and self.courseid not in vmbot.updated_courses:            
+        if vmbot.edx_time > 0 and self.courseid not in vmbot.updated_courses:
             self.sender.sendMessage("Please wait for a while.")
             vmedxlib.update_mcq(self.courseid,  self.client_name)
             vmedxlib.update_assignment(self.courseid,  self.client_name)
@@ -777,7 +785,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             return 
         if self.userdata is None:            
             return
-        (txt, self.records ) = verify_student(self.userdata, sid)        
+        (txt, self.records ) = verify_student(self.userdata, sid, self.courseid)
         err = 0        
         try:
             self.stage_name = self.records['stage']
@@ -799,7 +807,8 @@ class MessageCounter(telepot.helper.ChatHandler):
             self.is_admin = False
             self.student_id = sid
             self.new_session = False
-            vmbot.user_list[chat_id]=[self.courseid, self.student_id, self.client_name, chat_id, ""]
+            #vmbot.user_list[chat_id]=[self.courseid, self.student_id, self.client_name, chat_id, ""]
+            vmbot.user_list[chat_id]=[self.courseid, self.student_id, self.username, chat_id, ""]
             txt = display_progress(self.userdata, self.stage_name, self.records, self.client_name)
             if txt == "":
                 txt = "Welcome back."
@@ -852,10 +861,10 @@ class MessageCounter(telepot.helper.ChatHandler):
             txt = vars['mcq_att_balance']
         return txt
 
-    def update_stage(self, sid):
+    def update_stage(self, sid):        
         if (sid <= 0) or (self.userdata is None):
             return ""                 
-        vars = load_vars(self.userdata, sid)            
+        vars = load_vars(self.userdata, sid)   
         df = self.userdata.copy()        
         client_name = list([x for x in df.client_name])[0]
         courseid = list([x for x in df.courseid])[0]
@@ -870,22 +879,22 @@ class MessageCounter(telepot.helper.ChatHandler):
         current_stage = ""
         vars['mcq_due_dates'] = []
         vars['as_due_dates'] = []
-        try:
-            pass_stage = 0
-            txt = ''
-            for n in range(tblsize):
-                try:
-                    current_stage = stage_names[n]
-                    vars['stage'] = current_stage
-                    (t1, t2, vars) = load_progress(self.userdata, current_stage, vars, self.client_name)
-                    txt = t1 + t2
-                    if vars['pass_stage'] == 0:
-                        pass_stage = 1                
-                        break
-                except:
-                    pass
-        except:
-            current_stage = ""
+        #try:
+        pass_stage = 0
+        txt = ''
+        for n in range(tblsize):
+            #try:
+            current_stage = stage_names[n]            
+            vars['stage'] = current_stage
+            (t1, t2, vars) = load_progress(self.userdata, current_stage, vars, self.client_name)
+            txt = t1 + t2
+            if vars['pass_stage'] == 0:
+                pass_stage = 1                                
+                break
+            #except:
+            #    pass
+        #except:
+        #    current_stage = ""
         if current_stage == "":
             return ""
         else:
@@ -1148,8 +1157,9 @@ class MessageCounter(telepot.helper.ChatHandler):
                             coursename = rds_param(query)                            
                             msg = "You are in course:\n" + courseid
                             self.courseid = courseid
-                            self.load_tables()
-                            bot.sendMessage(chat_id, msg)
+                            self.load_tables()                            
+                            bot.sendMessage(chat_id, msg)                            
+                            self.update_stage(sid)                           
                             self.check_student(self.student_id, self.chatid)
                         return
                     elif usertype == 11:
@@ -1353,7 +1363,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             option_faq, option_mychat, option_mychart, option_binduser, option_gethelp, option_info, option_back]:
             if (resp == option_back) or (resp == "0"):
                 self.logoff()            
-            elif resp == option_mycourse:
+            elif resp == option_mycourse:                
                 date_today = datetime.datetime.now().date()
                 yrnow = str(date_today.strftime('%Y'))
                 course_list = [x for x in self.list_courseids if x[-4:]==yrnow]
@@ -1368,13 +1378,16 @@ class MessageCounter(telepot.helper.ChatHandler):
                 cname = self.client_name
                 query = f"select stage from userdata where client_name = '{cname}' and studentid={sid} and courseid='{courseid}';"
                 stg = rds_param(query)
-                result = "stage:'_x_'".replace('_x_', stg)                
-                edit_fields(cname, courseid, "userdata", "studentid", sid, result)
+                query = f"select * from userdata where client_name = '{cname}' and studentid={sid} and courseid='{courseid}';"
+                df = rds_df(query)
+                if df is not None:
+                    df.columns = get_columns("userdata")
+                    self.userdata = df                
                 self.stage_name = stg
                 self.student_id = sid
                 self.courseid = courseid
                 self.load_tables()
-                (txt, self.records ) = verify_student(self.userdata, sid)                
+                (txt, self.records ) = verify_student(self.userdata, sid, self.courseid)                
                 retmsg = display_progress(self.userdata, self.stage_name, self.records, self.client_name)                
                 self.menu_id = keys_dict[lrn_student]
             elif resp == option_faq:
@@ -1387,11 +1400,12 @@ class MessageCounter(telepot.helper.ChatHandler):
                 retmsg = "Please wait, our faculty admin will connect with you on a live chat"
             elif resp == option_mychat:
                 self.livechat()
-            elif resp == option_mychart:
+            elif resp == option_mychart:            
                 self.menu_id = keys_dict[lrn_student]
-                self.mcqas_chart()
-                txt = 'Do you have any more questions?'
-                bot_prompt(self.bot, self.chatid, txt, self.menu_home)
+                if self.student_id > 0:
+                    self.mcqas_chart()
+                    txt = 'Do you have any more questions?'
+                    bot_prompt(self.bot, self.chatid, txt, self.menu_home)
             elif resp == option_binduser:
                 txt += "\nDo you want me to activate auto-login without entering student id each time ?"
                 opt_yes = "Yes, enable auto-login"
@@ -1412,12 +1426,14 @@ class MessageCounter(telepot.helper.ChatHandler):
                 n = self.list_courseids.index( resp )
                 self.courseid = resp
                 self.coursename = self.list_coursename[n]
-                self.load_tables()
+                self.load_tables()                
+                sid = self.student_id                
                 self.check_student(self.student_id, chat_id)                
                 txt = "You are now with this cohort : " + self.courseid
                 bot_prompt(self.bot, self.chatid, txt, self.menu_home)
                 self.menu_id = keys_dict[lrn_student]
-                self.new_session = True
+                #self.new_session = True
+                self.student_id = sid               
             else:
                 btn_course_list = build_menu(self.list_courseids, 1)
                 txt = "Please select the course id from below:"
@@ -2074,46 +2090,34 @@ def syslog(msgtype, message):
         query = query.replace('_y',message)
         rds_update(query)
     except:
-        print("Error for ", msgtype, message)
+        #print("Error for ", msgtype, message)
+        pass
     return
    
-def verify_student(userdata, student_id):
+def verify_student(userdata, student_id, courseid):
+    global vmbot    
+    cname = vmbot.client_name
     vars = dict()
-    amt = 0
+    amt = 0    
+    sid = int(student_id)
+    query = f"select * from userdata where client_name = '{cname}' and studentid={sid} and courseid='{courseid}';"    
+    df = rds_df(query)
+    if df is not None:
+        df.columns = get_columns("userdata")
+        userdata = df         
     if userdata is None:
         return (msg, vars)
+    student_record = df.to_dict()        
     student_name = ''
     stage = ''
     stype = -1
     sid = int(student_id)
-    client_name = list(userdata['client_name'])[0]
-    courseid = list(userdata['courseid'])[0]    
-    learners = [int(x) for x in userdata.studentid]
-    condqry = f" client_name = '{client_name}' and courseid = '{courseid}'"
-    if sid not in learners:
-        msg = 'Student id not found. Please try again'        
-        return (msg, vars)
-
-    student_match = ( userdata['studentid'] == sid )     
-    
-    if len(userdata[student_match])==0:
-        msg = 'Sorry, we do not have your records. Please come back again some time.'
-        return (msg, vars)
-    
-    student_record = userdata[student_match]
-    for fld in list(student_record):
-        fldname = fld.lower()
-        try:
-            if fldname=='amt':
-                vars[fldname] = float(list(student_record[fld])[0])+0
-            elif fldname=='grade':
-                vars[fldname] = float(list(student_record[fld])[0])+0
-            else:
-                vars[fldname] = list(student_record[fld])[0]
-                if ("_avg" in fldname) or ("_attempts" in fldname):                    
-                    vars[fldname] = int(list(student_record[fld])[0])
-        except:
-            vars[fldname] = 0    
+    condqry = f" client_name = '{cname}' and courseid = '{courseid}'"
+    for x in list(student_record):
+        val = student_record[x][0]
+        vars[x] = val
+        if 'Decimal' in str(student_record[x]):
+            vars[x] = eval(str(val))
     amt = vars['amt']
     student_name = vars['username']
     stage = vars['stage']
@@ -2127,6 +2131,7 @@ def verify_student(userdata, student_id):
     if stage_table is None:        
         msg = f'Unable to load stage table for course-id {courseid}' 
         return (msg, vars)
+        
     stage_table.columns = get_columns("stages")
     stage_list = [x for x in stage_table.name]
     date_list = [x for x in stage_table.stagedate]    
@@ -2136,7 +2141,8 @@ def verify_student(userdata, student_id):
     if stage is None:
         stage = stage_list[0]
         vars['stage'] = stage
-    msg += 'You are currently on stage ' + stage + "\n\n"
+    msg += 'You are currently on stage ' + stage + "\n\n"    
+    
     return (msg, vars)
 
 def get_stage_name(df):
@@ -2265,6 +2271,7 @@ def load_progress(df, stg, vars, client_name):
 
     txt += "\n\n"
     avg_score  = sum(mcqas_list)/len(mcqas_list) if mcqas_list != [] else 0
+    avg_score = round(avg_score*100)/100
     mcqas_complete = 1 if len([n+1 for n in range(len(list_attempts)) if list_attempts[n]==0])==0 else 0
     max_attempts = 0 if len(list_attempts)==0 else max(list_attempts)
     mcqdate = stg_date
@@ -2283,6 +2290,7 @@ def load_progress(df, stg, vars, client_name):
         pass_stage = 1
     if f2f_limit >= 6 and f2f >= f2f_limit :
         pass_stage = 1
+        
     stage = stg
     for vv in ['stage', 'mcqdate', 'asdate', 'eldate', 'fcdate', 'avg_score', 'mcqas_complete', \
             'has_score', 'pass_stage', 'max_attempts', 'mcqas_list', 'mcq_zero', 'mcq_avg', \
@@ -2416,9 +2424,10 @@ def load_vars(df, sid):
     process_rec( edit_records(client_name, courseid,  'userdata', 'studentid', sid, "mcq_attempts") )    
     process_rec( edit_records(client_name, courseid,  'userdata', 'studentid', sid, "as_avg") )    
     process_rec( edit_records(client_name, courseid,  'userdata', 'studentid', sid, "as_attempts") )    
-    process_rec( edit_records(client_name, courseid,  'userdata', 'studentid', sid, "f2f") )    
-    process_rec( edit_records(client_name, courseid,  'userdata', 'studentid', sid, "amt") )    
-
+    process_rec( edit_records(client_name, courseid,  'userdata', 'studentid', sid, "f2f") )        
+    amt_str  = edit_records(client_name, courseid,  'userdata', 'studentid', sid, "amt")    
+    process_rec( amt_str )        
+    
     vars['mcq_due_dates'] = []
     vars['as_due_dates'] = []
     vars['stage'] = stg

@@ -356,7 +356,7 @@ def rds_df(query):
     rdscur = rdscon.cursor()
     rdscur.execute(query)
     rows = rdscur.fetchall()
-    rdscon.commit()
+    #rdscon.commit()
     rdscon.close()
     if len(rows) == 0:
         #print("rds_df returns no data")
