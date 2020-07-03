@@ -164,7 +164,6 @@ def edx_mcqinfo(client_name, course_id):
     # Status : Tested
     # https://om.sambaash.com/edx/api/swagger-ui/index.html?configUrl=/edx/v3/api-docs/swagger-config#/User/fetchUserMCQScoresByCourseId
     # https://om.sambaash.com/edx/v1/user/fetch/mcq/scores/list
-    # https://omnimentor.lithan.com/edx/v1/user/fetch/mcq/scores/list
     global edx_api_header, edx_api_url    
     df_mcq = pd.DataFrame.from_dict( {'client_name':[],'course_id':[],'student_id':[], 'score':[],'mcq':[],'qn':[],'attempts':[]} )    
     url = f"{edx_api_url}/user/fetch/mcq/scores/list"
@@ -354,7 +353,6 @@ def update_mcq(course_id, client_name):
     if mcqcnt==0:
         return 0
     try:
-    #else:
         mcq_df = edx_mcqinfo(client_name, course_id)
         if len(mcq_df) > 0:
             query = "delete from mcq_data where " + cond_qry
@@ -372,7 +370,7 @@ def update_mcq(course_id, client_name):
             rds_update(query)                
             scoredf.columns = ['client_name', 'courseid', 'studentid', 'mcq', 'max','score','max_attempts']
             copydbtbl(scoredf, "mcq_score")            
-            
+
         # not all courses has the same total # of MCQ test, ususally 13
         query = "select max(mcq) AS maxmcq from mcq_score where " + condqry
         df = rds_df(query)
@@ -400,7 +398,7 @@ def update_mcq(course_id, client_name):
         df = rds_df(query)
         df.columns = ['mcq' , 'maxscore']
         mcqmaxscore = dict(zip( [x for x in df.mcq] , [x for x in df.maxscore] ))
-        
+
         # reset mcq scores 
         #print("reset mcq scores")
         updqry = "update userdata set " + ','.join([ "mcq_avg" + str(x) + " = 0"  for x in range( 1, max_mcq + 1 )]) + " where "
@@ -408,23 +406,17 @@ def update_mcq(course_id, client_name):
         rds_update(updqry)
 
         # update on  mcq scores ( not average scores )
-        query = "SELECT studentid, mcq, score  from mcq_score WHERE mcq >0 AND " + condqry
-        df = rds_df(query)
-        df.columns = ['studentid', 'mcq', 'score']
-        
-        df1 = pd.pivot_table(df, values='score', index=['studentid'],columns='mcq')        
+        df = rds_df("SELECT studentid, mcq, score  from mcq_score WHERE mcq >0 AND " + condqry)
+        df1 = pd.pivot_table(df, values='score', index=['studentid'],columns='mcq')
         df1 = df1.fillna(0)
-        #df.columns = [''] ??
-        
         list0 = str(df1).split("\n")[2:]
         for scoreline in list0:
             updqry = ""
-            list1 = [eval(x) for x in scoreline.split(' ') if x != '']            
+            list1 = [eval(x) for x in scoreline.split(' ') if x != '']
             for x in range( 1, max_mcq + 1 ):
                 if mcqmaxscore[x] > 0:
                     list1[x] = list1[x] / mcqmaxscore[x]
                 updqry += ",mcq_avg" + str(x) + " = " + str(list1[x])
-                
             updqry = "update userdata set " + updqry[1:] + " where studentid = " + str(list1[0]) + " and " + condqry             
             rds_update(updqry)
             ok = 1
@@ -935,6 +927,7 @@ def edx_mass_update(func, clt):
     if df is None:
         mc_list = []
     else:
+        df.columns = ['module_code']
         mc_list = [x for x in df.module_code]
         course_list = [ x for x in course_list if module_code(x) in mc_list ]
     for course_id in course_list:        
@@ -1118,12 +1111,12 @@ if __name__ == "__main__":
     vmsvclib.rds_connstr = ""
     vmsvclib.rdscon = None
     #course_id = "course-v1:Lithan+AFI-1119A-0120A+12Apr2020"
-    #course_id = "course-v1:Lithan+FOS-1219A+04Dec2019"
-    course_id = "course-v1:Lithan+FOS-0520B+27May2020"
-    
+    course_id = "course-v1:Lithan+FOS-1219A+04Dec2019"
     #update_mcq(course_id,  client_name)
     #update_assignment(course_id,  client_name)
-    #print("running mass import for Lithan")
+    print("running mass import for Lithan")
+    edx_mass_import(client_name)
+    #
     #df = querydf("omdb.db", "select * from stages where client_name = 'Demo';")
     #print(df)
     #copydbtbl(df, "stages")
