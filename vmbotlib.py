@@ -895,9 +895,12 @@ class MessageCounter(telepot.helper.ChatHandler):
                     current_stage = stage_names[n]            
                     vars['stage'] = current_stage
                     (t1, t2, vars) = load_progress(self.userdata, current_stage, vars, self.client_name)
+                    if t1 == "_eoc_":        
+                        pass_stage = 1
+                        break
                     txt = t1 + t2
                     if vars['pass_stage'] == 0:
-                        pass_stage = 1                                
+                        pass_stage = 1
                         break
                 except:
                     pass
@@ -2228,14 +2231,14 @@ def load_progress(df, stg, vars, client_name):
     condqry = f" client_name = '{client_name}' and courseid = '{courseid}';"
     pass_rate = vmbot.pass_rate
 
-    stagebyschedule = get_stage_name(client_name, courseid)
+    stagebyschedule = get_stage_name(client_name, courseid)    
     
-    seperator = re.compile('[a-zA-Z0-9\ ]').sub('',stg)    
-    if 'soc' in stg.lower() and seperator=='':
-        stage = 'SOC'
-    else:        
-        stg_list = [x.strip() for x in stg.split(seperator)]    
-        stage = stg_list[1] if len(stg_list)>=2 else stg_list[0]
+    #seperator = re.compile('[a-zA-Z0-9\ ]').sub('',stg)    
+    #if 'soc' in stg.lower() and seperator=='':
+    #    stage = 'SOC'
+    #else:        
+    #    stg_list = [x.strip() for x in stg.split(seperator)]    
+    #    stage = stg_list[1] if len(stg_list)>=2 else stg_list[0]
     #query = "select * from stages where stage = '" + stage + "' and " + condqry 
     query = "select * from stages where `name` = '" + stagebyschedule + "' and " + condqry 
     stagedf = rds_df(query)    
@@ -2249,17 +2252,21 @@ def load_progress(df, stg, vars, client_name):
     f2fvars = [x for x in stagedf.f2f][0]
     stage_desc = [x for x in stagedf.desc][0]
     stg_date = [x for x in stagedf.stagedate][0]    
-    
     resp_dict = vmbot.resp_dict
+    stage = stagebyschedule
+    vars['stage'] = stagebyschedule        
     txt_hdr = resp_dict['stg0']
-    if "eoc" not in stagebyschedule.lower():        
-        txt_hdr += resp_dict['stg1']
+    
+    #if "eoc" not in stagebyschedule.lower():        
+        #txt_hdr += resp_dict['stg1']
+        
     if '{stage_desc}' in txt_hdr:
         txt_hdr = txt_hdr.replace('{stage_desc}' , stage_desc)
     if '{username}' in txt_hdr:
         txt_hdr = txt_hdr.replace('{username}' , vars['username'])
     if '{stage}' in txt_hdr:
-        txt_hdr = txt_hdr.replace('{stage}' , stg)
+        #txt_hdr = txt_hdr.replace('{stage}' , stg)
+        txt_hdr = txt_hdr.replace('{stage}' , stagebyschedule)
     if '{stagebyschedule}' in txt_hdr:
         txt_hdr = txt_hdr.replace('{stagebyschedule}' , stagebyschedule)
     if '{lf}' in txt_hdr:
@@ -2305,6 +2312,10 @@ def load_progress(df, stg, vars, client_name):
         pass_stage = 1
     if f2f_limit >= 6 and f2f >= f2f_limit :
         pass_stage = 1
+    if "eoc" in stage.lower():
+        pass_stage = 1
+        txt = ""
+        txt_hdr = "_eoc_"
         
     stage = stg
     for vv in ['stage', 'mcqdate', 'asdate', 'eldate', 'fcdate', 'avg_score', 'mcqas_complete', \
@@ -2325,6 +2336,8 @@ def display_progress(df, stg, vars, client_name):
     txt = txt1 + txt2        
     if txt == "":
         return "Your information is incomplete, please do not proceed and inform you faculty admin."
+    if txt == "_eoc_":        
+        return "Congratulations, you hae reached the end of the course."
     telegram_ids = [x for x in list(vmbot.user_list) if vmbot.user_list[x][1] == vars['studentid']]
     if len(telegram_ids)>0:
         chatid = telegram_ids[0]
