@@ -790,7 +790,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             return 
         if self.userdata is None:            
             return
-        (txt, self.records ) = verify_student(self.userdata, sid, self.courseid)
+        (txt, self.records ) = verify_student(self.userdata, sid, self.courseid)        
         err = 0        
         try:
             self.stage_name = self.records['stage']
@@ -813,8 +813,8 @@ class MessageCounter(telepot.helper.ChatHandler):
             self.student_id = sid
             self.new_session = False
             #vmbot.user_list[chat_id]=[self.courseid, self.student_id, self.client_name, chat_id, ""]
-            vmbot.user_list[chat_id]=[self.courseid, self.student_id, self.username, chat_id, ""]
-            txt = display_progress(self.userdata, self.stage_name, self.records, self.client_name)
+            vmbot.user_list[chat_id]=[self.courseid, self.student_id, self.username, chat_id, ""]    
+            txt = display_progress(self.userdata, self.stage_name, self.records, self.client_name)            
             if txt == "":
                 txt = "Welcome back."
             bot_prompt(self.bot, self.chatid, txt, self.menu_home)
@@ -866,12 +866,16 @@ class MessageCounter(telepot.helper.ChatHandler):
             txt = vars['mcq_att_balance']
         return txt
 
-    def update_stage(self, sid):        
+    def update_stage(self, sid):          
         if (sid <= 0) or (self.userdata is None):
-            return ""                 
-        vars = load_vars(self.userdata, sid)   
+            return ""
+        vars = load_vars(self.userdata, sid)       
         client_name = vars['client_name']
         courseid = vars['courseid']
+        if True:
+            current_stage = get_stage_name(client_name, courseid)
+            vars['stage'] = current_stage
+            return current_stage
         condqry = f" client_name = '{client_name}' and courseid = '{courseid}';"
         df = rds_df( "select * from stages where " + condqry)
         if df is None:
@@ -1484,7 +1488,7 @@ class MessageCounter(telepot.helper.ChatHandler):
 
         elif self.menu_id == keys_dict[option_bind] :            
             if "yes," in resptxt:
-                updqry = f"update user_master set chat_id = {str(self.chatid)}, courseid = '{self.courseid}' where client_name = '{self.client_name}' and studentid={str(self.student_id)};"
+                updqry = f"update user_master set chat_id = {str(self.chatid)}, courseid = '{self.courseid}' where client_name = '{self.client_name}' and studentid={str(self.student_id)};"                
                 rds_update(updqry)
                 txt = "Auto-Login option enabled"
             elif "no," in resptxt:                
@@ -2145,7 +2149,9 @@ def verify_student(userdata, student_id, courseid):
     
     return (msg, vars)
 
-def get_stage_name(df):
+def get_stage_name(clt, courseid):
+    #def get_stage_name(df):
+    old_codes = """
     today_date = time.strftime('%Y-%m-%d', time.localtime() )
     stage_dates = [x for x in df.stagedate]
     stage_names = [x for x in df.name]
@@ -2175,6 +2181,11 @@ def get_stage_name(df):
             stage_name = stage_names[k]
             stage_days = str(stage_daysnum[k])
         result = stage_name + " ( " + stage_name +" ) on days #" + stage_days
+    """
+    #DATE_FORMAT(STR_TO_DATE(stagedate,'%d/%m/%Y'),'%Y-%m-%d'), 
+    #query = f"SELECT `name` AS stagename FROM stages WHERE client_name = '{clt}' AND courseid='{}' AND STR_TO_DATE(stagedate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
+    query = f"SELECT `name` FROM stages WHERE client_name = '{clt}' AND courseid='{courseid}' AND STR_TO_DATE(stagedate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
+    result = rds_param(query)                
     return result
 
 def evaluate_progress(vars,iu_list,passingrate,var_prefix,var_title):    
@@ -2209,6 +2220,7 @@ def evaluate_progress(vars,iu_list,passingrate,var_prefix,var_title):
 
 def load_progress(df, stg, vars, client_name):
     global vmbot    
+    # zz
     resp_dict = vmbot.resp_dict
     if ( len(stg) == 0) or (df is None) or (vars == {}):
         return ("", "", vars)
@@ -2216,19 +2228,22 @@ def load_progress(df, stg, vars, client_name):
     condqry = f" client_name = '{client_name}' and courseid = '{courseid}';"
     pass_rate = vmbot.pass_rate
 
+    stagebyschedule = get_stage_name(client_name, courseid)
+    
     seperator = re.compile('[a-zA-Z0-9\ ]').sub('',stg)    
     if 'soc' in stg.lower() and seperator=='':
         stage = 'SOC'
     else:        
         stg_list = [x.strip() for x in stg.split(seperator)]    
         stage = stg_list[1] if len(stg_list)>=2 else stg_list[0]
-
-    query = "select * from stages where stage = '" + stage + "' and " + condqry 
+    #query = "select * from stages where stage = '" + stage + "' and " + condqry 
+    query = "select * from stages where `name` = '" + stagebyschedule + "' and " + condqry 
     stagedf = rds_df(query)    
-    if stagedf is None:        
+    if stagedf is None:           
         return ("", "", vars)
-    stagedf.columns = get_columns("stages")
-    stagebyschedule = get_stage_name(stagedf)
+    stagedf.columns = get_columns("stages")    
+    #stagebyschedule = get_stage_name(stagedf)
+    
     mcqvars = [x for x in stagedf.mcq][0]
     asvars = [x for x in stagedf.assignment][0]
     f2fvars = [x for x in stagedf.f2f][0]
@@ -2237,8 +2252,8 @@ def load_progress(df, stg, vars, client_name):
     
     resp_dict = vmbot.resp_dict
     txt_hdr = resp_dict['stg0']
-    #if "eoc" not in stagebyschedule.lower():        
-        #txt_hdr += resp_dict['stg1']
+    if "eoc" not in stagebyschedule.lower():        
+        txt_hdr += resp_dict['stg1']
     if '{stage_desc}' in txt_hdr:
         txt_hdr = txt_hdr.replace('{stage_desc}' , stage_desc)
     if '{username}' in txt_hdr:
@@ -2300,14 +2315,14 @@ def load_progress(df, stg, vars, client_name):
     return (txt_hdr, txt, vars)
 
 def display_progress(df, stg, vars, client_name):
-    global vmbot, dt_model , nn_model
-    
-    if vars == {}:
+    global vmbot, dt_model , nn_model        
+    #if vars == {}:
+    if len(list(vars)) == 0:        
         return "Your information is incomplete, please do not proceed and inform you faculty admin."
     resp_dict = vmbot.resp_dict
     pass_rate = vmbot.pass_rate
     (txt1, txt2, vars) = load_progress(df, stg, vars, client_name)
-    txt = txt1 + txt2
+    txt = txt1 + txt2        
     if txt == "":
         return "Your information is incomplete, please do not proceed and inform you faculty admin."
     telegram_ids = [x for x in list(vmbot.user_list) if vmbot.user_list[x][1] == vars['studentid']]
@@ -2665,8 +2680,15 @@ def runbotjob(vmbot):
 if __name__ == "__main__":        
     version = sys.version_info
     if version.major == 3 and version.minor >= 7:        
-        do_main()
+        #do_main()
         #print("this is vmbotlib")
+        vmsvclib.rds_connstr = ""
+        vmsvclib.rdscon = None    
+        clt = 'Sambaash'
+        courseid = 'course-v1:Lithan+FOS-0620A+17Jun2020'
+        #condqry = f" client_name = '{clt}' and courseid = '{courseid}';"
+        query = f"SELECT `name` FROM stages WHERE client_name = '{clt}' AND courseid='{courseid}' AND STR_TO_DATE(stagedate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
+        stagename = rds_param(query)            
     else:
         print("Unable to use this version of python\n", version)
 

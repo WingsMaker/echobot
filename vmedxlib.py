@@ -646,7 +646,10 @@ def update_userdf(userdf, client_name):
         for x in list(ct_dict):
             if ct_dict[x]==0:    ct_dict.pop(x)
     # eliminate duplicates
-    query = f"SELECT DISTINCTROW * FROM user_master WHERE client_name = '{client_name}' ORDER BY studentid;"
+    #query = f"SELECT DISTINCTROW * FROM user_master WHERE client_name = '{client_name}' ORDER BY studentid;"
+    query = "select distinct client_name, studentid, max(username) as username, max(email) AS email, "
+    query += "max(usertype) AS usertype, max(chat_id) AS chat_id, max(courseid) as course_id from user_master "
+    query += f"where client_name = '{client_name}' group by client_name, studentid;"
     df1 = rds_df(query)
     if df1 is not None:
         if len(df) == len(df1):
@@ -956,10 +959,11 @@ def mass_update_usermaster(client_name):
     if df is None:
         print("Failed to perform user master update")
         return
-    query = "DELETE um.* FROM user_master um INNER JOIN userdata ud ON um.client_name=ud.client_name"
-    query += f" AND um.studentid=ud.studentid where um.client_name = '{client_name}';"        
+    #query = "DELETE um.* FROM user_master um INNER JOIN userdata ud ON um.client_name=ud.client_name"
+    #query += f" AND um.studentid=ud.studentid where um.client_name = '{client_name}';"        
+    query = f"delete from user_master where client_name = '{client_name}';"    
     rds_update(query)
-    copydbtbl(df,"user_master")
+    copydbtbl(df,"user_master")    
     #
     print(f"mass_update_usermaster completed for {client_name}")        
     return
@@ -1101,6 +1105,7 @@ if __name__ == "__main__":
     #edx_api_url = "https://om.sambaash.com/edx/v1"
     edx_api_url = "https://omnimentor.lithan.com/edx/v1"
     edx_api_header = {'Authorization': 'Basic ZWR4YXBpOlVzM3VhRUxJVXZENUU4azNXdG9E', 'Content-Type': 'text/plain'}
+    #client_name = "Sambaash"    
     client_name = "Lithan"    
     vmsvclib.rds_connstr = ""
     vmsvclib.rdscon = None
@@ -1114,4 +1119,6 @@ if __name__ == "__main__":
     #copydbtbl(df, "stages")
     #
     # perform_unit_tests()    
+    #mass_update_usermaster(client_name)
+    #print("check user_master")
     print("This is vmedxlib.py")
