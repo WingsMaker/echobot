@@ -82,12 +82,13 @@ mentor_menu = [[option_fct, option_pb, option_analysis], [option_chat, option_bi
 fc_student = "Student Update"
 fc_cohlist = "Cohort Listing"
 fc_userimport = "User Import"
+fc_edxupdate = "LMS Import"
 #fc_edx = "EdX Import"
 #fc_assignment = "Update Assignment"
 #fc_mcqtest = "Update MCQs"
 #fc_schedule = "Schedule Update"
 #faculty_menu = [[fc_student,fc_cohlist, fc_edx], [fc_assignment, fc_mcqtest, fc_schedule, option_back]]
-faculty_menu = [[fc_student, fc_cohlist, fc_userimport, option_back]]
+faculty_menu = [[fc_student, fc_cohlist, fc_userimport, fc_edxupdate, option_back]]
 fc_updstage = "Stage Update"
 fc_resetstage = "Stage Reset"
 fc_recupd = "Record Update"
@@ -157,20 +158,22 @@ def do_main():
     #load_edxdata()
     while vmbot.bot_running :
         try:        
+        #if vmbot.bot_running:
             checkjoblist(vmbot)
             timenow = time_hhmm(gmt)            
             if (edx_time > 0) and (timenow==edx_time) and (edx_cnt==0) :
                 edx_cnt = 1
                 #job_request("ServiceBot",adminchatid,client_name,"edx_mass_import","")
-                load_edxdata()
+                #load_edxdata()
                 time.sleep(60)
             if (edx_time > 0) and (timenow > edx_time) and (edx_cnt==1):
                 edx_cnt = 0
             time.sleep(3)
         except:
-            print("Error running the bot,please check")
-            vmbot.bot_running = False
-            break
+            #print("Error running the bot,please check")
+            #vmbot.bot_running = False
+            #break
+            pass
 
     msg = botname + ' shutdown.'
     syslog('system',msg)
@@ -208,12 +211,16 @@ def load_edxdata():
     course_list = [ x for x in course_list if 'v1:lithan' not in x.lower() ]    
     vmbot.updated_courses = []
     # update existing courses on mcq,attempts,stage schedule
+    vmbot.updated_courses = []
     for course_id in course_list:       
         #print(course_id)
-        vmedxlib.update_mcq(course_id, client_name)
-        vmedxlib.update_assignment(course_id, client_name)
-        vmedxlib.update_schedule(course_id, client_name)
-    vmbot.updated_courses = course_list       
+        eoc = vmedxlib.edx_endofcourse(client_name, course_id)
+        if eoc == 0:
+            vmedxlib.update_mcq(course_id, client_name)
+            vmedxlib.update_assignment(course_id, client_name)
+            vmedxlib.update_schedule(course_id, client_name)
+            vmbot.updated_courses.append(course_id)        
+    #vmbot.updated_courses = course_list       
     course_list = vmedxlib.search_course_list(yrnow)
     # new courses created recently , not found RDS
     for course_id in [ x for x in course_list if x not in vmbot.updated_courses]:
@@ -1524,10 +1531,15 @@ class MessageCounter(telepot.helper.ChatHandler):
                 txt += "Enter 0 to exit"
                 bot_prompt(self.bot, self.chatid, txt, [])
                 self.menu_id = keys_dict[fc_cohlist]
-            elif resp == fc_userimport :
-                self.sender.sendMessage("Please wait for a while, system updating user master....")
-                vmedxlib.mass_update_usermaster(self.client_name)
-                retmsg = "User master data updated."
+            elif resp == fc_userimport :                
+                self.sender.sendMessage("System has scheduled a job to update user master.")                
+                #vmedxlib.mass_update_usermaster(self.client_name)
+                job_request("ServiceBot",adminchatid, self.client_name,"mass_update_usermaster","")
+                #retmsg = "User master data updated."
+            elif resp == fc_edxupdate :
+                self.sender.sendMessage("System has scheduled a job to import from LMS.")                
+                job_request("ServiceBot",adminchatid, self.client_name,"edx_mass_import","")
+                #retmsg = "system updated."
             elif (resp == option_back) or (resp == "0"):
                 txt = 'Please select the following mode:'
                 bot_prompt(self.bot, self.chatid, txt, self.menu_home)
@@ -2153,40 +2165,6 @@ def verify_student(userdata, student_id, courseid):
     return (msg, vars)
 
 def get_stage_name(clt, courseid):
-    #def get_stage_name(df):
-    old_codes = """
-    today_date = time.strftime('%Y-%m-%d', time.localtime() )
-    stage_dates = [x for x in df.stagedate]
-    stage_names = [x for x in df.name]
-    stage_daysnum = [x for x in df.days]
-    cnt = len( stage_names )
-    if cnt==0:
-        return ""
-    stage_name = ""
-    stage_days = ""
-    if cnt > 0:
-        k = 0
-        txt = ''
-        stage_found = 0
-        for m in range(1,cnt):
-            if stage_found==0:
-                n = m - 1
-                stage_name = stage_names[n]
-                stage_date = stage_dates[n]
-                stage_days = str(stage_daysnum[n])
-                if stage_found==0 and today_date >= stage_date:
-                    next_stage_date = stage_dates[m]
-                    if next_stage_date >= today_date:
-                        k = n
-        if stage_found==0:            
-            if today_date > stage_dates[-1]:
-                k = cnt - 1
-            stage_name = stage_names[k]
-            stage_days = str(stage_daysnum[k])
-        result = stage_name + " ( " + stage_name +" ) on days #" + stage_days
-    """
-    #DATE_FORMAT(STR_TO_DATE(stagedate,'%d/%m/%Y'),'%Y-%m-%d'), 
-    #query = f"SELECT `name` AS stagename FROM stages WHERE client_name = '{clt}' AND courseid='{}' AND STR_TO_DATE(stagedate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
     query = f"SELECT `name` FROM stages WHERE client_name = '{clt}' AND courseid='{courseid}' AND STR_TO_DATE(stagedate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
     result = rds_param(query)                
     return result
@@ -2614,8 +2592,9 @@ def checkjoblist(vmbot):
     client_name = vmbot.client_name
     df = rds_df(f"select * from job_list where status='open' and client_name='{client_name}';")    
     if df is None:
+        #print("no job found")
         return
-    df.columns = get_columns(job_list)
+    df.columns = get_columns("job_list")
     jobitem = df.iloc[0].to_dict()
     vmbot.job_items = jobitem
     msg =  runbotjob(vmbot)
@@ -2633,7 +2612,7 @@ def runbotjob(vmbot):
     global edx_api_header, edx_api_url    
     jobitem = vmbot.job_items
     client_name = vmbot.client_name
-    print(*jobitem.items(), sep = '\n')            
+    #print(*jobitem.items(), sep = '\n')            
     job_id = jobitem['job_id']
     #client_name = jobitem['client_name']
     chat_id = int(jobitem['chat_id'])

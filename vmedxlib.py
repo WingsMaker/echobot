@@ -221,6 +221,16 @@ def search_course_list(keyword):
             course_list = eval(data)               
     return course_list
 
+def edx_endofcourse(client_name, course_id):
+    query = "SELECT (case SUBSTRING(`name`,-3) when 'EOC' then 1 else 0 END) eoc FROM stages WHERE client_name ="
+    query += f"'{client_name}' AND courseid='{course_id}' AND STR_TO_DATE(stagedate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
+    try:
+        eoc = rds_param(query)    
+        eoc=int(eoc)
+    except:
+        eoc = 0
+    return eoc
+
 def update_schedule(course_id, client_name):
     # Status : Tested
     dstr = lambda x : piece(piece(x.strip(),':',1),'+',2)
@@ -469,12 +479,15 @@ def edx_import(course_id, client_name):
     query = "delete from userdata where " + condqry
     rds_update(query)
     
-    
+    query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{course_id}' AND STR_TO_DATE(stagedate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
+    stage = rds_param(query)                
+    if stage=="":
+        stage = "SOC Days"
     df['client_name'] = client_name
     df['module_id'] = module_id
     df['amt'] = 0
     df['grade'] = 0
-    df['stage'] = 'SOC Days'
+    df['stage'] = stage
     df['f2f'] = 0
     df.rename(columns={'course_id':'courseid','student_id':'studentid'} , inplace=True)
     df1 = df[['client_name', 'module_id', 'courseid', 'studentid', 'username', 'amt', 'grade', 'stage', 'f2f']]
@@ -907,6 +920,12 @@ def update_stage_table(stage_list, course_id, client_name):
     stg_date = arr_stagedate[m-1] 
     query = f"update stages set stagedate = '{stg_date}' where id = {m} and " + qry
     rds_update(query)
+    query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{course_id}' AND STR_TO_DATE(stagedate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
+    stage = rds_param(query)                
+    if stage != "":
+        query=f"update userdata set stage = '{stage}' WHERE client_name = '{client_name}' AND courseid='{course_id}';"
+        #print(query)
+        rds_update(query)
     return
 
 def edx_mass_update(func, clt):
@@ -931,9 +950,14 @@ def edx_mass_update(func, clt):
         mc_list = [x for x in df.module_code]
         course_list = [ x for x in course_list if module_code(x) in mc_list ]
     for course_id in course_list:        
-        if 'v1:lithan' in course_id.lower():
+        #if 'v1:lithan' in course_id.lower():        
+        eoc = edx_endofcourse(client_name, course_id)
+        #print( course_id , eoc)
+        if eoc == 0:
+            #print( "processing ", course_id )
             func(course_id, client_name)
-            #print(course_id)
+        #else                :
+            #print( course_id , "at EOC" )
     return
 
 def edx_mass_import(client_name):
@@ -1106,16 +1130,23 @@ if __name__ == "__main__":
     #edx_api_url = "https://om.sambaash.com/edx/v1"
     edx_api_url = "https://omnimentor.lithan.com/edx/v1"
     edx_api_header = {'Authorization': 'Basic ZWR4YXBpOlVzM3VhRUxJVXZENUU4azNXdG9E', 'Content-Type': 'text/plain'}
-    client_name = "Sambaash"    
-    #client_name = "Lithan"    
+    #client_name = "Sambaash"    
+    client_name = "Lithan"    
     vmsvclib.rds_connstr = ""
     vmsvclib.rdscon = None
     #course_id = "course-v1:Lithan+AFI-1119A-0120A+12Apr2020"
-    course_id = "course-v1:Lithan+FOS-1219A+04Dec2019"
+    #course_id = "course-v1:Lithan+FOS-1219A+04Dec2019"
+    course_id = "course-v1:Lithan+FOS-0620A+17Jun2020"
+    #update_schedule(course_id, client_name)    
+    #eoc = edx_endofcourse(client_name, course_id)
+    #
     #update_mcq(course_id,  client_name)
     #update_assignment(course_id,  client_name)
-    print("running mass import for Lithan")
+    #
+    print(f"running mass import for {client_name}")
     edx_mass_import(client_name)
+    #print(f"running mass update for {client_name}")
+    #mass_update_schedule(client_name)
     #
     #df = querydf("omdb.db", "select * from stages where client_name = 'Demo';")
     #print(df)
