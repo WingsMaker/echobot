@@ -37,7 +37,7 @@ import json
 
 import vmnlplib
 import vmaiglib
-import vmffnnlib
+#import vmffnnlib
 import vmmcqdlib
 import vmsvclib
 import vmedxlib
@@ -143,11 +143,11 @@ def do_main():
         syslog('system', txt)
         vmbot.bot.sendMessage(vmbot.adminchatid, txt)
         vmbot.bot_running = False
-    elif nn_model.model_name=="" :
-        txt = "AI grading model data file ffnn_model.hdf5 is missing"
-        syslog('system', txt)
-        vmbot.bot.sendMessage(vmbot.adminchatid, txt)
-        vmbot.bot_running = False
+    #elif nn_model.model_name=="" :
+    #    txt = "AI grading model data file ffnn_model.hdf5 is missing"
+    #    syslog('system', txt)
+    #    vmbot.bot.sendMessage(vmbot.adminchatid, txt)
+    #    vmbot.bot_running = False
     else:
         print("running " + botname)
         #vmbot.bot.sendMessage(vmbot.adminchatid, "welcome to the bot")
@@ -155,7 +155,8 @@ def do_main():
     edx_cnt = 0
     edx_time = vmbot.edx_time
     gmt = vmbot.gmt    
-    #load_edxdata()
+    #load_edxdata(vmbot.client_name)
+    job_request("ServiceBot",vmbot.adminchatid, vmbot.client_name, "load_edxdata","")
     while vmbot.bot_running :
         try:        
         #if vmbot.bot_running:
@@ -163,8 +164,9 @@ def do_main():
             timenow = time_hhmm(gmt)            
             if (edx_time > 0) and (timenow==edx_time) and (edx_cnt==0) :
                 edx_cnt = 1
-                #job_request("ServiceBot",adminchatid,client_name,"edx_mass_import","")
-                #load_edxdata()
+                #job_request("ServiceBot",vmbot.adminchatid,vmbot.client_name,"edx_mass_import","")
+                #load_edxdata(vmbot.client_name)
+                job_request("ServiceBot",vmbot.adminchatid, vmbot.client_name, "load_edxdata","")
                 time.sleep(60)
             if (edx_time > 0) and (timenow > edx_time) and (edx_cnt==1):
                 edx_cnt = 0
@@ -187,46 +189,59 @@ def do_main():
         print(txt)
     return (err==0)
 
-def load_edxdata():
+def load_edxdata(client_name):
     global vmbot                
-    client_name = vmbot.client_name
+    #client_name = vmbot.client_name
     date_today = datetime.datetime.now().date()
     yrnow = str(date_today.strftime('%Y'))    
-    query = f"select DISTINCT courseid FROM userdata WHERE client_name = '{client_name}' " 
-    query += f" AND SUBSTRING(courseid,-4)='{yrnow}' ORDER BY courseid;"
+    query = f"SELECT DISTINCT courseid FROM userdata WHERE client_name = '{client_name}' " 
+    query += f" AND SUBSTRING(courseid,-4)='{yrnow}' ORDER BY courseid;"    
     df = rds_df(query)
     if df is None:
         course_list = []
     else:
         df.columns = ['courseid']
         course_list= [x for x in df.courseid]                
-    qry = f"SELECT DISTINCT module_code FROM course_module WHERE client_name='{client_name}';"    
-    df = rds_df(qry)
-    df.columns = ['module_code']
-    if df is None:
-        mc_list = []
-    else:
-        mc_list = [x for x in df.module_code]
-        course_list = [ x for x in course_list if module_code(x) in mc_list ]
-    course_list = [ x for x in course_list if 'v1:lithan' not in x.lower() ]    
-    vmbot.updated_courses = []
+        
+    #qry = f"SELECT DISTINCT module_code FROM course_module WHERE client_name='{client_name}';"    
+    #df = rds_df(qry)
+    #df.columns = ['module_code']
+    #if df is None:
+        #mc_list = []
+    #else:
+        #mc_list = [x for x in df.module_code]
+        #mc_list = list( set( mc_list))
+        #course_list = [ x for x in course_list if module_code(x) in mc_list ]
+        #print(course_list)
+    #course_list = [ x for x in course_list if 'v1:lithan' not in x.lower() ]    
+    
     # update existing courses on mcq,attempts,stage schedule
     vmbot.updated_courses = []
-    for course_id in course_list:       
-        #print(course_id)
-        eoc = vmedxlib.edx_endofcourse(client_name, course_id)
+    #print(course_list)
+    for course_id in course_list:        
+        #if course_id == 'course-v1:Lithan+FOS-0620A+17Jun2020':
+        eoc = vmedxlib.edx_endofcourse(client_name, course_id)            
         if eoc == 0:
+            #print(course_id)
+            #print("update_mcq")
             vmedxlib.update_mcq(course_id, client_name)
+            #print("update_assignment")
             vmedxlib.update_assignment(course_id, client_name)
+            #print("update_schedule")
             vmedxlib.update_schedule(course_id, client_name)
+            #print("updated_courses")
             vmbot.updated_courses.append(course_id)        
-    #vmbot.updated_courses = course_list       
+    
     course_list = vmedxlib.search_course_list(yrnow)
     # new courses created recently , not found RDS
+    #print("edx_import")
     for course_id in [ x for x in course_list if x not in vmbot.updated_courses]:
         #print(course_id)
         vmedxlib.edx_import(course_id, client_name)
+        
+    #print("mass_update_usermaster")
     vmedxlib.mass_update_usermaster(client_name)    
+    print("load_edxdata completed")
     return
     
 def loadconfig():
@@ -247,11 +262,11 @@ def loadconfig():
         if dt_model.model_name == "":
             print("Error loading dt_model")
             ok = False
-        nn_model = vmffnnlib.NNGrader()
-        nn_model.model_loader(ffnn)
-        if nn_model.model_name == "":
-            print("Error loading nn_model")
-            ok = False
+        #nn_model = vmffnnlib.NNGrader()
+        #nn_model.model_loader(ffnn)
+        #if nn_model.model_name == "":
+        #    print("Error loading nn_model")
+        #    ok = False
         mcq_analysis = vmmcqdlib.MCQ_Diff()
     except:  
         ok = False  
@@ -734,15 +749,15 @@ class MessageCounter(telepot.helper.ChatHandler):
     def load_tables(self):
         global vmbot             
         #if (vmbot.edx_time > 0) and (self.courseid not in vmbot.updated_courses):
-        if (self.client_name != "Demo") and (self.courseid not in vmbot.updated_courses):
-            self.sender.sendMessage("Please wait for a while.")
-            try:
-                vmedxlib.update_mcq(self.courseid,  self.client_name)
-                vmedxlib.update_assignment(self.courseid,  self.client_name)
-                vmedxlib.update_schedule(self.courseid,  self.client_name)
-                vmbot.updated_courses.append(self.courseid)        
-            except:
-                pass
+        #if (self.client_name != "Demo") and (self.courseid not in vmbot.updated_courses):        
+            #self.sender.sendMessage("Please wait for a while.")
+            #try:
+            #    vmedxlib.update_mcq(self.courseid,  self.client_name)
+            #    vmedxlib.update_assignment(self.courseid,  self.client_name)
+            #    vmedxlib.update_schedule(self.courseid,  self.client_name)
+            #    vmbot.updated_courses.append(self.courseid)        
+            #except:
+            #    pass
         qry = "select * from userdata where client_name = '_c_' and courseid = '_x_';"
         qry = qry.replace('_c_', self.client_name)
         qry = qry.replace('_x_', self.courseid)
@@ -928,9 +943,9 @@ class MessageCounter(telepot.helper.ChatHandler):
         if dt_model.model_name == "" :
             print("please load the model first")
             return []
-        if nn_model.model_name == "":
-            print("please load the model first")
-            return []
+        #if nn_model.model_name == "":
+        #    print("please load the model first")
+        #    return []
         txt = ""        
         df = self.userdata
         if self.userdata is None:
@@ -966,13 +981,14 @@ class MessageCounter(telepot.helper.ChatHandler):
             # current not working                
             use_neural_network = False   # True or False
             if use_neural_network:
-                mavgatt = sum([gx(n) for n in range(1,14)]) / 13
-                mmaxatt = max([gx(n) for n in range(1,14)])
-                as_avgatt = sum([gy(n) for n in range(1,14)]) / 13
-                as_maxatt = max([gy(n) for n in range(1,14)])
-                grad_pred = nn_model.pred(client_name,mavg,mavgatt,mmaxatt,aavg,as_avgatt,as_maxatt,acnt)
-                if grad_pred is None:
-                    continue                    
+                #mavgatt = sum([gx(n) for n in range(1,14)]) / 13
+                #mmaxatt = max([gx(n) for n in range(1,14)])
+                #as_avgatt = sum([gy(n) for n in range(1,14)]) / 13
+                #as_maxatt = max([gy(n) for n in range(1,14)])
+                #grad_pred = nn_model.pred(client_name,mavg,mavgatt,mmaxatt,aavg,as_avgatt,as_maxatt,acnt)
+                #if grad_pred is None:
+                #    continue                    
+                pass
             else:
                 grad_pred = dt_model.predict(mavg , aavg, mcnt) 
             
@@ -1552,13 +1568,13 @@ class MessageCounter(telepot.helper.ChatHandler):
                 self.menu_id = keys_dict[option_fct]                
                 return
             if resp in self.list_courseids:
-                if vmbot.edx_time > 0 and resp not in vmbot.updated_courses:
-                    self.sender.sendMessage("Please wait for a while.")
-                    client_name = self.client_name                    
-                    vmedxlib.update_assignment(resp, client_name)
-                    vmedxlib.update_mcq(resp, client_name)
-                    vmedxlib.update_schedule(resp, client_name)   
-                    vmbot.updated_courses.append(resp)            
+                #if vmbot.edx_time > 0 and resp not in vmbot.updated_courses:                
+                    #self.sender.sendMessage("Please wait for a while.")
+                    #client_name = self.client_name                    
+                    #vmedxlib.update_assignment(resp, client_name)
+                    #vmedxlib.update_mcq(resp, client_name)
+                    #vmedxlib.update_schedule(resp, client_name)   
+                    #vmbot.updated_courses.append(resp)            
                 self.courseid = resp
                 cohort_id = piece(piece(resp,':',1),'+',1)
                 condqry = " where client_name = '" + self.client_name + "' and courseid = '" + resp + "';"
@@ -1775,13 +1791,13 @@ class MessageCounter(telepot.helper.ChatHandler):
 
         elif self.menu_id == keys_dict[pb_userdata]:
             if self.load_courseinfo(resp) == 1:
-                if vmbot.edx_time > 0 and resp not in vmbot.updated_courses:                
-                    self.sender.sendMessage("Please wait for a while.")
-                    client_name = self.client_name
-                    vmedxlib.update_assignment(resp, client_name)
-                    vmedxlib.update_mcq(resp, client_name)
-                    vmedxlib.update_schedule(resp, client_name)   
-                    vmbot.updated_courses.append(resp)
+                #if vmbot.edx_time > 0 and resp not in vmbot.updated_courses:                
+                    #self.sender.sendMessage("Please wait for a while.")
+                    #client_name = self.client_name
+                    #vmedxlib.update_assignment(resp, client_name)
+                    #vmedxlib.update_mcq(resp, client_name)
+                    #vmedxlib.update_schedule(resp, client_name)   
+                    #vmbot.updated_courses.append(resp)
                 self.courseid = resp
                 cohort_id = piece(piece(resp,':',1),'+',1)
                 self.courseid = resp
@@ -1878,8 +1894,8 @@ class MessageCounter(telepot.helper.ChatHandler):
                 bot_prompt(self.bot, self.chatid, txt, analysis_menu)
                 self.menu_id = keys_dict[option_analysis]
             elif resp == an_avgatt:            
-                mcq_analysis.load_mcqdata(self.userdata)
-                if mcq_analysis.top10attempts(self.userdata) is None:
+                mcq_analysis.load_mcqdata(self.client_name, self.courseid)
+                if mcq_analysis.top10attempts() is None:
                     retmsg = 'There is no data for this course.'                    
                 else:                    
                     plt.draw()
@@ -1889,8 +1905,8 @@ class MessageCounter(telepot.helper.ChatHandler):
                     f = open(fn, 'rb')
                     self.bot.sendPhoto(chat_id, f)
             elif resp == an_avgscore:
-                mcq_analysis.load_mcqdata(self.userdata)
-                if mcq_analysis.top10score(self.userdata) is None:
+                mcq_analysis.load_mcqdata(self.client_name, self.courseid)
+                if mcq_analysis.top10score() is None:
                     retmsg = 'There is no data for this course.'
                 else:
                     plt.draw()
@@ -1903,6 +1919,8 @@ class MessageCounter(telepot.helper.ChatHandler):
                 df = self.userdata
                 client_name = list(df['client_name'])[0]
                 course_id = list(df['courseid'])[0]
+                self.client_name = client_name
+                self.courseid = course_id
                 qry = f"select * from mcq_data where client_name = '{client_name}' and course_id = '{course_id}';"
                 df = rds_df(qry)
                 df.columns = get_columns("mcq_data")
@@ -1917,8 +1935,8 @@ class MessageCounter(telepot.helper.ChatHandler):
 
         elif self.menu_id == keys_dict[opt_mcqavg]:            
             if resp.isnumeric() :
-                mcq_analysis.load_mcqdata(self.userdata)
-                if mcq_analysis.mcq_summary(int(resp), self.userdata) is None:
+                mcq_analysis.load_mcqdata(self.client_name, self.courseid)
+                if mcq_analysis.mcq_summary(int(resp)) is None:                
                     retmsg = 'There is no data for this course.'
                 else:
                     plt.draw()
@@ -2395,16 +2413,17 @@ def display_progress(df, stg, vars, client_name):
 
     use_neural_network = False # True or False
     if use_neural_network:                    
-        if (nn_model.model_name != "") and ((vars['mcnt'] + vars['acnt']) >0):
-            mavg = vars['mcq_avg']
-            mcqavgatt = list_avg( vars['mcq_attempts'] )
-            mcqmaxatt = max( vars['mcq_attempts'] )
-            aavg = vars['as_avg'] 
-            acnt = vars['acnt']  
-            as_avgatt = list_avg( vars['as_attempts'] )
-            as_maxatt = max( vars['as_attempts'] )
-            grad_pred_nn = nn_model.pred(client_name,mavg,mcqavgatt,mcqmaxatt,aavg,as_avgatt,as_maxatt,acnt)
-            txt += "\n\nAI grading prediction : " +  "{:.2%}".format(grad_pred[0]) + "\n\n"
+        pass
+        #if (nn_model.model_name != "") and ((vars['mcnt'] + vars['acnt']) >0):
+        #    mavg = vars['mcq_avg']
+        #    mcqavgatt = list_avg( vars['mcq_attempts'] )
+        #    mcqmaxatt = max( vars['mcq_attempts'] )
+        #    aavg = vars['as_avg'] 
+        #    acnt = vars['acnt']  
+        #    as_avgatt = list_avg( vars['as_attempts'] )
+        #    as_maxatt = max( vars['as_attempts'] )
+        #    grad_pred_nn = nn_model.pred(client_name,mavg,mcqavgatt,mcqmaxatt,aavg,as_avgatt,as_maxatt,acnt)
+        #    txt += "\n\nAI grading prediction : " +  "{:.2%}".format(grad_pred[0]) + "\n\n"
     else:
         if (dt_model.model_name != "") and ((vars['mcnt'] + vars['acnt']) >0):
             grad_pred = dt_model.predict(vars['mcq_avg'] , vars['as_avg'], 13)
@@ -2650,6 +2669,8 @@ def runbotjob(vmbot):
             txt += " completed successfully."
         except:
             txt += " failed."
+    elif func_req == 'load_edxdata':
+        load_edxdata(client_name)    
     else:
         try:
             func_svc = func_req + "(" + func_param + ")"
@@ -2672,15 +2693,11 @@ def runbotjob(vmbot):
 if __name__ == "__main__":        
     version = sys.version_info
     if version.major == 3 and version.minor >= 7:        
-        #do_main()
-        #print("this is vmbotlib")
+        do_main()
         vmsvclib.rds_connstr = ""
         vmsvclib.rdscon = None    
-        clt = 'Sambaash'
-        courseid = 'course-v1:Lithan+FOS-0620A+17Jun2020'
-        #condqry = f" client_name = '{clt}' and courseid = '{courseid}';"
-        query = f"SELECT `name` FROM stages WHERE client_name = '{clt}' AND courseid='{courseid}' AND STR_TO_DATE(stagedate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
-        stagename = rds_param(query)            
+        #client_name = 'Sambaash'
+        print("this is vmbotlib")
     else:
         print("Unable to use this version of python\n", version)
 

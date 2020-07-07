@@ -165,22 +165,37 @@ def edx_mcqinfo(client_name, course_id):
     # https://om.sambaash.com/edx/api/swagger-ui/index.html?configUrl=/edx/v3/api-docs/swagger-config#/User/fetchUserMCQScoresByCourseId
     # https://om.sambaash.com/edx/v1/user/fetch/mcq/scores/list
     global edx_api_header, edx_api_url    
+    
+    def getnumstr(qn_str):
+        if ' ' in qn_str:
+            qn_str = qn_str.split(' ')[0]
+        qn_numstr  = ''.join([x for x in qn_str if x in '0123456789'])
+        qn_numstr = '0' if qn_numstr=='' else qn_numstr
+        qn = int(qn_numstr)
+        if (qn > 13) or (qn<1):
+            qn = 1
+        return qn
+    
     df_mcq = pd.DataFrame.from_dict( {'client_name':[],'course_id':[],'student_id':[], 'score':[],'mcq':[],'qn':[],'attempts':[]} )    
     url = f"{edx_api_url}/user/fetch/mcq/scores/list"
     response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)                
     if response.status_code==200:
         data = json.loads(response.content.decode('utf-8'))
-        rec = [ x for x in list(data) if 'attempts' in x['state']]            
+        rec = [ x for x in list(data) if 'attempts' in x['state']]                            
         course_id_list = [x['course_id'] for x in rec]
         student_id_list = [x['student_id'] for x in rec]
         grade_list = [x['grade'] for x in rec]
-        iu_list = [  int(x['chapter_title'].split(':')[0][2:]) for x in rec]
-        qn_list = [ int(x['options_display_name'].split('.')[0][1:]) for x in rec]
+        #iu_list = [  int(x['chapter_title'].split(':')[0][2:]) for x in rec]
+        iu_list = [ getnumstr(x['chapter_title']) for x in rec]               
+        
+        #qn_list = [ int(x['options_display_name'].split('.')[0][1:]) for x in rec]        
+        qn_list = [ getnumstr(x['options_display_name']) for x in rec]               
+        
         att_list = [ int(list(x['state'].replace('"attempts": ','__').split('__'))[1].split(',')[0]) for x in rec]
         client_list = [client_name for x in rec]
         data = {'client_name':client_list, 'course_id': course_id_list, 'student_id':student_id_list, \
             'score':grade_list ,'mcq':iu_list , 'qn':qn_list , 'attempts': att_list}            
-        df_mcq = pd.DataFrame.from_dict(data)        
+        df_mcq = pd.DataFrame.from_dict(data)     
     return df_mcq
 
 def edx_assignment_score(course_id):
@@ -251,7 +266,7 @@ def update_schedule(course_id, client_name):
         date_today = datetime.datetime.now().date()
         days = (date_today - eoc_date).days
     except:
-        #print("update_stage_table failed")
+        print("update_stage_table failed")
         return
 
     condqry = "client_name = '_c_' and courseid = '_x_';"
@@ -284,6 +299,7 @@ def update_schedule(course_id, client_name):
     query = "update stages a INNER JOIN stages_master b on b.client_name=a.client_name AND b.stage=a.stage "
     query += "AND b.module_code = substring_index(substring_index(SUBSTRING_INDEX(a.courseid,'+',2),'+',-1),'-',1) "
     query += f"SET a.IU = b.IU WHERE a.client_name = '{client_name}' and a.courseid = '{course_id}';"
+    #print(query)
     rds_update(query)
     #print(f"update_schedule completed on {course_id}")    
     return
@@ -364,7 +380,7 @@ def update_mcq(course_id, client_name):
         return 0
     try:
         mcq_df = edx_mcqinfo(client_name, course_id)
-        if len(mcq_df) > 0:
+        if len(mcq_df) > 0:            
             query = "delete from mcq_data where " + cond_qry
             rds_update(query)
         df = mcq_df[['client_name', 'course_id', 'student_id', 'score', 'mcq', 'qn', 'attempts']]
@@ -374,32 +390,44 @@ def update_mcq(course_id, client_name):
         query = "select client_name, course_id, student_id, mcq, count(*) as max, sum(score) as mcqscore, \
             max(attempts) as max_attempts from mcq_data where " + cond_qry \
             + " group by client_name, course_id, student_id, mcq order by client_name, course_id, student_id, mcq"
-        scoredf = rds_df(query)
-        if len(scoredf) > 0:
-            query = "delete from mcq_score where " + condqry
-            rds_update(query)                
-            scoredf.columns = ['client_name', 'courseid', 'studentid', 'mcq', 'max','score','max_attempts']
-            copydbtbl(scoredf, "mcq_score")            
+        scoredf = rds_df(query)        
+        cnt = 0
+        if scoredf is not None :
+            cnt = len(scoredf)
+            if cnt > 0:                
+                query = "delete from mcq_score where " + condqry
+                rds_update(query)                
+                scoredf.columns = ['client_name', 'courseid', 'studentid', 'mcq', 'max','score','max_attempts']
+                copydbtbl(scoredf, "mcq_score")            
 
         # not all courses has the same total # of MCQ test, ususally 13
-        query = "select max(mcq) AS maxmcq from mcq_score where " + condqry
-        df = rds_df(query)
-        df.columns = ['maxmcq']
-        max_mcq = 0 if df is None else df['maxmcq'][0]
+        if cnt == 0:
+            max_mcq = 0
+        else:
+            query = "select max(mcq) AS maxmcq from mcq_score where " + condqry
+            df = rds_df(query)
+            max_mcq = 0
+            if df is not None:
+                df.columns = ['maxmcq']
+                max_mcq = df['maxmcq'][0]
+            if max_mcq > 13:
+                max_mcq = 0
+        if max_mcq==0:
+            return 0
 
         # reset mcq attempts
         #print("reset mcq attempts")
         updqry = "update userdata set " 
         updqry += ','.join([ "mcq_attempts" + str(x) + " = 0"  for x in range( 1, max_mcq + 1 )]) + " where "
-        updqry += condqry
+        updqry += condqry        
         rds_update(updqry)
 
         # update mcq attempts
         #print("update mcq attempts")
-        qry = " = IFNULL((select max_attempts from mcq_score where studentid = userdata.studentid and courseid=userdata.courseid and mcq = "
+        qry = " = IFNULL((select max_attempts from mcq_score where client_name = userdata.client_name and studentid = userdata.studentid and courseid=userdata.courseid and mcq = "
         updqry = "update userdata set " 
         updqry += ','.join([ "mcq_attempts" + str(x) + qry + str(x) + "),0)" for x in range( 1, max_mcq + 1 )]) 
-        updqry += " where " + condqry
+        updqry += " where " + condqry        
         rds_update(updqry)
 
         # total number of questions per mcq test is independent
@@ -408,28 +436,35 @@ def update_mcq(course_id, client_name):
         df = rds_df(query)
         df.columns = ['mcq' , 'maxscore']
         mcqmaxscore = dict(zip( [x for x in df.mcq] , [x for x in df.maxscore] ))
-
+        
         # reset mcq scores 
         #print("reset mcq scores")
         updqry = "update userdata set " + ','.join([ "mcq_avg" + str(x) + " = 0"  for x in range( 1, max_mcq + 1 )]) + " where "
-        updqry += condqry
+        updqry += condqry        
         rds_update(updqry)
-
+        
         # update on  mcq scores ( not average scores )
         df = rds_df("SELECT studentid, mcq, score  from mcq_score WHERE mcq >0 AND " + condqry)
+        df.columns = ['studentid' , 'mcq', 'score']
+        
         df1 = pd.pivot_table(df, values='score', index=['studentid'],columns='mcq')
         df1 = df1.fillna(0)
         list0 = str(df1).split("\n")[2:]
-        for scoreline in list0:
+        
+        for scoreline in list0:               
             updqry = ""
-            list1 = [eval(x) for x in scoreline.split(' ') if x != '']
-            for x in range( 1, max_mcq + 1 ):
+            list1 = [eval(x) for x in scoreline.split(' ') if x != '']            
+            for x in list(mcqmaxscore):
+                y = list(mcqmaxscore).index(x)+1
                 if mcqmaxscore[x] > 0:
-                    list1[x] = list1[x] / mcqmaxscore[x]
-                updqry += ",mcq_avg" + str(x) + " = " + str(list1[x])
-            updqry = "update userdata set " + updqry[1:] + " where studentid = " + str(list1[0]) + " and " + condqry             
-            rds_update(updqry)
-            ok = 1
+                    list1[y] = list1[y] / mcqmaxscore[x]
+                    updqry += ",mcq_avg" + str(y) + " = " + str(list1[y])
+            updqry = "update userdata set " + updqry[1:] + " where studentid = " + str(list1[0]) + " and " + condqry                         
+            try:
+                rds_update(updqry)  
+            except:                
+                pass
+            ok = 1        
     except:
         ok = 0
     #print("update_mcq completed for course_id " + course_id)
@@ -823,7 +858,7 @@ def stage_code(txt):
     return stg
 
 def get_google_calendar(course_id, client_name):
-    cohort_id = piece(piece(course_id,':',1),'+',1)    
+    cohort_id = piece(piece(course_id,':',1),'+',1)        
     module_code = cohort_id.split('-')[0]
     course_code = rds_param(f"select `course_code` from `module_iu` where `module_code` = '{module_code}' and client_name='{client_name}' limit 1;")
     # direct_cohort_url = f"https://realtime.sambaash.com/v1/calendar/fetch?cohortId={cohort_id}"
@@ -831,6 +866,7 @@ def get_google_calendar(course_id, client_name):
     # single_cohort_url = "https://realtime.sambaash.com/v1/calendar/fetch?cohortId=EIT%20:%20ICO-0520A"
     try:
         api_url = f"https://realtime.sambaash.com/v1/calendar/fetch?cohortId={course_code}%20:%20{cohort_id}"    
+        #print(api_url)
         data  = get_calendar_json(api_url)
     except:
         data = {}
@@ -878,6 +914,7 @@ def update_stage_table(stage_list, course_id, client_name):
             mcq_dict = dict(zip(stg_list,mcq_list))
             ast_dict = dict(zip(stg_list,ast_list))
     else:
+        df.columns = get_columns("stages")        
         stg_list = [x for x in df.stage]
         mcq_list = [x for x in df.mcq]
         ast_list = [x for x in df.assignment]
@@ -889,6 +926,7 @@ def update_stage_table(stage_list, course_id, client_name):
             ast_dict[ x[0] ] = "0"
     
     for x in stage_list:
+        #print(x)
         x.append( mcq_dict[x[0]] )
         x.append( ast_dict[x[0]] )
     query = "delete from stages where " + qry
@@ -956,8 +994,6 @@ def edx_mass_update(func, clt):
         if eoc == 0:
             #print( "processing ", course_id )
             func(course_id, client_name)
-        #else                :
-            #print( course_id , "at EOC" )
     return
 
 def edx_mass_import(client_name):
@@ -1124,29 +1160,39 @@ def perform_unit_tests():
 
 if __name__ == "__main__":    
     global use_edxapi, edx_api_header, edx_api_url
-    #with open("vmbot.json") as json_file:  
-    #    bot_info = json.load(json_file)
-    #client_name = bot_info['client_name']
+    with open("vmbot.json") as json_file:  
+        bot_info = json.load(json_file)
+    client_name = bot_info['client_name']
     #edx_api_url = "https://om.sambaash.com/edx/v1"
     edx_api_url = "https://omnimentor.lithan.com/edx/v1"
     edx_api_header = {'Authorization': 'Basic ZWR4YXBpOlVzM3VhRUxJVXZENUU4azNXdG9E', 'Content-Type': 'text/plain'}
     #client_name = "Sambaash"    
-    client_name = "Lithan"    
+    #client_name = "Lithan"    
     vmsvclib.rds_connstr = ""
     vmsvclib.rdscon = None
     #course_id = "course-v1:Lithan+AFI-1119A-0120A+12Apr2020"
     #course_id = "course-v1:Lithan+FOS-1219A+04Dec2019"
     course_id = "course-v1:Lithan+FOS-0620A+17Jun2020"
+    #course_id = "course-v1:Lithan+ERI-0220A+11Mar2020"
+    #course_id = "course-v1:Lithan+ADM-0120A+may2020"
+    #course_id = "course-v1:Lithan+FOS-0720A+08Jul2020"
+    #course_id = "course-v1:Lithan+ICO-0220A+19Mar2020"        
+    #
+    #df = edx_mcqinfo(client_name, course_id)
+    #print(df.head(10))
     #update_schedule(course_id, client_name)    
     #eoc = edx_endofcourse(client_name, course_id)
     #
-    #update_mcq(course_id,  client_name)
-    #update_assignment(course_id,  client_name)
+    update_mcq(course_id,  client_name)    
+    update_assignment(course_id,  client_name)
+    update_schedule(course_id, client_name)    
+    #edx_import(course_id, client_name)    
     #
-    print(f"running mass import for {client_name}")
-    edx_mass_import(client_name)
+    #print(f"running mass import for {client_name}")
+    #edx_mass_import(client_name)
     #print(f"running mass update for {client_name}")
     #mass_update_schedule(client_name)
+    #mass_update_mcq(client_name)
     #
     #df = querydf("omdb.db", "select * from stages where client_name = 'Demo';")
     #print(df)

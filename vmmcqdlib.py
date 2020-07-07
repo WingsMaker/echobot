@@ -32,21 +32,20 @@ class MCQ_Diff():
     def __repr__(self):
         return 'mcq_analysis()'
 
-    def load_mcqdata(self, df):
+    def load_mcqdata(self, client_name , course_id):
         # Loading in the mcq data less the client_name, course_id, student_id from the database
         try:
-            client_name = list(df['client_name'])[0]
-            course_id = list(df['courseid'])[0]
             query = f"select * from mcq_data where client_name = '{client_name}' and course_id = '{course_id}';"
             mcqdf = rds_df( query )
+            mcqdf.columns = get_columns("mcq_data")
             cols = ['score','mcq','qn','attempts']
             self.mcqdf = mcqdf[cols]
         except:
-           self.mcqdf = None
+            self.mcqdf = None
         return
     
     # Takes in a database file as an input    
-    def top10attempts(self, db):
+    def top10attempts(self):
         if self.mcqdf is None:
             return None
         df = self.mcqdf.copy()
@@ -72,7 +71,7 @@ class MCQ_Diff():
         return table
     
     # Takes in database file as input
-    def top10score(self, db):
+    def top10score(self):
         if self.mcqdf is None:
             return None
         df = self.mcqdf.copy()
@@ -97,7 +96,7 @@ class MCQ_Diff():
         return table
     
     # Takes in two inputs, mcq number & database file
-    def mcq_summary(self, mcq, db):        
+    def mcq_summary(self, mcq):        
         if self.mcqdf is None:
             return None
         df = self.mcqdf.copy()
@@ -119,6 +118,8 @@ class MCQ_Diff():
 
 # Tested to be working
 if __name__ == '__main__':        
+    vmsvclib.rds_connstr = ""
+    vmsvclib.rdscon = None
     vmsvclib.rdscon=vmsvclib.rds_connector()
     mcq_analysis = MCQ_Diff()
     print(mcq_analysis)
@@ -126,24 +127,23 @@ if __name__ == '__main__':
         bot_info = json.load(json_file)
     client_name = bot_info['client_name']
     course_id = "course-v1:Lithan+FOS-1219A+04Dec2019"
-    df = rds_df(f"select * from userdata where client_name = '{client_name}' and courseid = '{course_id}';")
-    if df is None:
-        print("unable to read userdata")
-        options = []
-    else:
-        mcq_analysis.load_mcqdata(df)
-        options = [ 0, 1, 2 ]    
+    
+    mcq_analysis.load_mcqdata(client_name, course_id)
+    options = [ 0, 1, 2 ]            
     if 0 in options:
-        photo = mcq_analysis.top10attempts(df)
+        photo = mcq_analysis.top10attempts()
         plt.savefig('attempts.png', dpi=100)
+        print("top10attempts  completed")
 
     if 1 in options:
-        photo = mcq_analysis.top10score(df)
+        photo = mcq_analysis.top10score()
         plt.savefig('score.png', dpi=100)
+        print("top10score  completed")
 
     if 2 in options:
-        photo = mcq_analysis.mcq_summary(10, df)
+        photo = mcq_analysis.mcq_summary(10)
         if photo is not None:
             plt.savefig('summary.png', dpi=100)
+            print("mcq_summary  completed")
 
 #print(f"End of unit test on MCQ Diff")
