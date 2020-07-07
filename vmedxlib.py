@@ -371,19 +371,21 @@ def update_assignment(course_id, client_name):
 
 def update_mcq(course_id, client_name):
     # Status : Tested
-    ok = 0
+    
     cohort_id = piece(piece(course_id,':',1),'+',1)
     condqry = f"`client_name` = '{client_name}' and `courseid` = '{course_id}'"
     cond_qry = condqry.replace("courseid", "course_id")
     mcqcnt = edx_mcqcnt(course_id)
     if mcqcnt==0:
-        return 0
-    try:
-        mcq_df = edx_mcqinfo(client_name, course_id)
+        return 
+    #try:
+    else:
+        mcq_df = edx_mcqinfo(client_name, course_id)        
         if len(mcq_df) > 0:            
             query = "delete from mcq_data where " + cond_qry
             rds_update(query)
         df = mcq_df[['client_name', 'course_id', 'student_id', 'score', 'mcq', 'qn', 'attempts']]
+        # zz
         copydbtbl(df, "mcq_data")
 
         # save into local database with tablename mcq_score with score/max_attempts per mcq tests/students/cohorts
@@ -398,13 +400,13 @@ def update_mcq(course_id, client_name):
                 query = "delete from mcq_score where " + condqry
                 rds_update(query)                
                 scoredf.columns = ['client_name', 'courseid', 'studentid', 'mcq', 'max','score','max_attempts']
-                copydbtbl(scoredf, "mcq_score")            
+                copydbtbl(scoredf, "mcq_score")                            
 
         # not all courses has the same total # of MCQ test, ususally 13
         if cnt == 0:
             max_mcq = 0
         else:
-            query = "select max(mcq) AS maxmcq from mcq_score where " + condqry
+            query = "select max(mcq) AS maxmcq from mcq_score where " + condqry            
             df = rds_df(query)
             max_mcq = 0
             if df is not None:
@@ -412,8 +414,9 @@ def update_mcq(course_id, client_name):
                 max_mcq = df['maxmcq'][0]
             if max_mcq > 13:
                 max_mcq = 0
-        if max_mcq==0:
-            return 0
+                
+        if max_mcq==0:            
+            return 
 
         # reset mcq attempts
         #print("reset mcq attempts")
@@ -429,7 +432,7 @@ def update_mcq(course_id, client_name):
         updqry += ','.join([ "mcq_attempts" + str(x) + qry + str(x) + "),0)" for x in range( 1, max_mcq + 1 )]) 
         updqry += " where " + condqry        
         rds_update(updqry)
-
+        
         # total number of questions per mcq test is independent
         #print("max mcq score")
         query = "select mcq,  max(score) as maxscore from mcq_score where " + condqry + " group by courseid, mcq;"
@@ -445,30 +448,36 @@ def update_mcq(course_id, client_name):
         
         # update on  mcq scores ( not average scores )
         df = rds_df("SELECT studentid, mcq, score  from mcq_score WHERE mcq >0 AND " + condqry)
-        df.columns = ['studentid' , 'mcq', 'score']
+        if df is None:
+            return
+        df.columns = ['studentid' , 'mcq', 'score']       
         
         df1 = pd.pivot_table(df, values='score', index=['studentid'],columns='mcq')
-        df1 = df1.fillna(0)
-        list0 = str(df1).split("\n")[2:]
-        
-        for scoreline in list0:               
-            updqry = ""
-            list1 = [eval(x) for x in scoreline.split(' ') if x != '']            
-            for x in list(mcqmaxscore):
-                y = list(mcqmaxscore).index(x)+1
-                if mcqmaxscore[x] > 0:
-                    list1[y] = list1[y] / mcqmaxscore[x]
-                    updqry += ",mcq_avg" + str(y) + " = " + str(list1[y])
-            updqry = "update userdata set " + updqry[1:] + " where studentid = " + str(list1[0]) + " and " + condqry                         
-            try:
-                rds_update(updqry)  
-            except:                
-                pass
-            ok = 1        
-    except:
-        ok = 0
+        df1 = df1.fillna(0)        
+        cols = list(df1.columns)
+        cnt = len(cols)        
+        #fout = open("debug_mcq.txt", "wt")                
+        for index, row in df1.iterrows():            
+            list1 = list(row)            
+            updqry = ""    
+            for n in range(cnt):
+                m = mcqmaxscore[n+1]
+                if m == 0 :
+                    list1[n] = 0
+                else:
+                    list1[n] = list1[n] / m                
+                m = n + 1
+                updqry += ",mcq_avg" + str(m) + " = " + str(list1[n])
+            updqry = "update userdata set " + updqry[1:] + " where studentid = " + str(index) + " and " + condqry
+            #fout.write(updqry)
+            #fout.write("\n")
+            rds_update(updqry)  
+        #fout.close()
+    #except:
+        #ok = 0
     #print("update_mcq completed for course_id " + course_id)
-    return ok
+    #return ok
+    return
 
 def edx_import(course_id, client_name):
     # Status : Tested       

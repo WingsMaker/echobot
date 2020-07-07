@@ -156,20 +156,20 @@ def do_main():
     edx_time = vmbot.edx_time
     gmt = vmbot.gmt    
     #load_edxdata(vmbot.client_name)
-    job_request("ServiceBot",vmbot.adminchatid, vmbot.client_name, "load_edxdata","")
+    #job_request("ServiceBot",vmbot.adminchatid, vmbot.client_name, "load_edxdata","")
     while vmbot.bot_running :
         try:        
         #if vmbot.bot_running:
             checkjoblist(vmbot)
             timenow = time_hhmm(gmt)            
-            if (edx_time > 0) and (timenow==edx_time) and (edx_cnt==0) :
-                edx_cnt = 1
+            #if (edx_time > 0) and (timenow==edx_time) and (edx_cnt==0) :
+                #edx_cnt = 1
                 #job_request("ServiceBot",vmbot.adminchatid,vmbot.client_name,"edx_mass_import","")
                 #load_edxdata(vmbot.client_name)
-                job_request("ServiceBot",vmbot.adminchatid, vmbot.client_name, "load_edxdata","")
-                time.sleep(60)
-            if (edx_time > 0) and (timenow > edx_time) and (edx_cnt==1):
-                edx_cnt = 0
+                #job_request("ServiceBot",vmbot.adminchatid, vmbot.client_name, "load_edxdata","")
+                #time.sleep(60)
+            #if (edx_time > 0) and (timenow > edx_time) and (edx_cnt==1):
+                #edx_cnt = 0
             time.sleep(3)
         except:
             #print("Error running the bot,please check")
@@ -747,17 +747,19 @@ class MessageCounter(telepot.helper.ChatHandler):
         return txt
 
     def load_tables(self):
-        global vmbot             
+        global vmbot
+        client_name = vmbot.client_name
         #if (vmbot.edx_time > 0) and (self.courseid not in vmbot.updated_courses):
         #if (self.client_name != "Demo") and (self.courseid not in vmbot.updated_courses):        
-            #self.sender.sendMessage("Please wait for a while.")
-            #try:
-            #    vmedxlib.update_mcq(self.courseid,  self.client_name)
-            #    vmedxlib.update_assignment(self.courseid,  self.client_name)
-            #    vmedxlib.update_schedule(self.courseid,  self.client_name)
-            #    vmbot.updated_courses.append(self.courseid)        
-            #except:
-            #    pass
+        if (client_name != "Demo") :
+            self.sender.sendMessage("Please wait for a while.")
+            try:            
+                vmedxlib.update_mcq(self.courseid, client_name)
+                vmedxlib.update_assignment(self.courseid,  client_name)
+                vmedxlib.update_schedule(self.courseid,  client_name)
+                #vmbot.updated_courses.append(self.courseid)        
+            except:
+                pass
         qry = "select * from userdata where client_name = '_c_' and courseid = '_x_';"
         qry = qry.replace('_c_', self.client_name)
         qry = qry.replace('_x_', self.courseid)
@@ -2644,10 +2646,12 @@ def runbotjob(vmbot):
     updqry = f"update job_list set status = 'running', message = '' where job_id = '{job_id}';"
     rds_update(updqry)
     jobitem['status'] = 'running'
-    try:
-        vmbot.bot.sendMessage(chat_id,f"running job {job_id}")
-    except:
-        print(f"running job {job_id}")            
+    #try:
+        #vmbot.bot.sendMessage(chat_id,f"running job {job_id}")
+    #except:
+        #print(f"running job {job_id}")            
+    vmsvclib.rds_connstr = ""
+    vmsvclib.rdscon = None        
     if func_req == "generate_mcq_as":
         try:
             vmedxlib.generate_mcq_as(func_param)
@@ -2655,20 +2659,36 @@ def runbotjob(vmbot):
         except:
             txt += " failed."               
     elif func_req in ["edx_mass_import", "mass_update_assignment", "mass_update_mcq", "mass_update_schedule", "mass_update_usermaster"]:
-        try:
-            func_svc = "vmedxlib." + func_req + "(client_name)"
-            status = eval(func_svc)
-            txt += " completed successfully."
-        except:
-            txt += " failed."
+        #try:
+        #    func_svc = "vmedxlib." + func_req + "(client_name)"
+        #    status = eval(func_svc)
+        if func_req == "mass_update_assignment":
+            vmedxlib.mass_update_assignment(client_name)
+        elif func_req == "mass_update_mcq":
+            vmedxlib.mass_update_mcq(client_name)            
+        elif func_req == "mass_update_schedule":
+            vmedxlib.mass_update_schedule(client_name)
+        elif func_req == "edx_mass_import":
+            vmedxlib.edx_mass_import(client_name)        
+        txt += " completed successfully."
+        #except:
+        #    txt += " failed."
     elif func_req in func_svc_list :
         course_id = func_param              
-        try:
-            func_svc = "vmedxlib." + func_req + "(course_id, client_name)"
-            status = eval(func_svc)
-            txt += " completed successfully."
-        except:
-            txt += " failed."
+        #try:            
+        #    func_svc = "vmedxlib." + func_req + "(course_id, client_name)"
+        #    status = eval(func_svc)        
+        if func_req == "update_assignment":
+            vmedxlib.update_assignment(course_id, client_name)
+        elif func_req == "update_mcq":
+            vmedxlib.update_mcq(course_id, client_name)            
+        elif func_req == "update_schedule":
+            vmedxlib.update_schedule(course_id, client_name)
+        elif func_req == "edx_import":
+            vmedxlib.edx_import(course_id, client_name)
+        txt += " completed successfully."
+        #except:
+        #    txt += " failed."
     elif func_req == 'load_edxdata':
         load_edxdata(client_name)    
     else:

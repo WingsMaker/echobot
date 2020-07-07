@@ -25,6 +25,7 @@
 #------------------------------------------------------------------------------------------------------
 import sys
 import vmbotlib
+import matplotlib
 
 # 
 #  __  __       _
@@ -34,6 +35,7 @@ import vmbotlib
 # |_|  |_|\__,_|_|_| |_|
 
 if __name__ == "__main__":
+    matplotlib.use('Agg')
     version = sys.version_info    
     if version.major == 3 and version.minor >= 7:
         vmbotlib.do_main()
