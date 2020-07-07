@@ -143,13 +143,16 @@ def student_course_list(student_id):
         df = pd.DataFrame.from_dict({'course_id':course_list})            
     return df
 
-def edx_grade(course_id):
+def edx_grade(course_id, student_id=0):
     # Status : Tested
     # https://om.sambaash.com/edx/api/swagger-ui/index.html?configUrl=/edx/v3/api-docs/swagger-config#/User/fetchUserGradesByCourseId
     # https://om.sambaash.com/edx/v1/user/fetch/grades/list
     global edx_api_header, edx_api_url
     df = pd.DataFrame.from_dict( {'student_id' : [] , 'grade' : [] } )
-    url = f"{edx_api_url}/user/fetch/grades/list"
+    if student_id==0:
+        url = f"{edx_api_url}/user/fetch/grades/list"
+    else:
+        url = f"{edx_api_url}/user/fetch/grades/list/{student_id}"
     response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)        
     if response.status_code==200:
         data = response.content.decode('utf-8')            
@@ -160,10 +163,11 @@ def edx_grade(course_id):
         df = pd.DataFrame.from_dict(data)
     return df
 
-def edx_mcqinfo(client_name, course_id):
+def edx_mcqinfo(client_name, course_id, student_id=0):
     # Status : Tested
     # https://om.sambaash.com/edx/api/swagger-ui/index.html?configUrl=/edx/v3/api-docs/swagger-config#/User/fetchUserMCQScoresByCourseId
     # https://om.sambaash.com/edx/v1/user/fetch/mcq/scores/list
+    # https://om.sambaash.com/edx/v1/user/fetch/mcq/scores/list/{userId}    
     global edx_api_header, edx_api_url    
     
     def getnumstr(qn_str):
@@ -177,7 +181,10 @@ def edx_mcqinfo(client_name, course_id):
         return qn
     
     df_mcq = pd.DataFrame.from_dict( {'client_name':[],'course_id':[],'student_id':[], 'score':[],'mcq':[],'qn':[],'attempts':[]} )    
-    url = f"{edx_api_url}/user/fetch/mcq/scores/list"
+    if student_id==0:
+        url = f"{edx_api_url}/user/fetch/mcq/scores/list"
+    else:
+        url = f"{edx_api_url}/user/fetch/mcq/scores/list/{student_id}"
     response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)                
     if response.status_code==200:
         data = json.loads(response.content.decode('utf-8'))
@@ -198,24 +205,28 @@ def edx_mcqinfo(client_name, course_id):
         df_mcq = pd.DataFrame.from_dict(data)     
     return df_mcq
 
-def edx_assignment_score(course_id):
+def edx_assignment_score(course_id, student_id=0):
     # Status : Tested
     # https://om.sambaash.com/edx/api/swagger-ui/index.html?configUrl=/edx/v3/api-docs/swagger-config#/User/fetchUserAssignmentScoresByCourseId
     # https://om.sambaash.com/edx/v1/user/fetch/assignment/scores/list
-    global edx_api_header, edx_api_url
-    df = pd.DataFrame.from_dict({'student_id':[], 'score':[], 'IU': [], 'attempts': []})
-    url = f"{edx_api_url}/user/fetch/assignment/scores/list"
+    global edx_api_header, edx_api_url    
+    if student_id==0:
+        url = f"{edx_api_url}/user/fetch/assignment/scores/list"
+    else:
+        url = f"{edx_api_url}/user/fetch/assignment/scores/list/{student_id}"
     response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)
-    df = pd.DataFrame.from_dict({'student_id': [], 'score': [] , 'IU': [] ,'attempts': []})
+    #df = pd.DataFrame.from_dict({'student_id': [], 'score': [] , 'IU': [] ,'attempts': []})
+    df = pd.DataFrame.from_dict({'student_id':[], 'score':[], 'points_possible':[], 'IU': [], 'attempts': []})
     if response.status_code==200:
         data = response.content.decode('utf-8')
-        rec = eval(data)
-        if rec != []:
+        rec = eval(data)        
+        if rec != []:            
             student_id_list = [x['student_id'] for x in rec]
             grade_list = [x['score'] for x in rec]
+            pp_list = [x['points_possible'] for x in rec]
             iu_list = [x['IU'] for x in rec]
             att_list = [x['attempts'] for x in rec]
-            data = {'student_id': student_id_list, 'score': grade_list , 'IU': iu_list ,'attempts': att_list}
+            data = {'student_id': student_id_list, 'score': grade_list, 'points_possible':pp_list, 'IU': iu_list ,'attempts': att_list}
             df = pd.DataFrame.from_dict(data)
             df['is_num'] = df.apply(lambda x: 1 if x['IU'].isnumeric() else 0, axis=1)               
             df.drop(df[ df.is_num == 0 ].index, inplace=True)
@@ -304,11 +315,12 @@ def update_schedule(course_id, client_name):
     #print(f"update_schedule completed on {course_id}")    
     return
 
-def update_assignment(course_id, client_name):
+def update_assignment(course_id, client_name, student_id=0):
     # Status : Tested
     condqry = f"`client_name` = '{client_name}' and `courseid` = '{course_id}';"
     # df with columns ['student_id', 'grade'], overall score/grade sorted by student_ids
-    df = edx_grade(course_id)    
+    # df = edx_grade(course_id)
+    df = edx_grade(course_id, student_id)
     if df is None:        
         return False     
     if len(df) == 0:
@@ -316,12 +328,14 @@ def update_assignment(course_id, client_name):
     # Converts df into a dictionary format {student_id : grade}
     stud_grade_dict = dict(zip([x for x in df.student_id],[x for x in df.grade]))
     # df with columns ['student_id', 'score', 'IU'], assignment scores sorted by IU by student_ids
-    df = edx_assignment_score(course_id)    
+    #df = edx_assignment_score(course_id)    
+    df = edx_assignment_score(course_id, student_id)        
     if len(df) == 0:
         sid_list = []
         score_list = []
         iu_list = []
         attempts_list = []
+        pp_list = []
     else:        
         if 'attempts' not in list(df.columns):
             df['attempts'] = 1
@@ -330,6 +344,7 @@ def update_assignment(course_id, client_name):
         score_list = [x for x in df.score]
         iu_list = [x for x in df.IU]
         attempts_list = [x for x in df.attempts]
+        pp_list = [x for x in df.points_possible]
     # Creates a dictionary of student_id as key, sub-dict of IU:Score as pair {student_id : {IU:score}}
     stud_list = []
     iu_score = dict()
@@ -337,13 +352,15 @@ def update_assignment(course_id, client_name):
     for n in range(len(df)):
         sid = sid_list[n]
         iu_num = iu_list[n]
+        pp_num = pp_list[n]
         score = score_list[n]
         attempts = attempts_list[n]
         if sid not in stud_list:
             stud_list.append(sid)
             iu_score[sid] = dict()
             iu_attempts[sid] = dict()
-        iu_score[sid][iu_num] = int(score)/100
+        #iu_score[sid][iu_num] = int(score)/100
+        iu_score[sid][iu_num] = 1 if pp_num == 0 else (int(score)/pp_num)
         iu_attempts[sid][iu_num] = attempts
     # Creates a list of student_ids
     for sid in list(stud_grade_dict):
@@ -369,23 +386,26 @@ def update_assignment(course_id, client_name):
     #print("update_assignment completed for course_id " + course_id)
     return True
 
-def update_mcq(course_id, client_name):
+def update_mcq(course_id, client_name, student_id=0):
     # Status : Tested
     
     cohort_id = piece(piece(course_id,':',1),'+',1)
-    condqry = f"`client_name` = '{client_name}' and `courseid` = '{course_id}'"
-    cond_qry = condqry.replace("courseid", "course_id")
+    if student_id==0:
+        condqry = f"`client_name` = '{client_name}' and `courseid` = '{course_id}'"
+        cond_qry = f"`client_name` = '{client_name}' and `course_id` = '{course_id}'"
+    else:
+        condqry = f"`client_name` = '{client_name}' and `courseid` = '{course_id}' and studentid  = {student_id}"
+        cond_qry = f"`client_name` = '{client_name}' and `course_id` = '{course_id}' and student_id  = {student_id}"
     mcqcnt = edx_mcqcnt(course_id)
     if mcqcnt==0:
         return 
     #try:
     else:
-        mcq_df = edx_mcqinfo(client_name, course_id)        
+        mcq_df = edx_mcqinfo(client_name, course_id, student_id)        
         if len(mcq_df) > 0:            
             query = "delete from mcq_data where " + cond_qry
             rds_update(query)
-        df = mcq_df[['client_name', 'course_id', 'student_id', 'score', 'mcq', 'qn', 'attempts']]
-        # zz
+        df = mcq_df[['client_name', 'course_id', 'student_id', 'score', 'mcq', 'qn', 'attempts']]        
         copydbtbl(df, "mcq_data")
 
         # save into local database with tablename mcq_score with score/max_attempts per mcq tests/students/cohorts
@@ -426,13 +446,27 @@ def update_mcq(course_id, client_name):
         rds_update(updqry)
 
         # update mcq attempts
-        #print("update mcq attempts")
-        qry = " = IFNULL((select max_attempts from mcq_score where client_name = userdata.client_name and studentid = userdata.studentid and courseid=userdata.courseid and mcq = "
-        updqry = "update userdata set " 
-        updqry += ','.join([ "mcq_attempts" + str(x) + qry + str(x) + "),0)" for x in range( 1, max_mcq + 1 )]) 
-        updqry += " where " + condqry        
-        rds_update(updqry)
-        
+        #print("update mcq attempts")        
+        query = "SELECT distinct student_id as sid FROM mcq_data WHERE " + cond_qry + " order by student_id;"
+        df = rds_df(query)
+        if df is None:
+            sid_list = []
+        else:
+            df.columns = ['sid']
+            sid_list = [x for x in df.sid]        
+        for sid in sid_list:
+            query = f"SELECT mcq , max(attempts) as att FROM mcq_data WHERE client_name = '{client_name}' AND course_id = '{course_id}' AND student_id={sid} GROUP BY mcq"
+            df = rds_df(query)
+            if df is None:
+                att_dict = {}
+            else:
+                df.columns = ['mcq', 'att']
+                mcq_list = [x for x in df.mcq]
+                att_list = [x for x in df.att]
+                att_dict = dict(zip(mcq_list,att_list))
+                expr = ','.join( [ f"mcq_attempts{x} = {att_dict[x]}"  for x in mcq_list] )            
+                updqry = "update userdata set " + expr + f" WHERE client_name = '{client_name}' AND courseid = '{course_id}' AND studentid={sid};"
+                rds_update(updqry)        
         # total number of questions per mcq test is independent
         #print("max mcq score")
         query = "select mcq,  max(score) as maxscore from mcq_score where " + condqry + " group by courseid, mcq;"
@@ -456,7 +490,6 @@ def update_mcq(course_id, client_name):
         df1 = df1.fillna(0)        
         cols = list(df1.columns)
         cnt = len(cols)        
-        #fout = open("debug_mcq.txt", "wt")                
         for index, row in df1.iterrows():            
             list1 = list(row)            
             updqry = ""    
@@ -469,14 +502,10 @@ def update_mcq(course_id, client_name):
                 m = n + 1
                 updqry += ",mcq_avg" + str(m) + " = " + str(list1[n])
             updqry = "update userdata set " + updqry[1:] + " where studentid = " + str(index) + " and " + condqry
-            #fout.write(updqry)
-            #fout.write("\n")
             rds_update(updqry)  
-        #fout.close()
     #except:
-        #ok = 0
+        #pass
     #print("update_mcq completed for course_id " + course_id)
-    #return ok
     return
 
 def edx_import(course_id, client_name):
@@ -1187,16 +1216,24 @@ if __name__ == "__main__":
     #course_id = "course-v1:Lithan+FOS-0720A+08Jul2020"
     #course_id = "course-v1:Lithan+ICO-0220A+19Mar2020"        
     #
-    #df = edx_mcqinfo(client_name, course_id)
-    #print(df.head(10))
+    sid = 6116
+    #df = edx_mcqinfo(client_name, course_id, sid)
+    #df = edx_assignment_score(course_id, sid)
+    #df = edx_grade(course_id, sid)    
+    #print(df[df.student_id==sid].head(20))
+    #print(df.head(20))
+    #
     #update_schedule(course_id, client_name)    
     #eoc = edx_endofcourse(client_name, course_id)
     #
-    update_mcq(course_id,  client_name)    
-    update_assignment(course_id,  client_name)
-    update_schedule(course_id, client_name)    
-    #edx_import(course_id, client_name)    
+    update_mcq(course_id,  client_name, sid)
     #
+    #update_assignment(course_id, client_name, sid)
+    #
+    #update_schedule(course_id, client_name)    
+    #=====================================
+    # edx_import(course_id, client_name)    
+    #=====================================
     #print(f"running mass import for {client_name}")
     #edx_mass_import(client_name)
     #print(f"running mass update for {client_name}")

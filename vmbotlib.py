@@ -754,9 +754,11 @@ class MessageCounter(telepot.helper.ChatHandler):
         if (client_name != "Demo") :
             self.sender.sendMessage("Please wait for a while.")
             try:            
-                vmedxlib.update_mcq(self.courseid, client_name)
-                vmedxlib.update_assignment(self.courseid,  client_name)
-                vmedxlib.update_schedule(self.courseid,  client_name)
+                #vmedxlib.update_mcq(self.courseid, client_name)
+                vmedxlib.update_mcq(self.courseid, client_name, self.student_id)
+                #vmedxlib.update_assignment(self.courseid,  client_name)
+                vmedxlib.update_assignment(self.courseid, client_name, self.student_id)
+                #vmedxlib.update_schedule(self.courseid,  client_name)
                 #vmbot.updated_courses.append(self.courseid)        
             except:
                 pass
@@ -2191,20 +2193,22 @@ def get_stage_name(clt, courseid):
 
 def evaluate_progress(vars,iu_list,passingrate,var_prefix,var_title):    
     avg_prefix = var_prefix + "_avg"
-    att_prefix = var_prefix + "_attempts"
-    #scoredate = ' '*10 ; 
+    att_prefix = var_prefix + "_attempts"    
     score_zero = [] ; iu_score = [] ; iu_attempts = []
     score_avg = 0 ; tt = '' ; iu_cnt = 0 ; attempts_balance = ""
     if iu_list != '0' :
+        iu_attempts = [ vars[x] for x in [ att_prefix + x for x in iu_list.split(',') ]]
         iu_vars = [int(x) for x in iu_list.split(',')]
+        iu_att = dict(zip(iu_vars, iu_attempts))
         score_pass = [ x for x in iu_vars if vars[avg_prefix + str(x)]>=passingrate]
-        score_failed = [ x for x in iu_vars if vars[avg_prefix + str(x)] < passingrate and vars[avg_prefix + str(x)] > 0]
-        score_zero = [ x for x in iu_vars if vars[avg_prefix + str(x)] == 0]
+        #score_failed = [ x for x in iu_vars if vars[avg_prefix + str(x)] < passingrate and vars[avg_prefix + str(x)] > 0]
+        score_failed = [ x for x in iu_vars if (iu_att[x] > 0) and (vars[avg_prefix + str(x)] < passingrate) and (vars[avg_prefix + str(x)] >= 0)]
+        #score_zero = [ x for x in iu_vars if vars[avg_prefix + str(x)] == 0]
+        score_zero = [ x for x in iu_vars if (iu_att[x] == 0) and (vars[avg_prefix + str(x)] == 0)]
         iu_score = [ vars[x] for x in [ avg_prefix + x for x in iu_list.split(',') ]]  
         iu_score = [ eval(str(x)) for x in iu_score]
         score_avg = sum(iu_score)/len(iu_score) if iu_score != [] else 0
-        iu_attempts = [ vars[x] for x in [ att_prefix + x for x in iu_list.split(',') ]]
-
+        
         tt += "\n" + var_title + " average test score : " + "{:.2%}".format(score_avg)
         if len(score_pass) > 0:
             tt += "\n☑ " + var_title + " test passed : " + str(score_pass)
@@ -2214,14 +2218,32 @@ def evaluate_progress(vars,iu_list,passingrate,var_prefix,var_title):
             tt += "\n☐ " + var_title + " test pending : " + str(score_zero)
         iu_cnt = len(score_pass) + len(score_failed)
         m = 4 if var_prefix=="mcq" else 1
-        attempts_balance = "".join([ ("\n" + var_title + ' #'+str(x) + " has " + str(m-vars[att_prefix + str(x)])+" attempts left"  ) for x in iu_vars \
-            if vars[avg_prefix + str(x)] < passingrate ])
-        tt += attempts_balance 
+        
+        if var_prefix=="as" :
+            attempts_balance = "".join([ ("\n" + var_title + ' #'+str(x) + " has " + str(m-vars[att_prefix + str(x)])+" attempts left"  ) for x in iu_vars \
+                if vars[avg_prefix + str(x)] < passingrate ])
+            tt += attempts_balance + "\n"
+        elif (var_prefix=="mcq") and len(score_failed)>0:
+            sid = int(vars["studentid"])
+            client_name = vars['client_name']
+            course_id = vars['courseid']
+            df = rds_df(f"SELECT mcq, qn, (4 - attempts) as att from mcq_data WHERE client_name='{client_name}' and course_id='{course_id}' and student_id={sid};")
+            if df is not None:
+                df.columns = ['mcq', 'qn', 'att']    
+                df1 = pd.pivot_table(df, values='att', index=['mcq'],columns='qn')
+                df1 = df1.fillna(0)        
+                cols = list(df1.columns)
+                cnt = len(cols) 
+                tt += "\nMCQ attempts left :"
+                for index, row in df1.iterrows():
+                    if index in score_failed:
+                        list1 = str(list(row))                        
+                        tt += f"\n#{index} : {list1}"                    
+                tt += "\n"
     return (tt, score_avg, score_zero, iu_score , iu_attempts, iu_cnt, attempts_balance)
 
 def load_progress(df, stg, vars, client_name):
-    global vmbot    
-    # zz
+    global vmbot        
     resp_dict = vmbot.resp_dict
     if ( len(stg) == 0) or (df is None) or (vars == {}):
         return ("", "", vars)
