@@ -158,7 +158,10 @@ def do_main():
     while vmbot.bot_running :
         try:
             checkjoblist(vmbot)
-            timenow = time_hhmm(gmt)            
+            timenow = time_hhmm(gmt)      
+            if (timenow == 1259):
+                load_edxdata(vmbot.client_name)
+                time.sleep(60)
             if (edx_time > 0) and (timenow==edx_time) and (edx_cnt==0) :
                 edx_cnt = 1
                 job_request("ServiceBot",vmbot.adminchatid,vmbot.client_name,"edx_mass_import","")
@@ -194,46 +197,67 @@ def load_edxdata(client_name):
     else:
         df.columns = ['courseid']
         course_list= [x for x in df.courseid]                
-        
-    #qry = f"SELECT DISTINCT module_code FROM course_module WHERE client_name='{client_name}';"    
-    #df = rds_df(qry)
-    #df.columns = ['module_code']
-    #if df is None:
-        #mc_list = []
-    #else:
-        #mc_list = [x for x in df.module_code]
-        #mc_list = list( set( mc_list))
-        #course_list = [ x for x in course_list if module_code(x) in mc_list ]
-        #print(course_list)
-    #course_list = [ x for x in course_list if 'v1:lithan' not in x.lower() ]    
-    
+   
     # update existing courses on mcq,attempts,stage schedule
     vmbot.updated_courses = []
-    #print(course_list)
+    vars = dict()
+    txt =  ""
+    email_filter = rds_param(f"SELECT `value` from params WHERE `key` = 'email_filter' and client_name = '{client_name}';")
+    efilter = email_filter.split(',')    
     for course_id in course_list:        
-        #if course_id == 'course-v1:Lithan+FOS-0620A+17Jun2020':
         eoc = vmedxlib.edx_endofcourse(client_name, course_id)            
         if eoc == 0:
-            #print(course_id)
-            #print("update_mcq")
             vmedxlib.update_mcq(course_id, client_name)
-            #print("update_assignment")
             vmedxlib.update_assignment(course_id, client_name)
-            #print("update_schedule")
             vmedxlib.update_schedule(course_id, client_name)
-            #print("updated_courses")
             vmbot.updated_courses.append(course_id)        
-    
+            query = f"select * from userdata where client_name='{client_name}' and courseid='{course_id}';"
+            df = rds_df(query)
+            if df is not None:
+                df.columns = get_columns("userdata")
+                for index, row in df.iterrows():
+                    sid = row['studentid']
+                    uname = row['username']
+                    stg = row['stage']                    
+                    df1 = df[df.studentid==sid]
+                    (tt, vars) = verify_student(client_name, df1, sid, course_id)
+                    txt = display_progress(df, stg, vars, client_name)           
+                    if 'Your information is incomplete' in stg:
+                        pass                        
+                    elif ('test failed :' in txt) or ('test pending :' in txt):
+                        df2 = rds_df(f"SELECT * FROM user_master where client_name='{client_name}' and studentid='{sid}';")
+                        if df2 is not None:
+                            df2.columns = get_columns("user_master")
+                            tid = df2.chat_id.values[0]
+                            email = df2.email.values[0]
+                            if email.lower().split('@')[1] in efilter:
+                                pass  # school admin skip this
+                            else:
+                                txt += f"\n\nReference Course ID : {course_id}\nStudent ID : {sid}\n"                                
+                                if tid > 0:
+                                    try:    # it could failed to send if user blocked this bot
+                                        # print(course_id, sid, uname, stg, tid, email)
+                                        #
+                                        # for production, send to real user                                        
+                                        # vmbot.bot.sendMessage(tid, txt)
+                                        #
+                                        # for development send to company account
+                                        vmbot.bot.sendMessage(vmbot.adminchatid, txt)                                        
+                                    except:
+                                        pass
+                time.sleep(1)
+
+
     course_list = vmedxlib.search_course_list(yrnow)
     # new courses created recently , not found RDS
     #print("edx_import")
     for course_id in [ x for x in course_list if x not in vmbot.updated_courses]:
-        #print(course_id)
+        print(course_id)
         vmedxlib.edx_import(course_id, client_name)
         
     #print("mass_update_usermaster")
     vmedxlib.mass_update_usermaster(client_name)    
-    print("load_edxdata completed")
+    #print("load_edxdata completed")
     return
     
 def loadconfig():
@@ -469,32 +493,32 @@ class MessageCounter(telepot.helper.ChatHandler):
         self.sender.sendMessage('session time out, goodbye.')
         return 
 
-    def student_progress(self):
-        self.tablerows = []
-        prev_stage = self.records['stage']
-        stage_list = list(self.stagetable['name'])
-        stage_days = list(self.stagetable['days'])
-        self.stage_list = stage_list
-        self.stage_days = stage_days
-        self.records['username'] = self.username
-        self.courseid = self.records['courseid']        
-        txt = 'Select the day # to check your progress :'
-        btn_list = build_menu(["Day #" + str( stage_days[n] ) for n in range(len(stage_list))], 4, option_back)
-        bot_prompt(self.bot, self.chatid, txt, btn_list)
-        for stg in stage_list:                    
-            result = "stage:'_x_'".replace('_x_', stg)
-            edit_fields(self.client_name, self.courseid, "userdata", "studentid", self.student_id, result)
-            self.stage_name = stg
-            (tt, self.records ) = verify_student(self.userdata, self.student_id, self.courseid)
-            tt = display_progress(self.userdata, stg, self.records, self.client_name)
-            self.tablerows.append(tt)
-        self.stage_name = prev_stage
-        self.records['stage'] = prev_stage
-        result = "stage:'_x_'".replace('_x_', prev_stage)
-        edit_fields(self.client_name, self.courseid, "userdata", "studentid", self.student_id, result)
-        #self.parentbot.keys_dict[option_myprogress]
-        self.parentbot.keys_dict[lrn_student]        
-        return txt
+    #def student_progress(self):
+        #self.tablerows = []
+        #prev_stage = self.records['stage']
+        #stage_list = list(self.stagetable['name'])
+        #stage_days = list(self.stagetable['days'])
+        #self.stage_list = stage_list
+        #self.stage_days = stage_days
+        #self.records['username'] = self.username
+        #self.courseid = self.records['courseid']        
+        #txt = 'Select the day # to check your progress :'
+        #btn_list = build_menu(["Day #" + str( stage_days[n] ) for n in range(len(stage_list))], 4, option_back)
+        #bot_prompt(self.bot, self.chatid, txt, btn_list)
+        #for stg in stage_list:                    
+            #result = "stage:'_x_'".replace('_x_', stg)
+            #edit_fields(self.client_name, self.courseid, "userdata", "studentid", self.student_id, result)
+            #self.stage_name = stg
+            #(tt, self.records ) = verify_student(self.client_name, self.userdata, self.student_id, self.courseid)
+            #tt = display_progress(self.userdata, stg, self.records, self.client_name)
+            #self.tablerows.append(tt)
+        #self.stage_name = prev_stage
+        #self.records['stage'] = prev_stage
+        #result = "stage:'_x_'".replace('_x_', prev_stage)
+        #edit_fields(self.client_name, self.courseid, "userdata", "studentid", self.student_id, result)
+        ##self.parentbot.keys_dict[option_myprogress]
+        #self.parentbot.keys_dict[lrn_student]        
+        #return txt        
 
     def mcqas_chart(self, groupcht = False ):
         if self.userdata is None:            
@@ -516,7 +540,8 @@ class MessageCounter(telepot.helper.ChatHandler):
             if df is not None:
                 df.columns = get_columns("userdata")
                 self.userdata = df                            
-            condqry = f"client_name = '{self.client_name}' AND courseid = '{self.courseid}' AND studentid = {sid} "
+            #condqry = f"client_name = '{self.client_name}' AND courseid = '{self.courseid}' AND studentid = {sid} "
+            condqry = f"client_name = '{cname}' AND courseid = '{courseid}' AND studentid = {sid} "
             fn = 'chart_' + str(sid) + '.png'
             title = f"MCQ and Assignment scores for student #{sid}"                
         avg_list = dict()
@@ -524,10 +549,11 @@ class MessageCounter(telepot.helper.ChatHandler):
             qry =",".join([ f" avg({avgopt}{x}) as avg{x} " for x in range(1,14) ])
             query = f"select {qry} from userdata where " + condqry
             df = rds_df(query)
+            
             if df is None:                
                 return
             df.columns = qry.split(',')
-            avg_list[avgopt] = [eval(str(x)) for x in df.values.tolist()[0]]
+            avg_list[avgopt] = [eval(str(x)) for x in df.values.tolist()[0]]           
         df = pd.DataFrame({
             'Test/IU' : [ '#' + str(n) for n in range(1,14) ],    
             'mcq test' : avg_list['mcq_avg'],
@@ -543,7 +569,7 @@ class MessageCounter(telepot.helper.ChatHandler):
         width = 0.8
         plt.xlim([-width, len(df[xcol])-width])
         ax.set_xticklabels((label_list))
-        ax.yaxis.set_major_formatter(mtk.PercentFormatter())
+        #ax.yaxis.set_major_formatter(mtk.PercentFormatter())                
         plt.draw()
         plt.savefig(fn, dpi=100)
         plt.clf()
@@ -709,10 +735,10 @@ class MessageCounter(telepot.helper.ChatHandler):
             if '{mcq_att_balance}' in txt:
                 result = self.track_attempts()
                 txt = txt.replace('{mcq_att_balance}' , result)
-            if '{student_progress}' in txt:
-                self.student_progress()
-                txt = txt.replace('{student_progress}' , '')
-                return ""
+            #if '{student_progress}' in txt:
+                #self.student_progress()
+                #txt = txt.replace('{student_progress}' , '')
+                #return ""
             try:
                 txt = eval("f'@'".replace('@', txt.replace('\n','~~~'))).replace('~~~','\n')
             except:
@@ -808,7 +834,10 @@ class MessageCounter(telepot.helper.ChatHandler):
             return 
         if self.userdata is None:            
             return
-        (txt, self.records ) = verify_student(self.userdata, sid, self.courseid)        
+        (txt, self.records ) = verify_student(self.client_name, self.userdata, sid, self.courseid)
+        if sid > 0:
+            query = f"update user_master set chat_id={chat_id} where client_name='{self.client_name}' and studentid={sid};"
+            rds_update(query)
         err = 0        
         try:
             self.stage_name = self.records['stage']
@@ -832,7 +861,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             self.new_session = False
             #vmbot.user_list[chat_id]=[self.courseid, self.student_id, self.client_name, chat_id, ""]
             vmbot.user_list[chat_id]=[self.courseid, self.student_id, self.username, chat_id, ""]    
-            txt = display_progress(self.userdata, self.stage_name, self.records, self.client_name)            
+            txt = display_progress(self.userdata, self.stage_name, self.records, self.client_name)
             if txt == "":
                 txt = "Welcome back."
             bot_prompt(self.bot, self.chatid, txt, self.menu_home)
@@ -890,48 +919,8 @@ class MessageCounter(telepot.helper.ChatHandler):
         vars = load_vars(self.userdata, sid)       
         client_name = vars['client_name']
         courseid = vars['courseid']
-        if True:
-            current_stage = get_stage_name(client_name, courseid)
-            vars['stage'] = current_stage
-            return current_stage
-        condqry = f" client_name = '{client_name}' and courseid = '{courseid}';"
-        df = rds_df( "select * from stages where " + condqry)
-        if df is None:
-            return ""
-        df.columns = get_columns("stages")
-        stage_dates = list(df['stagedate'])
-        stage_names = list(df['name'])
-        tblsize = len(stage_names)
-        current_stage = ""
-        vars['mcq_due_dates'] = []
-        vars['as_due_dates'] = []
-        try:
-            pass_stage = 0
-            txt = ''
-            for n in range(tblsize):
-                try:
-                    current_stage = stage_names[n]            
-                    vars['stage'] = current_stage
-                    (t1, t2, vars) = load_progress(self.userdata, current_stage, vars, self.client_name)
-                    if t1 == "_eoc_":        
-                        pass_stage = 1
-                        break
-                    txt = t1 + t2
-                    if vars['pass_stage'] == 0:
-                        pass_stage = 1
-                        break
-                except:
-                    pass
-        except:
-            current_stage = ""
-        if current_stage == "":
-            return ""
-        else:
-            updqry = f"update userdata set stage = '{current_stage}' where studentid = {str(sid)} and " 
-            updqry += condqry            
-            rds_update(updqry)
-            self.userdata.loc[ self.userdata.studentid == sid, "stage" ] = current_stage
-            self.stage_name = current_stage
+        current_stage = get_stage_name(client_name, courseid)
+        vars['stage'] = current_stage        
         return current_stage
 
     def grad_prediction(self):
@@ -1147,24 +1136,25 @@ class MessageCounter(telepot.helper.ChatHandler):
             if chat_id > 0 :
                 self.endchat()
                 syslog("system","telegram user " + str(chat_id) + " online.")
-                query = "select usertype from user_master where chat_id =" + str(chat_id) + \
-                    " and client_name = '" + self.client_name + "';"
-                result = rds_param(query)
-                usertype = int("0" + str(result))                
-                query = "select studentid from user_master where chat_id =" + str(chat_id) + \
-                    " and client_name = '" + self.client_name + "';"
-                result = rds_param(query)
-                sid = int("0" + str(result))
-                query = "select username from user_master where studentid =" + str(self.student_id) + \
-                    " and client_name = '" + self.client_name + "';"
-                self.username = rds_param(query)
-                self.student_id = sid                
-                if sid > 0:  # binded users found
+                query = "select * from user_master where chat_id =" + str(chat_id) + " and client_name = '" + self.client_name + "';"
+                df = rds_df(query)
+                if df is None:
+                    sid = 0
+                    self.student_id = 0
+                    usertype = 0
+                    courseid = ""
+                    binded = 0
+                else:
+                    df.columns = get_columns("user_master")                
+                    sid = int(df.studentid.values[0])
+                    self.student_id = sid
+                    self.username = df.username.values[0]
+                    usertype = df.usertype.values[0]
+                    courseid = df.courseid.values[0]
+                    binded =  df.binded.values[0]
+                if (binded==1) and (sid > 0) and (courseid != ""):  # binded users found
                     self.sender.sendMessage(f"Welcome {self.username} !")
                     if usertype == 1:
-                        query = "select courseid from user_master where chat_id =" + str(chat_id) + \
-                            " and client_name = '" + self.client_name + "';"
-                        courseid = rds_param(query)                        
                         (self.list_courseids, self.list_coursename) = self.find_course(sid)                        
                         if courseid=="":
                             stud_courselist = self.list_courseids                                
@@ -1264,29 +1254,10 @@ class MessageCounter(telepot.helper.ChatHandler):
                         self.sender.sendMessage("Sorry your account is not found, please contact the admin.")
                         self.logoff()
                         return
-                    result = rds_param("SELECT courseid FROM user_master " + condqry)
-                    self.courseid = result
-                    qry = "select * from userdata where client_name = '_c_' and courseid = '_x_';"
-                    qry = qry.replace('_c_', self.client_name)
-                    qry = qry.replace('_x_', self.courseid)
-                    df = rds_df( qry )
-                    if df is None:
-                        self.sender.sendMessage("Sorry the system has no complete data yet.")
-                        self.logoff()
-                        return
-                    df.columns = get_columns('userdata')
-                    self.userdata = df
-                    self.courseids = [x for x in df.courseid]
-                    self.coursename =  rds_param(f"SELECT course_name FROM playbooks where course_id = '{self.courseid}'")
-                    self.load_tables()
-                    self.check_student(sid, chat_id)
-                    txt = "Welcome " + self.username
-                    self.menu_id = keys_dict[lrn_student]
-                    bot_prompt(self.bot, self.chatid, txt, self.menu_home)
-                    self.edited = 0
-                    return
-                else:
-                    return
+                    uname = rds_param("SELECT username FROM user_master " + condqry)
+                    self.username = uname
+                #else:
+                #    return
             if resp.isnumeric():
                 sid = int(resp)
                 query=f"SELECT COUNT(*) AS cnt FROM user_master WHERE studentid={resp} and client_name ='{self.client_name}';"
@@ -1421,7 +1392,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                 self.student_id = sid
                 self.courseid = courseid
                 self.load_tables()
-                (txt, self.records ) = verify_student(self.userdata, sid, self.courseid)                
+                (txt, self.records ) = verify_student(self.client_name. self.userdata, sid, self.courseid)                
                 retmsg = display_progress(self.userdata, self.stage_name, self.records, self.client_name)                
                 self.menu_id = keys_dict[lrn_student]
             elif resp == option_faq:
@@ -1508,13 +1479,19 @@ class MessageCounter(telepot.helper.ChatHandler):
             else:
                 retmsg = "Your are now in demo mode, there will be no response to above statement."
 
-        elif self.menu_id == keys_dict[option_bind] :            
+        elif self.menu_id == keys_dict[option_bind] :
+            sid = str(self.student_id)
+            cid = self.courseid
+            tid = str(self.chatid)
+            clt = self.client_name
             if "yes," in resptxt:
-                updqry = f"update user_master set chat_id = {str(self.chatid)}, courseid = '{self.courseid}' where client_name = '{self.client_name}' and studentid={str(self.student_id)};"                
+                #updqry = f"update user_master set chat_id = {str(self.chatid)}, courseid = '{self.courseid}' where client_name = '{self.client_name}' and studentid={str(self.student_id)};"                
+                updqry = f"update user_master set binded=1, chat_id={tid}, courseid='{cid}' where client_name = '{clt}' and studentid={sid};"
                 rds_update(updqry)
                 txt = "Auto-Login option enabled"
             elif "no," in resptxt:                
-                updqry = f"update user_master set chat_id = 0 where client_name = '{self.client_name}' and studentid={str(self.student_id)};"
+                #updqry = f"update user_master set chat_id = 0 where client_name = '{self.client_name}' and studentid={str(self.student_id)};"
+                updqry = f"update user_master set binded=0 where client_name = '{clt}' and studentid={sid};"
                 rds_update(updqry)
                 txt = "Auto-Login option disabled"
             elif (resp == option_back) or (resp == "0"):
@@ -2139,9 +2116,9 @@ def syslog(msgtype, message):
         pass
     return
    
-def verify_student(userdata, student_id, courseid):
-    global vmbot    
-    cname = vmbot.client_name
+def verify_student(cname, userdata, student_id, courseid):
+    #global vmbot    
+    #cname = vmbot.client_name
     vars = dict()
     amt = 0    
     sid = int(student_id)
@@ -2211,11 +2188,12 @@ def evaluate_progress(vars,iu_list,passingrate,var_prefix,var_title):
         iu_cnt = len(score_pass) + len(score_failed)
         m = 4 if var_prefix=="mcq" else 1
         
-        if var_prefix=="as" :
-            attempts_balance = "".join([ ("\n" + var_title + ' #'+str(x) + " has " + str(m-vars[att_prefix + str(x)])+" attempts left"  ) for x in iu_vars \
-                if vars[avg_prefix + str(x)] < passingrate ])
-            tt += attempts_balance + "\n"
-        elif (var_prefix=="mcq") and len(score_failed)>0:
+        #if var_prefix=="as" :
+        #    attempts_balance = "".join([ ("\n" + var_title + ' #'+str(x) + " has " + str(m-vars[att_prefix + str(x)])+" attempts left"  ) for x in iu_vars \
+        #        if vars[avg_prefix + str(x)] < passingrate ])
+        #    tt += attempts_balance + "\n"
+        #elif (var_prefix=="mcq") and len(score_failed)>0:
+        if (var_prefix=="mcq") and len(score_failed)>0:        
             sid = int(vars["studentid"])
             client_name = vars['client_name']
             course_id = vars['courseid']
@@ -2727,10 +2705,14 @@ def runbotjob(vmbot):
 if __name__ == "__main__":        
     version = sys.version_info
     if version.major == 3 and version.minor >= 7:        
-        do_main()
+        #do_main()
         vmsvclib.rds_connstr = ""
         vmsvclib.rdscon = None    
-        #client_name = 'Sambaash'
+        client_name = 'Sambaash'
+        #query = "select * from user_master where chat_id =" + str(71354936) + " and client_name = '" + client_name + "';"
+        #df = rds_df(query)
+        #df.columns = get_columns("user_master")
+        #print(df.username.values[0], df.studentid.values[0], df.email.values[0])
         print("this is vmbotlib")
     else:
         print("Unable to use this version of python\n", version)

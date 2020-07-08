@@ -1,7 +1,7 @@
 # Note
 # this code already merged into vmsvcbot.py for the next implementation
 # keeping this file for reference
-#------------------------------------------------------------------------------------------------------#  ___                  _ __  __            _
+#------------------------------------------------------------------------------------------------------# 
 # / _ \ _ __ ___  _ __ (_)  \/  | ___ _ __ | |_ ___  _ __
 #| | | | '_ ` _ \| '_ \| | |\/| |/ _ \ '_ \| __/ _ \| '__|
 #| |_| | | | | | | | | | | |  | |  __/ | | | || (_) | |
@@ -528,9 +528,11 @@ def edx_import(course_id, client_name):
     condqry = f"`client_name` = '{client_name}' and `courseid` = '{course_id}';"
     qry = f"select `pillar` from `omnimentor`.`course_module` where `client_name` = '{client_name}' and `module_code` = '{module_code}';"
     module_id = rds_param(qry)
+    if module_id=="":  # either incomplete course and just a course header        
+        return 
     
     course_name = edx_coursename(course_id)    
-    update_playbooklist(course_id, client_name, course_name, module_id)    
+    update_playbooklist(course_id, client_name, course_name)
     
     cnt = rds_param("select count(*) as cnt from stages where client_name='{client_name}' and courseid='{course_id}';")
     cnt = int("0" + str(cnt))
@@ -551,16 +553,7 @@ def edx_import(course_id, client_name):
     df = edx_userdata(course_id)
     nrows = len(df)
     if nrows == 0:
-        #print("there is no data from edx")
-        return False
-    #print(f"{nrows} of records found into edx for cohort = {course_id}")
-    kiv_codes = """
-    df['is_admin'] = df.apply(lambda x: 1 if 'lithan' in x['email'].lower() else 0, axis=1)
-    df['is_system'] = df.apply(lambda x: 1 if 'sambaash' in x['email'].lower() else 0, axis=1)
-    df['is_student'] = df.apply(lambda x: 1 if x['is_admin']+x['is_system']==0 else 0, axis=1)    
-    df.drop(df[df.is_student < 1].index, inplace=True)
-    df.drop(columns=['is_admin','is_system','is_student'], inplace=True)
-    """
+        return 
 
     query = "delete from userdata where " + condqry
     rds_update(query)
@@ -596,13 +589,13 @@ def edx_import(course_id, client_name):
             mlist += list1 + list2
     except:
         #print("error reset the mcq & assignment variables")
-        return False
+        return 
     
     if (mcqcnt + ascnt) > 0:
         update_assignment(course_id, client_name)
         update_mcq(course_id, client_name)
     update_schedule(course_id, client_name)    
-    return True
+    return 
 
 def count_avg_cols(client_name, course_id, maxmcqtest = 13, colname = "mcq_avg"):    
     condqry = " from userdata where courseid = '" + course_id + "' and client_name = '" + client_name + "';"
@@ -726,6 +719,7 @@ def update_userdf(userdf, client_name):
         ut_dict = dict()
         cs_dict = dict()
         ct_dict = dict()
+        bd_dict = dict()
     else:
         #df.drop_duplicates(keep=False,inplace=True)
         df.columns = get_columns("user_master")
@@ -733,19 +727,18 @@ def update_userdf(userdf, client_name):
         ut = [x for x in df.usertype]
         cs = [x for x in df.courseid]
         ct = [x for x in df.chat_id]
-        #em = [x for x in df.email]
-        #um = [x for x in df.username]
+        bd = [x for x in df.binded]
         ut_dict = dict(zip(sl,ut))
         cs_dict = dict(zip(sl,cs))
         ct_dict = dict(zip(sl,ct))
-        #em_dict = dict(zip(sl,em))
-        #um_dict = dict(zip(sl,um))
+        bd_dict = dict(zip(sl,bd))
         for x in list(cs_dict): 
             if cs_dict[x]=='':    cs_dict.pop(x)
         for x in list(ct_dict):
             if ct_dict[x]==0:    ct_dict.pop(x)
-    # eliminate duplicates
-    #query = f"SELECT DISTINCTROW * FROM user_master WHERE client_name = '{client_name}' ORDER BY studentid;"
+        for x in list(bd_dict):
+            if bd_dict[x]==0:    bd_dict.pop(x)
+    # eliminate duplicates    
     query = "select distinct client_name, studentid, max(username) as username, max(email) AS email, "
     query += "max(usertype) AS usertype, max(chat_id) AS chat_id, max(courseid) as course_id from user_master "
     query += f"where client_name = '{client_name}' group by client_name, studentid;"
@@ -760,7 +753,7 @@ def update_userdf(userdf, client_name):
             
     df = userdf    
     df.rename(columns={'course_id':'courseid','student_id':'studentid'} , inplace=True)
-    df['client_name'] = client_name
+    df['client_name'] = client_name 
     # no more hardcoding email filter to identify admin
     email_filter = rds_param(f"SELECT `value` from params WHERE  `key` = 'email_filter' and client_name = '{client_name}';")
     efilter = email_filter.split(',')    
@@ -769,18 +762,17 @@ def update_userdf(userdf, client_name):
     ut2_dict = dict()
     cs2_dict = dict(zip(sl2,cs2))
     ct2_dict = dict()
+    bd2_dict = dict()
     for x in list(cs_dict):    cs2_dict[x] = cs_dict[x]
     for x in sl2:    ct2_dict[x] = ct_dict[x] if x in list(ct_dict) else 0
     for x in sl2:    ut2_dict[x] = ut_dict[x] if x in list(ut_dict) else 0
+    for x in sl2:    bd2_dict[x] = bd_dict[x] if x in list(bd_dict) else 0
     df['courseid'] = df.apply(lambda x: cs2_dict[x['studentid']], axis=1)
     df['chat_id'] = df.apply(lambda x: ct2_dict[x['studentid']], axis=1)
+    df['binded'] = df.apply(lambda x: bd2_dict[x['studentid']], axis=1)
     # usertype 1 for learners, 11 for mentor/admin , otherwise blocked and set to 0
     df['usertype'] = df.apply(lambda x: 11 if x['email'].lower().split('@')[1] in efilter else 1, axis=1)
-    #df['is_admin'] = df.apply(lambda x: 1 if 'lithan' in x['email'].lower() else 0, axis=1)
-    #df['is_system'] = df.apply(lambda x: 1 if 'sambaash' in x['email'].lower() else 0, axis=1)
-    #df['usertype'] = df.apply(lambda x: ut2_dict[x['studentid']], axis=1)
-    #df['usertype'] = df.apply(lambda x: x['usertype'] if x['usertype']>0 else 21 if x['is_system']==1 else 11 if x['is_admin']==1 else 1, axis=1)
-    df = df [['client_name','studentid','username','email','usertype','chat_id','courseid']] 
+    df = df [['client_name','studentid','username','email','usertype','binded','chat_id','courseid']] 
     return df
 
 def get_calendar_json(api_url):
@@ -1017,6 +1009,24 @@ def update_stage_table(stage_list, course_id, client_name):
         rds_update(query)
     return
 
+def update_playbooklist(course_id, client_name, course_name):
+    try:
+        query = f"delete from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
+        rds_update(query)
+        cohort_id = piece(piece(course_id,':',1),'+',1)
+        module_code = piece(cohort_id,'-',0)
+        query = "insert into playbooks(client_name,module_code,cohort_id,course_id,course_name) values('_c_', '_w_', '_x_', '_y_', '_z_');"                
+        query = query.replace("_c_", client_name)
+        query = query.replace("_w_", module_code)
+        query = query.replace("_x_", cohort_id)
+        query = query.replace("_y_", course_id)
+        query = query.replace("_z_", course_name)
+        rds_update(query)
+    except:
+        #print("Unable to update playbook list")
+        pass
+    return
+
 def edx_mass_update(func, clt):
     # Status : Tested
     global edx_api_header, edx_api_url
@@ -1029,6 +1039,9 @@ def edx_mass_update(func, clt):
         client_name = bot_info['client_name']
     else:
         client_name = clt
+
+    qry = f"delete from userdata where client_name='{client_name}' and module_id = '';"   
+    rds_update(qry)
     course_list = search_course_list(keyword)
     qry = f"SELECT DISTINCT module_code FROM course_module WHERE client_name='{client_name}';"    
     df = rds_df(qry)
@@ -1217,7 +1230,7 @@ if __name__ == "__main__":
     #edx_api_url = "https://om.sambaash.com/edx/v1"
     edx_api_url = "https://omnimentor.lithan.com/edx/v1"
     edx_api_header = {'Authorization': 'Basic ZWR4YXBpOlVzM3VhRUxJVXZENUU4azNXdG9E', 'Content-Type': 'text/plain'}
-    #client_name = "Sambaash"    
+    client_name = "Sambaash"    
     #client_name = "Lithan"    
     vmsvclib.rds_connstr = ""
     vmsvclib.rdscon = None
@@ -1230,11 +1243,11 @@ if __name__ == "__main__":
     #course_id = "course-v1:Lithan+ICO-0220A+19Mar2020"        
     #
     sid = 6116
-    #sid = 143
-    df = edx_mcqinfo(client_name, course_id, sid)
+    sid = 143
+    #df = edx_mcqinfo(client_name, course_id, sid)
     #df = edx_assignment_score(course_id, sid)
     #df = edx_grade(course_id, sid)    
-    #print(df[df.score<1].head(20))
+    #print(df[df.mcq==13].head(20))
     #print(df.head(50))
     #
     #update_schedule(course_id, client_name)    
@@ -1246,10 +1259,10 @@ if __name__ == "__main__":
     #
     #update_schedule(course_id, client_name)    
     #=====================================
-    # edx_import(course_id, client_name)    
+    #edx_import(course_id, client_name)    
     #=====================================
-    print(f"running mass import for {client_name}")
-    edx_mass_import(client_name)
+    #print(f"running mass import for {client_name}")
+    #edx_mass_import(client_name)
     #print(f"running mass update for {client_name}")
     #mass_update_schedule(client_name)
     #mass_update_mcq(client_name)
@@ -1259,6 +1272,6 @@ if __name__ == "__main__":
     #copydbtbl(df, "stages")
     #
     # perform_unit_tests()    
-    #mass_update_usermaster(client_name)
+    mass_update_usermaster(client_name)
     #print("check user_master")
     print("This is vmedxlib.py")

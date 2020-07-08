@@ -40,7 +40,6 @@ summary = """
 ║ render_table       output dataframe into HTML table in picture format       ║▒▒
 ║ shellcmd           to execute system commands from the server shell access  ║▒▒
 ║ time_hhmm          local time in hhmm numeric format                        ║▒▒
-║ update_playbooklist add record into the playbooks table in the RDS          ║▒▒
 ║ write2html         output dataframe content into HTML file                  ║▒▒
 ╚═════════════════════════════════════════════════════════════════════════════╝▒▒
  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
@@ -451,26 +450,6 @@ def time_hhmm(gmt):
     mm = int(datetime.datetime.now().strftime('%M'))
     hrs = (hh+gmt+24) % 24
     return hrs*100+mm
-
-def update_playbooklist(course_id, client_name, course_name, module_id):
-    try:
-        query = f"delete from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
-        rds_update(query)
-        cohort_id = piece(piece(course_id,':',1),'+',1)
-        module_code = piece(cohort_id,'-',0)
-        #query = """insert into playbooks(client_name,module_code,cohort_id,course_id,course_name,assignment,mcq) \
-        #        values('_c_', '_w_', '_x_', '_y_', '_z_', '{}', '{}');"""
-        query = "insert into playbooks(client_name,module_code,cohort_id,course_id,course_name) values('_c_', '_w_', '_x_', '_y_', '_z_');"                
-        query = query.replace("_c_", client_name)
-        query = query.replace("_w_", module_code)
-        query = query.replace("_x_", cohort_id)
-        query = query.replace("_y_", course_id)
-        query = query.replace("_z_", course_name)
-        rds_update(query)
-    except:
-        #print("Unable to update playbook list")
-        pass
-    return
 
 def write2html(df, title='', filename='report.html'):    
     if df is None:
