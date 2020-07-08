@@ -188,18 +188,27 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
     response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)                
     if response.status_code==200:
         data = json.loads(response.content.decode('utf-8'))
-        rec = [ x for x in list(data) if 'attempts' in x['state']]                            
-        course_id_list = [x['course_id'] for x in rec]
-        student_id_list = [x['student_id'] for x in rec]
-        grade_list = [x['grade'] for x in rec]
-        #iu_list = [  int(x['chapter_title'].split(':')[0][2:]) for x in rec]
-        iu_list = [ getnumstr(x['chapter_title']) for x in rec]               
-        
-        #qn_list = [ int(x['options_display_name'].split('.')[0][1:]) for x in rec]        
-        qn_list = [ getnumstr(x['options_display_name']) for x in rec]               
-        
-        att_list = [ int(list(x['state'].replace('"attempts": ','__').split('__'))[1].split(',')[0]) for x in rec]
-        client_list = [client_name for x in rec]
+        course_id_list = []
+        student_id_list = []
+        iu_list = []
+        qn_list = []
+        grade_list = []
+        att_list = []
+        for rec in [ x for x in list(data) if 'attempts' in x['state']]  :
+            sc = rec['score']
+            pp = rec['points_possible']
+            qn = getnumstr(rec['options_display_name'])
+            iu = getnumstr(rec['chapter_title'])
+            grade = 1.0 if pp==0 else float(sc/pp)
+            course_id_list.append(rec['course_id'])
+            student_id_list.append(rec['student_id'])                
+            #iu_list.append(int(rec['IU']))
+            iu_list.append(iu)
+            #qn_list.append(int(rec['options_display_name'].split('.')[0][1:]))
+            qn_list.append(qn)
+            grade_list.append(grade)
+            att_list.append(int(rec['state'].split(':')[17].split(',')[0]))
+        client_list = [client_name for x in iu_list]        
         data = {'client_name':client_list, 'course_id': course_id_list, 'student_id':student_id_list, \
             'score':grade_list ,'mcq':iu_list , 'qn':qn_list , 'attempts': att_list}            
         df_mcq = pd.DataFrame.from_dict(data)     
@@ -425,7 +434,7 @@ def update_mcq(course_id, client_name, student_id=0):
         # not all courses has the same total # of MCQ test, ususally 13
         if cnt == 0:
             max_mcq = 0
-        else:
+        else:            
             query = "select max(mcq) AS maxmcq from mcq_score where " + condqry            
             df = rds_df(query)
             max_mcq = 0
@@ -469,9 +478,10 @@ def update_mcq(course_id, client_name, student_id=0):
                 rds_update(updqry)        
         # total number of questions per mcq test is independent
         #print("max mcq score")
-        query = "select mcq,  max(score) as maxscore from mcq_score where " + condqry + " group by courseid, mcq;"
+        #query = "select mcq,  max(score) as maxscore from mcq_score where " + condqry + " group by courseid, mcq;"
+        query = "select mcq,  max(`max`) as maxscore from mcq_score where " + condqry + " group by courseid, mcq;"
         df = rds_df(query)
-        df.columns = ['mcq' , 'maxscore']
+        df.columns = ['mcq' , 'maxscore']        
         mcqmaxscore = dict(zip( [x for x in df.mcq] , [x for x in df.maxscore] ))
         
         # reset mcq scores 
@@ -494,7 +504,10 @@ def update_mcq(course_id, client_name, student_id=0):
             list1 = list(row)            
             updqry = ""    
             for n in range(cnt):
-                m = mcqmaxscore[n+1]
+                try:
+                    m = mcqmaxscore[n+1]
+                except:
+                    m = 0
                 if m == 0 :
                     list1[n] = 0
                 else:
@@ -1217,16 +1230,17 @@ if __name__ == "__main__":
     #course_id = "course-v1:Lithan+ICO-0220A+19Mar2020"        
     #
     sid = 6116
-    #df = edx_mcqinfo(client_name, course_id, sid)
+    #sid = 143
+    df = edx_mcqinfo(client_name, course_id, sid)
     #df = edx_assignment_score(course_id, sid)
     #df = edx_grade(course_id, sid)    
-    #print(df[df.student_id==sid].head(20))
-    #print(df.head(20))
+    #print(df[df.score<1].head(20))
+    #print(df.head(50))
     #
     #update_schedule(course_id, client_name)    
     #eoc = edx_endofcourse(client_name, course_id)
     #
-    update_mcq(course_id,  client_name, sid)
+    #update_mcq(course_id,  client_name, sid)
     #
     #update_assignment(course_id, client_name, sid)
     #
@@ -1234,8 +1248,8 @@ if __name__ == "__main__":
     #=====================================
     # edx_import(course_id, client_name)    
     #=====================================
-    #print(f"running mass import for {client_name}")
-    #edx_mass_import(client_name)
+    print(f"running mass import for {client_name}")
+    edx_mass_import(client_name)
     #print(f"running mass update for {client_name}")
     #mass_update_schedule(client_name)
     #mass_update_mcq(client_name)

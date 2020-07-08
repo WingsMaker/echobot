@@ -155,26 +155,18 @@ def do_main():
     edx_cnt = 0
     edx_time = vmbot.edx_time
     gmt = vmbot.gmt    
-    #load_edxdata(vmbot.client_name)
-    #job_request("ServiceBot",vmbot.adminchatid, vmbot.client_name, "load_edxdata","")
     while vmbot.bot_running :
-        try:        
-        #if vmbot.bot_running:
+        try:
             checkjoblist(vmbot)
             timenow = time_hhmm(gmt)            
-            #if (edx_time > 0) and (timenow==edx_time) and (edx_cnt==0) :
-                #edx_cnt = 1
-                #job_request("ServiceBot",vmbot.adminchatid,vmbot.client_name,"edx_mass_import","")
-                #load_edxdata(vmbot.client_name)
-                #job_request("ServiceBot",vmbot.adminchatid, vmbot.client_name, "load_edxdata","")
-                #time.sleep(60)
-            #if (edx_time > 0) and (timenow > edx_time) and (edx_cnt==1):
-                #edx_cnt = 0
+            if (edx_time > 0) and (timenow==edx_time) and (edx_cnt==0) :
+                edx_cnt = 1
+                job_request("ServiceBot",vmbot.adminchatid,vmbot.client_name,"edx_mass_import","")
+                time.sleep(60)
+            if (edx_time > 0) and (timenow > edx_time) and (edx_cnt==1):
+                edx_cnt = 0
             time.sleep(3)
         except:
-            #print("Error running the bot,please check")
-            #vmbot.bot_running = False
-            #break
             pass
 
     msg = botname + ' shutdown.'
@@ -1380,7 +1372,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                     else:                        
                         sid = self.student_id
                         ch_id = self.chatid   
-                        self.load_tables()  
+                        #self.load_tables()  
                         self.update_stage(sid)
                         self.check_student(sid, ch_id)
 
@@ -1445,8 +1437,8 @@ class MessageCounter(telepot.helper.ChatHandler):
             elif resp == option_mychart:            
                 self.menu_id = keys_dict[lrn_student]
                 if self.student_id > 0:
-                    self.mcqas_chart()
-                    txt = 'Do you have any more questions?'
+                    self.mcqas_chart()                    
+                    txt = 'You are at the main menu.'
                     bot_prompt(self.bot, self.chatid, txt, self.menu_home)
             elif resp == option_binduser:
                 txt += "\nDo you want me to activate auto-login without entering student id each time ?"
