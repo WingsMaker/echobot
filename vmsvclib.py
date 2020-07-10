@@ -494,9 +494,10 @@ def write2html(df, title='', filename='report.html'):
     else:
         result += df.to_html(classes='wide', escape=False)
     result += '''</body></html>'''
-    with open(filename, 'w') as f:
-        f.write(result)
-    return
+    if filename != "":
+        with open(filename, 'w') as f:
+            f.write(result)
+    return result
 
 if __name__ == "__main__":
     global rdscon, rds_connstr

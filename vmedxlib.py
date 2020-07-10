@@ -321,6 +321,11 @@ def update_schedule(course_id, client_name):
     query += f"SET a.IU = b.IU WHERE a.client_name = '{client_name}' and a.courseid = '{course_id}';"
     #print(query)
     rds_update(query)
+    
+    query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{course_id}' AND STR_TO_DATE(startdate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
+    current_stage = rds_param(query) 
+    query = f"update userdata set stage = '{current_stage}' where " + condqry 
+    rds_update(query)
     #print(f"update_schedule completed on {course_id}")    
     return
 
@@ -558,7 +563,8 @@ def edx_import(course_id, client_name):
     query = "delete from userdata where " + condqry
     rds_update(query)
     
-    query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{course_id}' AND STR_TO_DATE(stagedate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
+    #query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{course_id}' AND STR_TO_DATE(stagedate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
+    query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{course_id}' AND STR_TO_DATE(startdate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
     stage = rds_param(query)                
     if stage=="":
         stage = "SOC Days"
@@ -979,27 +985,30 @@ def update_stage_table(stage_list, course_id, client_name):
     arr_stagedate = []
     for stage_item in stage_list:
         stg = stage_list[n][0]
-        query = "insert into stages(client_name, courseid, id, stage, `name` , `desc` ,days, f2f, stagedate,"
+        query = "insert into stages(client_name, courseid, id, stage, `name` , `desc` ,days, f2f, stagedate, startdate,"
         query += "mcq, assignment, IU, flipclass) values("
         query += "'" + client_name + "','" + course_id + "'," + str(n+1)
         query += ",'" + str(stage_list[n][0]) + "','"  
         query += str(stage_list[n][1]) + "','"  
         query += str(stage_list[n][2]) + "',"   
-        query += str(stage_list[n][6]) + ",0,'" 
-        query += "','" + str(stage_list[n][7]) + "','"  
+        query += str(stage_list[n][6]) + ",0,'','','" 
+        query += str(stage_list[n][7]) + "','"   
         query += str(stage_list[n][8]) + "','" 
         query += str(stage_list[n][5])  + "','" + str(stage_list[n][5]) + "')"         
-        rds_update(query)
+        rds_update(query)        
         arr_stagedate.append(str(stage_list[n][3]))
         n += 1
     m = len(arr_stagedate)    
     for n in range(m - 1):
         id = n + 1
+        start_date = arr_stagedate[n] 
         stg_date = arr_stagedate[id] 
-        query = f"update stages set stagedate = '{stg_date}' where id = {id} and " + qry
+        query = f"update stages set startdate = '{start_date}', stagedate = '{stg_date}' where id = {id} and " + qry        
         rds_update(query)
-    stg_date = arr_stagedate[m-1] 
-    query = f"update stages set stagedate = '{stg_date}' where id = {m} and " + qry
+
+    start_date = arr_stagedate[m-1] 
+    stg_date = start_date
+    query = f"update stages set startdate = '{start_date}',stagedate = '{stg_date}' where id = {m} and " + qry
     rds_update(query)
     query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{course_id}' AND STR_TO_DATE(stagedate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
     stage = rds_param(query)                
@@ -1230,7 +1239,7 @@ if __name__ == "__main__":
     #edx_api_url = "https://om.sambaash.com/edx/v1"
     edx_api_url = "https://omnimentor.lithan.com/edx/v1"
     edx_api_header = {'Authorization': 'Basic ZWR4YXBpOlVzM3VhRUxJVXZENUU4azNXdG9E', 'Content-Type': 'text/plain'}
-    client_name = "Sambaash"    
+    #client_name = "Sambaash"    
     #client_name = "Lithan"    
     vmsvclib.rds_connstr = ""
     vmsvclib.rdscon = None
@@ -1244,13 +1253,13 @@ if __name__ == "__main__":
     #
     sid = 6116
     sid = 143
+    sid = 5655
     #df = edx_mcqinfo(client_name, course_id, sid)
     #df = edx_assignment_score(course_id, sid)
     #df = edx_grade(course_id, sid)    
     #print(df[df.mcq==13].head(20))
     #print(df.head(50))
     #
-    #update_schedule(course_id, client_name)    
     #eoc = edx_endofcourse(client_name, course_id)
     #
     #update_mcq(course_id,  client_name, sid)
@@ -1260,11 +1269,12 @@ if __name__ == "__main__":
     #update_schedule(course_id, client_name)    
     #=====================================
     #edx_import(course_id, client_name)    
+    mass_update_schedule(client_name)
     #=====================================
     #print(f"running mass import for {client_name}")
     #edx_mass_import(client_name)
     #print(f"running mass update for {client_name}")
-    #mass_update_schedule(client_name)
+    
     #mass_update_mcq(client_name)
     #
     #df = querydf("omdb.db", "select * from stages where client_name = 'Demo';")
@@ -1272,6 +1282,6 @@ if __name__ == "__main__":
     #copydbtbl(df, "stages")
     #
     # perform_unit_tests()    
-    mass_update_usermaster(client_name)
+    #mass_update_usermaster(client_name)
     #print("check user_master")
     print("This is vmedxlib.py")
