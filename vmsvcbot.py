@@ -43,7 +43,6 @@ import vmffnnlib
 import vmsvclib
 from vmsvclib import *
 
-
 global svcbot, edx_api_header, edx_api_url
 
 omchat = vmnlplib.NLP_Parser()
@@ -580,6 +579,8 @@ def do_main():
     global svcbot, edx_api_header, edx_api_url    
     err = 0    
     # load system config from RDS
+    vmsvclib.rds_connstr = ""
+    vmsvclib.rdscon = None
     df = rds_df("select * from params where client_name = 'System';")
     if df is None:            
         print("unable to proceed, params table not found")
