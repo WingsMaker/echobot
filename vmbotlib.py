@@ -258,6 +258,8 @@ def auto_notify(client_name, resp_dict, pass_rate):
         course_id = course_list[n]
         stagecode = stg_list[n]
         stagename = stgname_list[n]
+        stagedesc = stgdesc_list[n]
+        stagedesc = stagedesc.replace('?','')
         iu_list = iunum_list[n]
         due_date = duedate_list[n]
         mcqvars = mcqvars_list[n]
@@ -300,7 +302,9 @@ def auto_notify(client_name, resp_dict, pass_rate):
                 txt = txt.replace('{uname}', uname)
             if '{stagename}' in txt:
                 txt = txt.replace('{stagename}', stagename)
-            if '{mcq_zero}' in txt:
+            if '{stagedesc}' in txt:
+                txt = txt.replace('{stagedesc}', stagedesc)
+            if '{mcq_zero}' in txt:           
                 txt = txt.replace('{mcq_zero}', str(mcq_zero))
             if '{as_zero}' in txt:
                 txt = txt.replace('{as_zero}', str(as_zero))
@@ -315,7 +319,7 @@ def auto_notify(client_name, resp_dict, pass_rate):
             else:
                 try:
                     #vmbot.bot.sendMessage(vmbot.adminchatid, txt)
-                    vmbot.bot.sendMessage(tid, txt)
+                    vmbot.bot.sendMessage(int(tid), txt)
                 except:
                     print(txt)
         if len(err_list) > 0:
@@ -345,11 +349,11 @@ def auto_intervent(client_name, resp_dict, pass_rate):
     txt =  ""
     email_filter = rds_param(f"SELECT `value` from params WHERE `key` = 'email_filter' and client_name = '{client_name}';")    
     efilter = email_filter.split(',')    
-    #notif3 = resp_dict['notif3']
-    #notif4 = resp_dict['notif4']
-    #notif5 = resp_dict['notif5']
-    #notif6 = resp_dict['notif6']
-    #notif7 = resp_dict['notif7']
+    notif3 = resp_dict['notif3']
+    notif4 = resp_dict['notif4']
+    notif5 = resp_dict['notif5']
+    notif6 = resp_dict['notif6']
+    notif7 = resp_dict['notif7']
     for course_id in course_list:        
         eoc = vmedxlib.edx_endofcourse(client_name, course_id)            
         if eoc == 0:
@@ -360,6 +364,8 @@ def auto_intervent(client_name, resp_dict, pass_rate):
             df.columns = get_columns("stages")            
             stagecode = [x for x in df.stage][0]
             stagename = [x for x in df.name][0]
+            stagedesc = [x for x in df.desc][0]
+            stagedesc = stagedesc.replace('?','')
             mcqvars = [x for x in df.mcq][0]
             asvars = [x for x in df.assignment][0]
             f2fvars = [x for x in df.f2f][0]
@@ -381,19 +387,18 @@ def auto_intervent(client_name, resp_dict, pass_rate):
                     continue
                 df2.columns = get_columns("user_master")
                 tid = df2.chat_id.values[0]
-                email = df2.email.values[0]
+                email = df2.email.values[0]                
                 if email.lower().split('@')[1] in efilter:
                     continue
                 f2f = vars['f2f']
                 amt = vars['amt']            
 
                 # if using original message 
-                vars = display_progress(df1, vars, client_name, resp_dict, pass_rate)
-                txt  = vars['notification']
-                risk_level = vars['risk_level']
+                #vars = display_progress(df1, vars, client_name, resp_dict, pass_rate)
+                #txt  = vars['notification']
+                #risk_level = vars['risk_level']
                 
-                # if NOT using original message 
-                kiv_code = """                
+                # if NOT using original message                 
                 (pass_stage, has_score, avg_score, mcqas_list, max_attempts, list_attempts, mcq_avg, mcq_zero, mcq_pass, mcq_failed, mcq_attempts, \
                 mcnt, mcq_att_balance, as_avg, as_zero, as_pass, as_failed, as_attempts, acnt, as_att_balance, mcqas_complete, f2f_limit, risk_level, tt) \
                     = get_stageinfo(vars, pass_rate, f2f, amt, stagecode, mcqvars, asvars, f2fvars)
@@ -403,17 +408,19 @@ def auto_intervent(client_name, resp_dict, pass_rate):
                 txt = notif3
                 if len(mcq_zero) > 0:            
                     txt += notif4
-                #if len(mcq_failed) > 0:
-                    #txt += notif5
+                if len(mcq_failed) > 0:
+                    txt += notif5
                 if len(as_zero) > 0:
                     txt += notif6
-                #if len(as_failed) > 0:
-                    #txt += notif7
+                if len(as_failed) > 0:
+                    txt += notif7
                 txt += "\n"
                 if '{uname}' in txt:
                     txt = txt.replace('{uname}', uname)                    
                 if '{stagename}' in txt:
                     txt = txt.replace('{stagename}', stagename)
+                if '{stagedesc}' in txt:
+                    txt = txt.replace('{stagedesc}', stagedesc)
                 if '{mcq_zero}' in txt:
                     txt = txt.replace('{mcq_zero}', str(mcq_zero))
                 if '{mcq_failed}' in txt:
@@ -428,25 +435,24 @@ def auto_intervent(client_name, resp_dict, pass_rate):
                     txt = txt.replace('{due_date}', str(due_date))
                 if '{lf}' in txt:
                     txt = txt.replace('{lf}', "\n")
-                """                    
+                
                 if tid == 0:
                     err_list.append(sid)
                 else:
-                    try:
-                        # zz
-                        #vmbot.bot.sendMessage(vmbot.adminchatid, txt)
-                        vmbot.bot.sendMessage(tid, txt)
-                    except:
-                        print(txt)
+                    #try:
+                    #vmbot.bot.sendMessage(vmbot.adminchatid, txt)                    
+                    vmbot.bot.sendMessage(int(tid), txt)
+                    #except:
+                    #print(txt)
                 query = f"update userdata set risk_level = {risk_level} where client_name='{client_name}' and courseid='{course_id}' and studentid={sid};"
                 rds_update(query)
                 
             if len(err_list) > 0:
-                try:
-                    err_msg = f"Unable to send intervention to learners from {course_id} :\n{str(err_list)} \n"
-                    vmbot.bot.sendMessage(vmbot.adminchatid, err_msg)
-                except:
-                    print(err_msg)
+                #try:
+                err_msg = f"Unable to send intervention to learners from {course_id} :\n{str(err_list)} \n"
+                vmbot.bot.sendMessage(vmbot.adminchatid, err_msg)
+                #except:
+                #    print(err_msg)
             time.sleep(1)
     return
     
@@ -1022,7 +1028,8 @@ class MessageCounter(telepot.helper.ChatHandler):
             vmbot.user_list[chat_id]=[self.courseid, self.student_id, self.username, chat_id, ""]    
             vars = display_progress(self.userdata, self.records, self.client_name, vmbot.resp_dict, vmbot.pass_rate)
             txt  = vars['notification']
-            txt += grad_pred_text(vars, self.client_name)
+            if 'incomplete' not in txt:
+                txt += grad_pred_text(vars, self.client_name)
             if txt == "":
                 txt = "Welcome back."
             bot_prompt(self.bot, self.chatid, txt, self.menu_home)
@@ -1283,7 +1290,7 @@ class MessageCounter(telepot.helper.ChatHandler):
         elif resp=='/intv' and (chat_id in [adminchatid, 71354936]):
             auto_intervent(vmbot.client_name, vmbot.resp_dict, vmbot.pass_rate)
             return
-            
+
         elif resp=='/notf' and (chat_id in [adminchatid, 71354936]):
             auto_notify(vmbot.client_name, vmbot.resp_dict, vmbot.pass_rate)
             return
@@ -2382,7 +2389,7 @@ def evaluate_progress(vars,iu_list,passingrate,var_prefix,var_title):
                 tt += "\nMCQ attempts left :"
                 for index, row in df1.iterrows():
                     if index in score_failed:
-                        list1 = str(list(row))                        
+                        list1 = str([ int(x) for x in list(row)])
                         tt += f"\n#{index} : {list1}"                    
                 tt += "\n"
     return (tt, score_avg, score_zero, score_pass, score_failed, iu_score , iu_attempts, iu_cnt, attempts_balance)
@@ -2459,6 +2466,10 @@ def load_progress(df, vars, client_name, resp_dict, pass_rate):
     sid = vars['studentid']
     stagebyprogress = ""
     statusbyprogress = ""
+    mcnt = 0
+    acnt = 0
+    mcq_avg = 0
+    as_avg = 0
     for n in range(stglen):
         stagecode = stg_list[n]
         stagename = stage_names_list[n]
@@ -2467,6 +2478,7 @@ def load_progress(df, vars, client_name, resp_dict, pass_rate):
             = get_stageinfo(vars, pass_rate, f2f, amt, stagecode, mcqvars_list[n], asvars_list[n], f2fvars_list[n])
         if (stagebyprogress == "") and (pass_stage == 0):
             stagedesc = stage_desc_list[n]
+            stagedesc = stagedesc.replace('?','')
             stagebyprogress = stage_names_list[n]
             statusbyprogress = f"{stagename} ({stagedesc})"            
         if stagebyschedule == stagename: 

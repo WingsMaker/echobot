@@ -191,7 +191,7 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
         qn_list = []
         grade_list = []
         att_list = []
-        for rec in [ x for x in list(data) if 'attempts' in x['state']]  :
+        for rec in [ x for x in list(data) if 'attempts' in x['state']]  :            
             sc = rec['score']
             pp = rec['points_possible']
             qn = getnumstr(rec['options_display_name'])
@@ -204,7 +204,8 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
             #qn_list.append(int(rec['options_display_name'].split('.')[0][1:]))
             qn_list.append(qn)
             grade_list.append(grade)
-            att_list.append(int(rec['state'].split(':')[17].split(',')[0]))
+            attempts = eval(rec['state'].replace('null','""').replace('false','0').replace('true','1'))['attempts']
+            att_list.append(int(attempts))
         client_list = [client_name for x in iu_list]        
         data = {'client_name':client_list, 'course_id': course_id_list, 'student_id':student_id_list, \
             'score':grade_list ,'mcq':iu_list , 'qn':qn_list , 'attempts': att_list}            
@@ -1246,15 +1247,19 @@ if __name__ == "__main__":
     vmsvclib.rdscon = None
     #course_id = "course-v1:Lithan+AFI-1119A-0120A+12Apr2020"
     #course_id = "course-v1:Lithan+FOS-1219A+04Dec2019"
-    course_id = "course-v1:Lithan+FOS-0620A+17Jun2020"
+    #course_id = "course-v1:Lithan+FOS-0620A+17Jun2020"
+    #course_id = "course-v1:Lithan+ICO-0520A+15Jul2020"
+    course_id = "course-v1:Lithan+FOS-0520A+06May2020"
     #course_id = "course-v1:Lithan+ERI-0220A+11Mar2020"
     #course_id = "course-v1:Lithan+ADM-0120A+may2020"
     #course_id = "course-v1:Lithan+FOS-0720A+08Jul2020"
     #course_id = "course-v1:Lithan+ICO-0220A+19Mar2020"        
     #
-    sid = 6116
-    sid = 143
-    sid = 5655
+    #sid = 6116
+    #sid = 143
+    #sid = 5655
+    sid = 5709
+    #
     #df = edx_mcqinfo(client_name, course_id, sid)
     #df = edx_assignment_score(course_id, sid)
     #df = edx_grade(course_id, sid)    
@@ -1272,10 +1277,11 @@ if __name__ == "__main__":
     #edx_import(course_id, client_name)    
     # mass_update_schedule(client_name)
     #=====================================
+    #
     print(f"running mass import for {client_name}")
     edx_mass_import(client_name)
-    #print(f"running mass update for {client_name}")
-    
+    #
+    #print(f"running mass update for {client_name}")    
     #mass_update_mcq(client_name)
     #
     #df = querydf("omdb.db", "select * from stages where client_name = 'Demo';")
