@@ -9,9 +9,6 @@
 #
 # Library functions by KH
 # This is for EDX interface
-# API Documentation and End point information
-# https://om.sambaash.com/edx/api/docs.html
-# Username: edxapi Password: Us3uaELIUvD5E8k3WtoD
 #------------------------------------------------------------------------------------------------------
 import pandas as pd
 import pymysql
@@ -549,10 +546,12 @@ def edx_import(course_id, client_name):
             query = "delete from stages where " + condqry
             rds_update(query)
             df.drop(columns=['module_code'], inplace=True)
-            for fld in ['stagedate','fcdate','eldate','mcqdate','asdate']:
-                df[fld] = ''
+            #for fld in ['stagedate','fcdate','eldate','mcqdate','asdate']:
+            #    df[fld] = ''
+            df['stagedate'] = ''                
             df['courseid'] = course_id
-            df1 = df[['client_name','courseid', 'id', 'stage', 'name', 'desc', 'days', 'f2f', 'mcq', 'flipclass', 'assignment', 'IU', 'stagedate', 'fcdate', 'eldate', 'mcqdate', 'asdate']]
+            #df1 = df[['client_name','courseid', 'id', 'stage', 'name', 'desc', 'days', 'f2f', 'mcq', 'flipclass', 'assignment', 'IU', 'stagedate', 'fcdate', 'eldate', 'mcqdate', 'asdate']]
+            df1 = df[['client_name','courseid', 'id', 'stage', 'name', 'desc', 'days', 'f2f', 'mcq', 'flipclass', 'assignment', 'IU', 'stagedate']]
             copydbtbl(df1, "stages")
             
     df = edx_userdata(course_id)
@@ -574,8 +573,10 @@ def edx_import(course_id, client_name):
     df['grade'] = 0
     df['stage'] = stage
     df['f2f'] = 0
+    df['risk_level'] = 0
     df.rename(columns={'course_id':'courseid','student_id':'studentid'} , inplace=True)
-    df1 = df[['client_name', 'module_id', 'courseid', 'studentid', 'username', 'amt', 'grade', 'stage', 'f2f']]
+    #df1 = df[['client_name', 'module_id', 'courseid', 'studentid', 'username', 'amt', 'grade', 'stage', 'f2f']]
+    df1 = df[['client_name', 'module_id', 'courseid', 'studentid', 'username', 'amt', 'grade', 'stage', 'f2f', 'risk_level']]
     copydbtbl(df1,"userdata")
     
     mcqcnt = edx_mcqcnt(course_id)
@@ -1269,10 +1270,10 @@ if __name__ == "__main__":
     #update_schedule(course_id, client_name)    
     #=====================================
     #edx_import(course_id, client_name)    
-    mass_update_schedule(client_name)
+    # mass_update_schedule(client_name)
     #=====================================
-    #print(f"running mass import for {client_name}")
-    #edx_mass_import(client_name)
+    print(f"running mass import for {client_name}")
+    edx_mass_import(client_name)
     #print(f"running mass update for {client_name}")
     
     #mass_update_mcq(client_name)

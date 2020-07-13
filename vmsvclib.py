@@ -30,6 +30,7 @@ summary = """
 ║ encrypt_email      to encrypt email address field on a database record      ║▒▒
 ║ get_attachment     download the telegram attachement file locally           ║▒▒
 ║ get_columns        product the dataframe header into python list            ║▒▒
+║ printdict          print the item details of the given dictionary object    ║▒▒
 ║ pycmd              execute python codes via eval()                          ║▒▒
 ║ querydf            output sql query on SQLite database into dataframe       ║▒▒
 ║ rds_connector      database connection to RDS database by type of client    ║▒▒
@@ -294,6 +295,10 @@ def get_columns(tablename):
     del df
     return cols
 
+def printdict(obj):
+    print(*obj.items(), sep = '\n')
+    return
+    
 def pycmd(resp, parentbot):
     vars = parentbot.vars
     result = ""
