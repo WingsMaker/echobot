@@ -1283,6 +1283,10 @@ class MessageCounter(telepot.helper.ChatHandler):
         elif resp=='/intv' and (chat_id in [adminchatid, 71354936]):
             auto_intervent(vmbot.client_name, vmbot.resp_dict, vmbot.pass_rate)
             return
+            
+        elif resp=='/notf' and (chat_id in [adminchatid, 71354936]):
+            auto_notify(vmbot.client_name, vmbot.resp_dict, vmbot.pass_rate)
+            return
         
         elif resp=='/stop' and (chat_id in [adminchatid, 71354936]):
         #elif resp=='/stop' and (chat_id == adminchatid):
