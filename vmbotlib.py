@@ -86,9 +86,11 @@ fc_edxupdate = "LMS Import"
 #fc_edx = "EdX Import"
 #fc_assignment = "Update Assignment"
 #fc_mcqtest = "Update MCQs"
-#fc_schedule = "Schedule Update"
+fc_schedule = "Schedule Update"
 #faculty_menu = [[fc_student,fc_cohlist, fc_edx], [fc_assignment, fc_mcqtest, fc_schedule, option_back]]
 faculty_menu = [[fc_student, fc_cohlist, fc_userimport, fc_edxupdate, option_back]]
+# keep for next upgrade
+#faculty_menu = [[fc_student, fc_cohlist, fc_schedule],[fc_userimport, fc_edxupdate, option_back]]
 fc_updstage = "Stage Update"
 fc_resetstage = "Stage Reset"
 fc_recupd = "Record Update"
@@ -158,13 +160,14 @@ def do_main():
     while vmbot.bot_running :
         try:
             checkjoblist(vmbot)
+            zz = """
             timenow = time_hhmm(gmt)      
             if (timenow == 1259):  # i change to  9am ?? currently 1am
                 load_edxdata(vmbot.client_name)
                 time.sleep(1)
                 auto_notify(vmbot.client_name, vmbot.resp_dict, vmbot.pass_rate)
                 time.sleep(1)
-            if str(timenow) in ['0900', '1200', '1500']:
+            if str(timenow) in ['0900']:
                 auto_intervent(vmbot.client_name, vmbot.resp_dict, vmbot.pass_rate)
                 time.sleep(1)
             if (edx_time > 0) and (timenow==edx_time) and (edx_cnt==0) :
@@ -173,6 +176,7 @@ def do_main():
                 time.sleep(60)
             if (edx_time > 0) and (timenow > edx_time) and (edx_cnt==1):
                 edx_cnt = 0
+            #"""
             time.sleep(3)
         except:
             pass
@@ -204,7 +208,7 @@ def load_edxdata(client_name):
         course_list= [x for x in df.courseid]                
    
     # update existing courses on mcq,attempts,stage schedule
-    vmbot.updated_courses = []
+    updated_courses = []
     vars = dict()
     txt =  ""
     email_filter = rds_param(f"SELECT `value` from params WHERE `key` = 'email_filter' and client_name = '{client_name}';")
@@ -215,14 +219,15 @@ def load_edxdata(client_name):
             vmedxlib.update_mcq(course_id, client_name)
             vmedxlib.update_assignment(course_id, client_name)
             vmedxlib.update_schedule(course_id, client_name)
-            vmbot.updated_courses.append(course_id)        
+            updated_courses.append(course_id)
 
     course_list = vmedxlib.search_course_list(yrnow)
     # new courses created recently , not found RDS
     #print("edx_import")
-    for course_id in [ x for x in course_list if x not in vmbot.updated_courses]:
-        print(course_id)
+    for course_id in [ x for x in course_list if x not in updated_courses]:
+        #print(course_id)
         vmedxlib.edx_import(course_id, client_name)
+        updated_courses.append(course_id)
         
     #print("mass_update_usermaster")
     vmedxlib.mass_update_usermaster(client_name)    
@@ -574,7 +579,7 @@ class BotInstance():
         par_dict = dict(zip(par_key, par_val))
         email_filter = par_dict['email_filter']
         self.efilter = email_filter.split(',')
-        self.updated_courses = []
+        #self.updated_courses = []
         self.edx_time = int(par_dict['edx_import'])    
         hdr = par_dict['edx_api_header']        
         self.edx_api_header = eval(hdr)
@@ -931,17 +936,12 @@ class MessageCounter(telepot.helper.ChatHandler):
     def load_tables(self):
         global vmbot
         client_name = vmbot.client_name
-        #if (vmbot.edx_time > 0) and (self.courseid not in vmbot.updated_courses):
-        #if (self.client_name != "Demo") and (self.courseid not in vmbot.updated_courses):        
         if (client_name != "Demo") :
             self.sender.sendMessage("Please wait for a while.")
             try:            
-                #vmedxlib.update_mcq(self.courseid, client_name)
                 vmedxlib.update_mcq(self.courseid, client_name, self.student_id)
-                #vmedxlib.update_assignment(self.courseid,  client_name)
                 vmedxlib.update_assignment(self.courseid, client_name, self.student_id)
                 #vmedxlib.update_schedule(self.courseid,  client_name)                
-                #vmbot.updated_courses.append(self.courseid)        
             except:
                 pass
         qry = "select * from userdata where client_name = '_c_' and courseid = '_x_';"
@@ -1003,17 +1003,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             query = f"update user_master set chat_id={chat_id} where client_name='{self.client_name}' and studentid={sid};"
             rds_update(query)
         err = 0        
-        try:
-            self.stage_name = self.records['stage']
-            nextstagedate = rds_param(f"SELECT stagedate FROM stages WHERE client_name = '{self.client_name}' AND courseid='{self.courseid}' AND `name` = '{self.stage_name}';")                        
-            self.stagedate = nextstagedate
-            self.records['asdate'] = self.stagedate
-            self.records['eldate'] = self.stagedate
-            self.records['fcdate'] = self.stagedate
-            self.records['mcqdate'] = self.stagedate
-        except:
-            self.records=={}
-        if (self.records=={}) or (self.stage_name==""):
+        if (self.records=={}) :
             txt = "Hi, there is incomplete information at the moment, the session is not ready yet.\n\n"
             txt += "Please select the course from below list."
             btn_course_list = build_menu(self.list_courseids,1)
@@ -1024,10 +1014,10 @@ class MessageCounter(telepot.helper.ChatHandler):
             self.is_admin = False
             self.student_id = sid
             self.new_session = False
-            #vmbot.user_list[chat_id]=[self.courseid, self.student_id, self.client_name, chat_id, ""]
             vmbot.user_list[chat_id]=[self.courseid, self.student_id, self.username, chat_id, ""]    
             vars = display_progress(self.userdata, self.records, self.client_name, vmbot.resp_dict, vmbot.pass_rate)
             txt  = vars['notification']
+            self.stage_name = vars['stage']
             if 'incomplete' not in txt:
                 txt += grad_pred_text(vars, self.client_name)
             if txt == "":
@@ -1570,7 +1560,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                 self.student_id = sid
                 self.courseid = courseid
                 self.load_tables()
-                (txt, self.records ) = verify_student(self.client_name. self.userdata, sid, self.courseid)                
+                (txt, self.records ) = verify_student(self.client_name, self.userdata, sid, self.courseid)                
                 vars = display_progress(self.userdata, self.records, self.client_name, vmbot.resp_dict, vmbot.pass_rate)
                 retmsg  = vars['notification']
                 retmsg += grad_pred_text(vars, self.client_name)
@@ -1702,13 +1692,13 @@ class MessageCounter(telepot.helper.ChatHandler):
                 self.menu_id = keys_dict[fc_cohlist]
             elif resp == fc_userimport :                
                 self.sender.sendMessage("System has scheduled a job to update user master.")                
-                #vmedxlib.mass_update_usermaster(self.client_name)
                 job_request("ServiceBot",adminchatid, self.client_name,"mass_update_usermaster","")
-                #retmsg = "User master data updated."
             elif resp == fc_edxupdate :
                 self.sender.sendMessage("System has scheduled a job to import from LMS.")                
                 job_request("ServiceBot",adminchatid, self.client_name,"edx_mass_import","")
-                #retmsg = "system updated."
+            elif resp == fc_schedule :
+                self.sender.sendMessage("System has scheduled a job to import from google calendar.")                
+                job_request("ServiceBot",adminchatid, self.client_name,"mass_update_schedule","")               
             elif (resp == option_back) or (resp == "0"):
                 txt = 'Please select the following mode:'
                 bot_prompt(self.bot, self.chatid, txt, self.menu_home)
@@ -1721,13 +1711,6 @@ class MessageCounter(telepot.helper.ChatHandler):
                 self.menu_id = keys_dict[option_fct]                
                 return
             if resp in self.list_courseids:
-                #if vmbot.edx_time > 0 and resp not in vmbot.updated_courses:                
-                    #self.sender.sendMessage("Please wait for a while.")
-                    #client_name = self.client_name                    
-                    #vmedxlib.update_assignment(resp, client_name)
-                    #vmedxlib.update_mcq(resp, client_name)
-                    #vmedxlib.update_schedule(resp, client_name)   
-                    #vmbot.updated_courses.append(resp)            
                 self.courseid = resp
                 cohort_id = piece(piece(resp,':',1),'+',1)
                 condqry = " where client_name = '" + self.client_name + "' and courseid = '" + resp + "';"
@@ -1944,13 +1927,6 @@ class MessageCounter(telepot.helper.ChatHandler):
 
         elif self.menu_id == keys_dict[pb_userdata]:
             if self.load_courseinfo(resp) == 1:
-                #if vmbot.edx_time > 0 and resp not in vmbot.updated_courses:                
-                    #self.sender.sendMessage("Please wait for a while.")
-                    #client_name = self.client_name
-                    #vmedxlib.update_assignment(resp, client_name)
-                    #vmedxlib.update_mcq(resp, client_name)
-                    #vmedxlib.update_schedule(resp, client_name)   
-                    #vmbot.updated_courses.append(resp)
                 self.courseid = resp
                 cohort_id = piece(piece(resp,':',1),'+',1)
                 self.courseid = resp
