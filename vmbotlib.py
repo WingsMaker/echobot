@@ -388,18 +388,27 @@ def auto_intervent(client_name, resp_dict, pass_rate):
             df = rds_df(query)
             if df is None:
                 continue
-            df.columns = get_columns("stages")  
-            stageid = [x for x in df.id][0]
-            stagecode = [x for x in df.stage][0]
-            stagename = [x for x in df.name][0]
-            stagedesc = [x for x in df.desc][0]
+            df.columns = get_columns("stages")
+            stageid = df.id.values[0]
+            stagecode = df.stage.values[0]
+            stagename = df.name.values[0]
+            stagedesc = df.desc.values[0]
+            mcqvars = df.mcq.values[0]
+            asvars = df.assignment.values[0]
+            f2fvars = df.f2f.values[0]
+            iu_list = df.IU.values[0]
+            due_date = df.stagedate.values[0]
+            #stageid = [x for x in df.id][0]
+            #stagecode = [x for x in df.stage][0]
+            #stagename = [x for x in df.name][0]
+            #stagedesc = [x for x in df.desc][0]
             stagedesc = stagedesc.replace('?','')
-            mcqvars = [x for x in df.mcq][0]
-            asvars = [x for x in df.assignment][0]
-            f2fvars = [x for x in df.f2f][0]
-            iu_list = [x for x in df.IU][0]
+            #mcqvars = [x for x in df.mcq][0]
+            #asvars = [x for x in df.assignment][0]
+            #f2fvars = [x for x in df.f2f][0]
+            #iu_list = [x for x in df.IU][0]
             iu_list = [int(x) for x in str(iu_list).split(',')]
-            due_date = [x for x in df.stagedate][0]
+            #due_date = [x for x in df.stagedate][0]
             query = f"select * from userdata where client_name='{client_name}' and courseid='{course_id}';"
             df = rds_df(query)
             if df is None:
@@ -1040,8 +1049,10 @@ class MessageCounter(telepot.helper.ChatHandler):
             return
         (txt, self.records ) = verify_student(self.client_name, self.userdata, sid, self.courseid)
         if sid > 0:
-            query = f"update user_master set chat_id={chat_id} where client_name='{self.client_name}' and studentid={sid};"
-            rds_update(query)
+            binded = rds_param(f"select binded FROM user_master where client_name='{self.client_name}' and studentid={sid};")
+            if binded==0:
+                query = f"update user_master set chat_id={chat_id} where client_name='{self.client_name}' and studentid={sid};"
+                rds_update(query)
         err = 0        
         if (self.records=={}) :
             txt = "Hi, there is incomplete information at the moment, the session is not ready yet.\n\n"
@@ -2317,6 +2328,8 @@ class MessageCounter(telepot.helper.ChatHandler):
             opt_blockuser = 'Block this user'
             opt_setadmin = 'Set as Admin'
             opt_setlearner = 'Set as Learner'
+            opt_resetemail = 'Change Email'
+            opt_unbind = 'Reset Binding'            
             if resp.isnumeric():
                 sid = int(resp)
                 if sid > 0:
@@ -2327,11 +2340,19 @@ class MessageCounter(telepot.helper.ChatHandler):
                 if sid == 0:
                     retmsg = "Unable to find the matchnig record. Please try again."
                 else:
-                    df.columns = get_columns("user_master")                
-                    sid = [x for x in df.studentid][0]
+                    df.columns = get_columns("user_master")
+                    #sid = [x for x in df.studentid][0]
+                    rec = df.iloc[0]
+                    sid = rec['studentid']
                     self.student_id = sid
-                    txt = "What you like to do ?"
-                    useraction_menu = [[opt_blockuser, opt_setadmin , opt_setlearner, option_back]]
+                    username = rec['username']
+                    email = rec['email']
+                    tid = rec['chat_id']
+                    binded = 'Yes' if rec['binded']==1 else 'No'
+                    telegid = str(tid) if rec['binded']==1 else 'None'
+                    txt = f"Student-ID : #{sid}\nName : {username}\nEmail : {email}\nBinded :{binded}\nTelegramID : {telegid}\n"
+                    txt += "What you like to do ?"
+                    useraction_menu = [[opt_blockuser, opt_setadmin , opt_setlearner],[opt_resetemail, opt_unbind, option_back]]
                     bot_prompt(self.bot, self.chatid, txt, useraction_menu)
             elif resp == opt_blockuser:
                 query = f"update user_master set usertype = 0 where client_name = '{self.client_name}' and studentid = {self.student_id} ;"
@@ -2344,8 +2365,16 @@ class MessageCounter(telepot.helper.ChatHandler):
             elif resp == opt_setlearner:
                 query = f"update user_master set usertype = 1 where client_name = '{self.client_name}' and studentid = {self.student_id} ;"
                 rds_update(query)
-                retmsg = f"User with Student-ID {self.student_id} has been set as admin."
-
+                retmsg = f"User with Student-ID {self.student_id} has been set as learner."
+            elif resp == opt_resetemail:
+                query = f"update user_master set email = '{resp}' where client_name = '{self.client_name}' and studentid = {self.student_id} ;"
+                rds_update(query)
+                retmsg = f"User email with Student-ID {self.student_id} has been set to {self.student_id}."
+            elif resp == opt_unbind:
+                query = f"update user_master set binded = 0, chat_id = 0 where client_name = '{self.client_name}' and studentid = {self.student_id} ;"
+                rds_update(query)
+                retmsg = f"User telegram account has been unbinded from Student-ID {self.student_id}."
+            
         elif self.menu_id == keys_dict[option_chatlist]:
             if chat_id in vmbot.chat_list:
                 tid = vmbot.chat_list[ chat_id ]
@@ -2589,7 +2618,10 @@ def get_stageinfo(vars, pass_rate, f2f_missing, f2f, amt, stagecode, mcqvars, as
 def load_progress(df, vars, client_name, resp_dict, pass_rate):
     if (df is None) or (vars == {}):
         return ("", "", vars)
-    courseid = list(df['courseid'])[0]
+    rec = df.iloc[0]
+    courseid = rec['courseid']
+    sid = rec['studentid']
+    #courseid = list(df['courseid'])[0]
     stagebyschedule = schedule_stage(client_name, courseid)
     query = f"SELECT * FROM stages WHERE client_name = '{client_name}' AND courseid='{courseid}';"
     df = rds_df(query)
@@ -2608,7 +2640,7 @@ def load_progress(df, vars, client_name, resp_dict, pass_rate):
     mcqvars_list = [x for x in df.mcq]
     asvars_list = [x for x in df.assignment]
     f2fvars_list = [x for x in df.f2f]
-    sid = int(vars['studentid'])
+    #sid = int(vars['studentid'])
     f2f = vars['f2f']
     amt = vars['amt']
     missing_dates = vmedxlib.sms_missingdates(client_name, courseid, sid)
