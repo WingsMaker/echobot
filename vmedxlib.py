@@ -240,6 +240,43 @@ def edx_assignment_score(course_id, student_id=0):
             df.drop(columns=['is_num'], inplace=True)
     return df
 
+def sms_attendance(course_id, student_id):
+    # Status : okay
+    # https://omnimentor.lithan.com/edx/v1/user/attendance/fetch/{student_id}
+    global edx_api_header, edx_api_url
+    if student_id==0:
+        return []
+    url = f"{edx_api_url}/user/attendance/fetch/{student_id}"
+    response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)
+    date_list = []
+    if response.status_code==200:
+        data = response.content.decode('utf-8')
+        if data != "":
+            result  = eval(str(data))
+            date_list = [string2date(x['timetable_date'].split(' ')[0],"%m/%d/%Y") for x in result]
+    return date_list
+    
+def sms_missingdates(client_name, course_id, student_id):
+    f2flag = lambda x,y : ('' if y in date_list else x) if x[:2] in ['FC', 'PM'] else ''
+    if student_id==0:
+        return 0
+    date_list = sms_attendance(course_id, student_id)
+    missed_fsf = []
+    df = rds_df(f"select * from stages where courseid = '{course_id}' and client_name = '{client_name}';")
+    if df is not None:
+        df.columns = get_columns("stages")
+        stgid_list = [x for x in df.id]
+        fsf_dates = [string2date(x,"%d/%m/%Y") for x in df.startdate]
+        #fsf_dates = [x for x in df.startdate]
+        stage_list = [x for x in df.stage]
+        arr_stgf2f = dict(zip(stage_list, fsf_dates))
+        #stage_dates=[string2date(arr_stgf2f[x],"%d/%m/%Y") for x in stage_list if x[:2]=='FC' or x[:2]=='PM']
+        #mdat = [x.strftime('%d/%m/%Y') for x in stage_dates if x not in date_list]
+        #mstg = [x for x in stage_list if string2date(arr_stgf2f[x],"%d/%m/%Y").strftime('%d/%m/%Y') in mdat]
+        #missed_fsf = dict(zip(mstg,mdat))
+        missed_fsf = [f2flag(stage_list[n],fsf_dates[n]) for n in range(len(stgid_list))]
+    return missed_fsf
+
 def search_course_list(keyword):
     # Status : Tested
     # https://om.sambaash.com/edx/api/swagger-ui/index.html?configUrl=/edx/v3/api-docs/swagger-config#/Course/fetchCourseListByCourseIdLike
@@ -1265,14 +1302,19 @@ if __name__ == "__main__":
     #edx_api_url = "https://om.sambaash.com/edx/v1"
     edx_api_url = "https://omnimentor.lithan.com/edx/v1"
     edx_api_header = {'Authorization': 'Basic ZWR4YXBpOlVzM3VhRUxJVXZENUU4azNXdG9E', 'Content-Type': 'text/plain'}
-    #client_name = "Sambaash"    
+    client_name = "Sambaash"    
     #client_name = "Lithan"    
     vmsvclib.rds_connstr = ""
     vmsvclib.rdscon = None
-    #   course_id = "course-v1:Lithan+FOS-0620A+17Jun2020" # 6116
+    course_id = "course-v1:Lithan+FOS-0620A+17Jun2020" # 6116
     #course_id = "course-v1:Lithan+ICO-0520A+15Jul2020"
-    course_id = "course-v1:Lithan+FOS-0520A+06May2020"
-    sid = 5709
+    #course_id = "course-v1:Lithan+FOS-0520A+06May2020"  # 5709
+    sid = 6464
+    attendance_dates = sms_attendance(course_id, sid)
+    print(list(attendance_dates))
+    missing_dates = sms_missingdates(client_name, course_id, sid)
+    print(missing_dates)
+    #print(course_id, sid, f2f)
     #edx_daystart = edx_day0(course_id)
     #print( edx_daystart ) #2020-05-05
     #test_google_calendar(course_id)
@@ -1286,7 +1328,7 @@ if __name__ == "__main__":
     #
     #=====================================
     #mass_update_schedule(client_name)
-    perform_unit_tests(client_name, course_id, sid)
+    #perform_unit_tests(client_name, course_id, sid)
     #=====================================
     #mass_update_usermaster(client_name)
     #
