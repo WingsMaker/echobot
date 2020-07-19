@@ -19,7 +19,7 @@ import pydotplus
 import pickle
 
 from sklearn.ensemble import AdaBoostRegressor
-#from sklearn.externals.six import StringIO  
+from sklearn.externals.six import StringIO  
 from io import StringIO
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.model_selection import cross_val_score
@@ -66,12 +66,18 @@ class MLGrader():
         df = pd.DataFrame({'mcq_avgscore':[mcqscore],'mcq_cnt':[mcqcnt],'as_avgscore':[as_score]})
         return self.model.predict(df)
 
-    def train_model(self, client_name, dumpfile):        
+    def train_model(self, client_name, dumpfile):
+        report = ""
         modelnames = ["LinearRegression", "DecisionTreeRegressor", "AdaBoostRegressor"]
+        #if True:
         try:
-            mcqinfo = rds_df( f"SELECT * FROM mcqas_info WHERE client_name='{client_name}';")
+            cols = ['grade', 'mcq_avgscore', 'mcq_cnt', 'as_avgscore'] 
+            df = rds_df( f"SELECT grade,mcq_avgscore,mcq_cnt,as_avgscore FROM mcqas_info WHERE client_name='{client_name}';")
+            if df is None:
+                return ""
+            df.columns = cols
             features = ['mcq_avgscore', 'mcq_cnt', 'as_avgscore']
-            df = mcqinfo[['grade'] + features ]
+            df = df[cols]
             Xr = df[features]
             yr = df.grade.values
             reg_scores = cross_val_score(LinearRegression(), Xr, yr, cv=4)    
@@ -140,15 +146,18 @@ if __name__ == '__main__':
     with open("vmbot.json") as json_file:  
             bot_info = json.load(json_file)
     client_name = bot_info['client_name']
+    vmsvclib.rds_connstr = ""
+    vmsvclib.rdscon = None
     dt_model = MLGrader()
     print(dt_model)
-    opts = [0,2]
+    client_name = 'Lithan'
+    opts = [0, 2]
     if 0 in opts :
         dt_model.load_model("dt_model.bin")
         print(dt_model.model_name)    
 
     if 1 in opts :
-        txt = dt_model.train_model("mcqinfo.db", "dt_model.bin")
+        txt = dt_model.train_model(client_name, "dt_model.bin")
         print(txt)
     
     if 2 in opts :

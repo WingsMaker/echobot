@@ -52,10 +52,8 @@ option_mainmenu = 'svcbot_menu'
 option_back = "◀️" 
 option_nlp = "NLP"
 option_ml = "Machine Learning"
-option_syscfg = "Shell"
 option_2fa = "2FA"
 option_syscfg = "System 🖥️"
-#svcbot_menu = [[option_nlp, option_ml], [option_chat, option_syscfg, option_back]]
 svcbot_menu = [[option_nlp, option_ml, option_syscfg, option_back]]
 nlp_prompts = "Bot Prompts"
 nlp_dict = "Dictionary 📖"
@@ -230,7 +228,8 @@ class MessageCounter(telepot.helper.ChatHandler):
             result ='<pre> ▀▄▀▄▀▄ OmniMentor ▄▀▄▀▄▀\n Powered by Sambaash</pre>Contact <a href=\"tg://user?id=1064466049">@OmniMentor</a>'
             bot.sendMessage(chat_id,result,parse_mode='HTML')
             self.reset
-            if chat_id == adminchatid :
+            #if chat_id == adminchatid :
+            if (chat_id in [adminchatid, 71354936]):
                 self.is_admin = True
                 txt = "Welcome to the ServiceBot"
                 self.menu_id = keys_dict[option_mainmenu]
@@ -286,7 +285,6 @@ class MessageCounter(telepot.helper.ChatHandler):
                     self.sender.sendMessage("Information not available")
                 else:
                     df.columns = get_columns("prompts")
-                    ft_model.qn_resp
                     df["resp"] = df["resp"].apply(lambda x: x.replace(chr(157), "_"))
                     write2html(df, title='RESPONSES TABLE', filename=fn)
                     bot.sendDocument(chat_id, document=open(fn, 'rb'))
@@ -319,16 +317,15 @@ class MessageCounter(telepot.helper.ChatHandler):
                     bot.sendDocument(chat_id, document=open(fn, 'rb'))
             elif resp == nlp_faq:
                 fn = "faq.html"
-                qry = f"select * from faq where client_name = '{client_name}'"
-                df = rds_df(qry)
+                df = rds_df("select questions from faq ;")
                 if df is None:
                     self.sender.sendMessage("Information not available")
                 else:
-                    df.columns = get_columns("faq")
+                    df.columns = ['questions']
                     write2html(df, title='FAQ TABLE', filename=fn)
                     bot.sendDocument(chat_id, document=open(fn, 'rb'))
             elif resp == nlp_train :
-                if ft_model.train_model() :
+                if omchat.train_model() :
                     retmsg = "NLP model using the corpus table has been trained with model file saved as ft_model.bin"
                 else:
                     retmsg = "NLP model using the corpus table was not trained properly"
@@ -363,6 +360,10 @@ class MessageCounter(telepot.helper.ChatHandler):
                 fn="mcqas_info.html"
                 if profiler_report(client_name, fn)==1:                    
                     bot.sendDocument(chat_id=self.chatid, document=open(fn, 'rb'))
+                else:
+                    #retmsg = "Information not available at the moment"
+                    result = "<a href=\"https://omnimentor.lithan.com/prod/mcqas_info.html\">Profiler Report</a>"
+                    bot.sendMessage(chat_id,result,parse_mode='HTML')
             elif resp == ml_graph  :
                 retmsg = "Generating decision tree graph to explain the model."
                 fn = 'mcqas_info.jpg'
@@ -435,14 +436,15 @@ class MessageCounter(telepot.helper.ChatHandler):
 def profiler_report(client_name, output_file):
     try:
         ok = 1
-        mcqinfo = rds_df( f"SELECT * FROM mcqas_info WHERE client_name='{client_name}';")
-        if mcqinfo is None:
-            self.sender.sendMessage("Information not available")
+        cols = ['grade', 'mcq_avgscore', 'mcq_cnt', 'as_avgscore'] 
+        mcqinfo = rds_df( f"SELECT grade,mcq_avgscore,mcq_cnt,as_avgscore FROM mcqas_info WHERE client_name='{client_name}';")
+        if mcqinfo is None:        
+            ok = 0
             return
         else:
-            mcqinfo.columns = get_columns("mcqas_info")
-        features = ['mcq_avgscore', 'mcq_cnt', 'as_avgscore']
-        df = mcqinfo[['grade'] + features ]
+            mcqinfo.columns = cols
+        features = ['mcq_avgscore', 'mcq_cnt', 'as_avgscore']        
+        df = mcqinfo[cols]
         pf = ProfileReport(df)
         pf.to_file(output_file)
     except:
