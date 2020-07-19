@@ -62,13 +62,13 @@ class MCQ_Diff():
         # Using groupby to display top 10 questions sorted by average attempts in descending order
         # Can change the number of questions displayed by varying bracketed .head() number
         # Can change rounding significant figures by varying bracketed .roud() number
-        resp = df.groupby(['MCQ No. Question No.']).mean().round(2).sort_values(by=['Average Attempts'], ascending=False).reset_index().head(10)
+        df = df.groupby(['MCQ No. Question No.']).mean().round(2).sort_values(by=['Average Attempts'], ascending=False).reset_index().head(10)
 
         # Generating a png image of the table
-        title_name = "MCQ Analysis Difficulty By MCQ Attempts"
-        table = render_table(resp, header_columns=0, col_width=3.5, title_name=title_name)
-        
-        return table
+        #title_name = "MCQ Analysis Difficulty By MCQ Attempts"
+        #table = render_table(df, header_columns=0, col_width=3.5, title_name=title_name)
+        #return table
+        return df
     
     # Takes in database file as input
     def top10score(self):
@@ -87,13 +87,13 @@ class MCQ_Diff():
         # Using groupby to display top 10 questions sorted by average score in ascending order
         # Can change the number of questions displayed by varying bracketed .head() number
         # Can change rounding significant figures by varying bracketed .roud() number        
-        resp = df.groupby(['MCQ No. Question No.']).mean().round(2).sort_values(by=['Average Score %'], ascending=True).reset_index().head(10)
+        df = df.groupby(['MCQ No. Question No.']).mean().round(2).sort_values(by=['Average Score %'], ascending=True).reset_index().head(10)
         
         # Generating a png image of the table
-        title_name = "MCQ Analysis Difficulty By MCQ Scores"
-        table = render_table(resp, header_columns=0, col_width=3.5, title_name=title_name)
-        
-        return table
+        #title_name = "MCQ Analysis Difficulty By MCQ Scores"
+        #table = render_table(df, header_columns=0, col_width=3.5, title_name=title_name)        
+        #return table
+        return df
     
     # Takes in two inputs, mcq number & database file
     def mcq_summary(self, mcq):        
@@ -111,10 +111,10 @@ class MCQ_Diff():
         mcq_df = df[(df['MCQ'] == mcq) & (df['Question'] <= df[(df['MCQ'] == mcq)]['Question'].nunique())].groupby(['Question']).mean().round(2).reset_index().drop('MCQ', axis=1)    
         
         # Generating a png image of the table
-        title_name = f"MCQ Analysis Difficulty By MCQ Average for MCQ Test {mcq}"
-        table = render_table(mcq_df, header_columns=0, col_width=3, title_name=title_name)
-        
-        return table        
+        #title_name = f"MCQ Analysis Difficulty By MCQ Average for MCQ Test {mcq}"
+        #table = render_table(mcq_df, header_columns=0, col_width=3, title_name=title_name)        
+        #return table
+        return mcq_df
 
 # Tested to be working
 if __name__ == '__main__':        

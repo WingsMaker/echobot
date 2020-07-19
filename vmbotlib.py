@@ -79,7 +79,6 @@ option_chatlist = "Chat List"
 option_chatempty = "Chat Empty"
 option_bindadm = "Auto Sign-in 🔐"
 option_usermgmt = "Manage Users 👥"
-#mentor_menu = [[option_fct, option_pb, option_analysis], [option_chat, option_bindadm, option_back]]
 mentor_menu = [[option_fct, option_pb, option_analysis], [option_chat, option_usermgmt, option_back]]
 option_searchbyname = "Name Search"
 option_searchbyemail = "Email Search"
@@ -113,20 +112,26 @@ playbook_menu= [[pb_config, pb_userdata, pb_riskuser, option_back]]
 ps_userdata = "Userdata"
 ps_schedule = "Schedule 📅"
 #ps_stage = "Edit Stage"
-ps_stage = "Module Stage"
-course_menu = [[ps_userdata, ps_schedule, ps_stage, option_back]]
+ps_stage = "Unit Guides"
+ps_mcqzero = "MCQ Pending"
+ps_mcqfailed = "MCQ Failed"
+ps_aszero = "Assignment Pending"
+ps_asfailed = "Assignment Failed"
+#course_menu = [[ps_userdata, ps_schedule, ps_stage, option_back]]
+course_menu = [[ps_userdata, ps_schedule, ps_stage, ps_mcqzero],[ps_mcqfailed, ps_aszero, ps_asfailed, option_back]]
 an_mcq = "MCQ Analysis"
 an_chart = "Graph"
 an_mcqd = "MCQ Diff. Analysis"
 ml_grading = "AI Grading"
 opt_aig = "AI Grad Cohorts"
-analysis_menu = [[ml_grading, an_mcq, an_mcqd, an_chart, option_back]]  
+analysis_menu = [[ml_grading, an_mcq, an_mcqd, an_chart, option_back]]
 an_mcqavg = "By MCQ Average"
 an_avgatt = "By MCQ Attempts"
 an_avgscore = "By MCQ Scores"
 opt_mcqd = "MCQ Diff Cohorts"
 opt_pbusr = "Playbook Cohorts"
 opt_mcqavg = "MCQ Avg Cohorts"
+opt_analysis = "Analysis Cohorts"
 mcqdiff_menu = [[an_avgatt,an_avgscore,an_mcqavg,option_back]]
 
 gen2fa = lambda : (''.join(random.choice( "ABCDEFGHJKLMNPQRTUVWXY0123456789" ) for i in range(32))).upper()
@@ -585,7 +590,8 @@ class BotInstance():
         self.keys_dict[ opt_stage ] = (self.keys_dict[ ps_stage ]*10) + 1
         self.keys_dict[ opt_recupd ] = (self.keys_dict[ fc_recupd ]*10) + 1
         self.keys_dict[ opt_updstage ] = (self.keys_dict[ fc_updstage ]*10) + 1
-        self.keys_dict[ opt_resetstage ] = (self.keys_dict[ fc_resetstage ]*10) + 1        
+        self.keys_dict[ opt_resetstage ] = (self.keys_dict[ fc_resetstage ]*10) + 1
+        self.keys_dict[ opt_analysis ] = (self.keys_dict[ option_analysis ]*10) + 1
         self.keys_dict[ opt_mcqd ] = (self.keys_dict[ an_mcqd ]*10) + 1
         self.keys_dict[ opt_mcqavg ] = (self.keys_dict[ an_mcqavg ]*10) + 1
         self.keys_dict[ opt_aig ] = (self.keys_dict[ ml_grading ]*10) + 1
@@ -722,7 +728,7 @@ class MessageCounter(telepot.helper.ChatHandler):
         return
 
     def logoff(self, txt = "Have a great day!"):
-        global vmbot        
+        global vmbot
         try:
             if self.chatid in [d for d in vmbot.user_list]:
                 vmbot.user_list.pop(self.chatid)
@@ -734,12 +740,12 @@ class MessageCounter(telepot.helper.ChatHandler):
         self.chatid = 0
         self.student_id = 0
         self.reset  
-        self.menu_id = 0
+        self.menu_id = 0        
         return
 
     def on_close(self, exception):
         self.logoff()
-        self.sender.sendMessage('session time out, goodbye.')
+        self.sender.sendMessage('session time out.\nPress /start a few times to awake this bot.')
         return 
 
     def mcqas_chart(self, groupcht = False ):
@@ -803,16 +809,17 @@ class MessageCounter(telepot.helper.ChatHandler):
                 'mcq test' : [ "{:.2%}".format(x) for x in avg_list['mcq_avg'] ],
                 'assignment test' : [ "{:.2%}".format(x) for x in avg_list['as_avg'] ]
             })
-            if render_table(df, header_columns=0, col_width=6, title_name=title) is not None:
-                plt.savefig(fn, dpi=100)
-                plt.clf()
-                f = open(fn, 'rb')
-                self.bot.sendPhoto(self.chatid, f)
+            html_list(self.bot, self.chatid, df, df.columns, [10, 10, 10], title, 15)
+            #if render_table(df, header_columns=0, col_width=6, title_name=title) is not None:
+            #    plt.savefig(fn, dpi=100)
+            #    plt.clf()
+            #    f = open(fn, 'rb')
+            #    self.bot.sendPhoto(self.chatid, f)
         del df
         return 
 
     def session_info(self):
-        global vmbot          
+        global vmbot        
         txt = "Summary:\n"
         if self.is_admin :
             txt += '\nYou are the faculty adm\n\n'
@@ -1020,24 +1027,27 @@ class MessageCounter(telepot.helper.ChatHandler):
     def load_courseinfo(self, resp):
         if len(self.list_courseids)==0:
             return 0
-        query = f"SELECT COUNT(course_id) AS cnt FROM playbooks WHERE course_id='{resp}' and client_name = '{self.client_name}';"
-        result = rds_param(query)
-        cnt = int("0" + str(result))
-        if cnt == 0:
-            self.courseid = ""
-            self.userdata = ""
-            self.coursename = ""
-            ok = 0
-            if resp in self.list_courseids:
-                n = self.list_courseids.index(resp)
-                del (self.list_courseids)[n]
-                del (self.list_coursename)[n]
-        else:
+        #query = f"SELECT COUNT(course_id) AS cnt FROM playbooks WHERE course_id='{resp}' and client_name = '{self.client_name}';"
+        #result = rds_param(query)
+        #cnt = int("0" + str(result))
+        self.courseid = ""
+        self.userdata = ""
+        self.coursename = ""
+        ok = 0
+        #if cnt == 0:            
+        #    if resp in self.list_courseids:
+        #        n = self.list_courseids.index(resp)
+        #        del (self.list_courseids)[n]
+        #        del (self.list_coursename)[n]
+        #else:
+        if resp in self.list_courseids:
             n = self.list_courseids.index(resp)
             self.coursename = self.list_coursename[n]
             self.courseid = resp
             self.load_tables()
             ok = 1
+            del (self.list_courseids)[n]
+            del (self.list_coursename)[n]
         return ok
 
     def check_student(self, sid, chat_id):
@@ -1196,25 +1206,22 @@ class MessageCounter(telepot.helper.ChatHandler):
         df1.columns = ['Student ID#','Name', 'Prediction']
         tt = "AI Grading for " + self.courseid
         df1= df1.sort_values(by ='Prediction') 
-        if render_table(df1, header_columns=0, col_width=3, title_name=tt) is not None:
-            fn='gradpred_' + str(self.chatid) + '.png'
-            plt.savefig(fn, dpi=100)
-            plt.clf()
-            f = open(fn, 'rb')
-            self.bot.sendPhoto(self.chatid, f)
+        html_list(self.bot, self.chatid, df1, df1.columns, [10, 15, 10], tt, 8)
         return new_sidlist
 
     def find_course(self, stud):
         client_name =  self.client_name        
         course_id_list = []
         course_name_list = []
+        date_today = datetime.datetime.now().date()
+        yrnow = str(date_today.strftime('%Y'))        
         if client_name == "":
             return (course_id_list, course_name_list)
         if stud==0:
             #qry = f"SELECT DISTINCT course_id, course_name FROM playbooks WHERE client_name='{self.client_name}';"
             qry = f"SELECT DISTINCT a.course_id, a.course_name FROM playbooks a "
             qry += f"INNER JOIN course_module c ON a.client_name=c.client_name AND a.module_code=c.module_code "
-            qry += f"WHERE c.enabled=1 AND a.client_name='{self.client_name}' ORDER BY a.course_id;"
+            qry += f"WHERE c.enabled=1 AND a.client_name='{self.client_name}' and SUBSTRING(course_id,-4)='{yrnow}' ORDER BY a.course_id;"
             df = rds_df(qry)
             if df is not None:            
                 df.columns = ['course_id','course_name']
@@ -1320,12 +1327,13 @@ class MessageCounter(telepot.helper.ChatHandler):
             syslog("system","telegram user " + str(chat_id) + " offine.")
             self.logoff()
         
-        elif resp=='/stop' and (chat_id in [adminchatid, 71354936]):
-        #elif resp=='/stop' and (chat_id == adminchatid):
+        elif resp=='/stop' and (chat_id in [adminchatid, 71354936]):        
             vmbot.broadcast('System shutting down.')
             vmbot.bot_running = False
-            txt = 'System already shutdown.'
-            self.sender.sendMessage(txt)
+            #txt = 'System already shutdown.'
+            #self.sender.sendMessage(txt)
+            result ='<pre> ▀▄▀▄▀▄ OmniMentor ▄▀▄▀▄▀\n Powered by Sambaash</pre>Contact <a href=\"tg://user?id=1064466049">@OmniMentor</a>'
+            bot.sendMessage(chat_id,result,parse_mode='HTML')
             syslog('system',txt)
                 
         elif resp == '/start' or resp == '/hellobot' or resp == btn_hellobot:
@@ -1355,8 +1363,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                     usertype = df.usertype.values[0]
                     courseid = df.courseid.values[0]
                     binded =  df.binded.values[0]
-                if (binded==1) and (sid > 0) and (courseid != ""):  # binded users found
-                    self.sender.sendMessage(f"Welcome {self.username} !")
+                if (binded==1) and (sid > 0) and (courseid != ""):                    
                     if usertype == 1:
                         (self.list_courseids, self.list_coursename) = self.find_course(sid)
                         if courseid=="":
@@ -1418,9 +1425,13 @@ class MessageCounter(telepot.helper.ChatHandler):
             elif resp == option_chat :
                 self.livechat()
             elif resp == option_analysis :
-                txt = 'You are in Analysis options.'
-                bot_prompt(self.bot, self.chatid, txt, analysis_menu)
-                self.menu_id = keys_dict[option_analysis]
+                #txt = 'You are in Analysis options.'
+                #bot_prompt(self.bot, self.chatid, txt, analysis_menu)
+                #self.menu_id = keys_dict[option_analysis]
+                txt = "Let's take a look on the following courses."
+                courseid_menu = build_menu([x for x in self.list_courseids],1)
+                bot_prompt(self.bot, self.chatid, txt, courseid_menu)
+                self.menu_id = keys_dict[opt_analysis]
             elif resp == option_bindadm:
                 txt += "\nDo you want me to activate auto-login without entering admin id each time ?"
                 opt_yes = "Yes, enable auto-login"
@@ -1474,8 +1485,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                 usertype = rds_param(f"SELECT usertype FROM user_master WHERE studentid={resp} and client_name ='{self.client_name}';")
                 query = "select username from user_master where studentid =" + resp + \
                     " and client_name = '" + self.client_name + "';"
-                self.username = rds_param(query)                
-                self.sender.sendMessage(f"Welcome {self.username} !")
+                self.username = rds_param(query)
                 if usertype == 11:
                     self.is_admin = True
                     self.menu_id = 1
@@ -1531,7 +1541,6 @@ class MessageCounter(telepot.helper.ChatHandler):
                     txt += 'Please select the course from below list'
                     date_today = datetime.datetime.now().date()
                     yrnow = str(date_today.strftime('%Y'))
-                    #course_list = [x for x in self.list_courseids if x[-4:]==yrnow and resptxt in x.lower()]
                     course_list = [x for x in self.list_courseids if resptxt in x.lower()]
                     btn_course_list  = build_menu(course_list, 1)
                     bot_prompt(self.bot, self.chatid,  txt, btn_course_list )
@@ -1690,12 +1699,10 @@ class MessageCounter(telepot.helper.ChatHandler):
             tid = str(self.chatid)
             clt = self.client_name
             if "yes," in resptxt:
-                #updqry = f"update user_master set chat_id = {str(self.chatid)}, courseid = '{self.courseid}' where client_name = '{self.client_name}' and studentid={str(self.student_id)};"                
                 updqry = f"update user_master set binded=1, chat_id={tid}, courseid='{cid}' where client_name = '{clt}' and studentid={sid};"
                 rds_update(updqry)
                 txt = "Auto-Login option enabled"
             elif "no," in resptxt:
-                #updqry = f"update user_master set chat_id = 0 where client_name = '{self.client_name}' and studentid={str(self.student_id)};"
                 updqry = f"update user_master set binded=0 where client_name = '{clt}' and studentid={sid};"
                 rds_update(updqry)
                 txt = "Auto-Login option disabled"
@@ -1767,7 +1774,6 @@ class MessageCounter(telepot.helper.ChatHandler):
                 else:
                     df.columns = get_columns('userdata')
                     self.userdata = df
-                #query = "select studentid,username,amt,grade,stage,f2f from userdata " + condqry
                 query = "select studentid,username,amt,grade,stage from userdata " + condqry
                 df = rds_df( query)
                 if df is None:
@@ -1775,15 +1781,9 @@ class MessageCounter(telepot.helper.ChatHandler):
                     self.sender.sendMessage(retmsg)
                     returnclea
                 else:
-                    #df.columns = "studentid,username,amt,grade,stage,f2f".split(",")
                     df.columns = "studentid,username,amt,grade,stage".split(",")
-                title_name = "List of learners from " + cohort_id                
-                if render_table(df, header_columns=0, col_width=3, title_name=title_name) is not None:
-                    fn='userdata' + str(self.chatid) + '.png'
-                    plt.savefig(fn, dpi=100)
-                    plt.clf()
-                    f = open(fn, 'rb')
-                    self.bot.sendPhoto(self.chatid, f)
+                title_name = "List of learners from " + cohort_id   
+                html_list(self.bot, chat_id, df, df.columns, [10,20,8,5,10], title_name,8)
                 txt = "Select the following:"
                 bot_prompt(self.bot, self.chatid, txt, faculty_submenu)
                 self.menu_id = keys_dict[fc_studentsub]
@@ -1872,7 +1872,6 @@ class MessageCounter(telepot.helper.ChatHandler):
                 bot_prompt(self.bot, self.chatid, txt, faculty_submenu)
                 self.menu_id = keys_dict[fc_studentsub]
             else:                
-                #df = self.stagetable 
                 query = f"select name from stages where client_name = '{self.client_name}' and courseid = '{self.courseid}';"
                 df = rds_df(query)
                 if df is None:
@@ -1945,9 +1944,11 @@ class MessageCounter(telepot.helper.ChatHandler):
                 course_list = []
                 course_list = vmedxlib.search_course_list(result)
                 df = pd.DataFrame(course_list, columns=['course_id'])
-                fn = "course_list.html"
-                write2html(df, title='COURSE LIST', filename=fn)
-                bot.sendDocument(chat_id, document=open(fn, 'rb'))
+                if df is None:
+                    retmsg = "There is no information found at the moment"
+                else:                    
+                    title_name = "Searched course-id results"
+                    html_list(self.bot, chat_id, df, df.columns, [30], title_name, 15)                
                 txt = "You are now at faculty menu"
                 bot_prompt(self.bot, self.chatid, txt, faculty_menu)
                 self.menu_id = keys_dict[option_fct]
@@ -1989,29 +1990,11 @@ class MessageCounter(telepot.helper.ChatHandler):
                 self.menu_id = 1
 
         elif self.menu_id == keys_dict[pb_userdata]:
-            if self.load_courseinfo(resp) == 1:
+            if self.load_courseinfo(resp) == 1:                
                 self.courseid = resp
-                cohort_id = piece(piece(resp,':',1),'+',1)
-                self.courseid = resp
-                #query = "select studentid,username,amt,grade,stage,f2f from userdata"
-                query = "select studentid,username,amt,grade,stage from userdata"
-                query += " where client_name = '" + self.client_name + "' and courseid = '" + resp + "';"
-                df = rds_df( query)
-                if df is None:
-                    retmsg = "There is information for this course at the moment"
-                else:
-                    #df.columns = "studentid,username,amt,grade,stage,f2f".split(",")
-                    df.columns = "studentid,username,amt,grade,stage".split(",")
-                    title_name = "List of learners from " + cohort_id
-                    if render_table(df, header_columns=0, col_width=3, title_name=title_name) is not None:
-                        fn='userdata' + str(self.chatid) + '.png'
-                        plt.savefig(fn, dpi=100)
-                        plt.clf()
-                        f = open(fn, 'rb')
-                        self.bot.sendPhoto(self.chatid, f)
-                    txt = "Which tables are you looking at for :\n" + resp + " ?"
-                    bot_prompt(self.bot, self.chatid, txt, course_menu)                
-                    self.menu_id = keys_dict[opt_pbusr]
+                txt = "You are looking at :\n" + resp
+                bot_prompt(self.bot, self.chatid, txt, course_menu)                
+                self.menu_id = keys_dict[opt_pbusr]
             elif (resp == option_back) or (resp == "0"):
                 txt = 'You are in playbook maintainence mode.'
                 bot_prompt(self.bot, self.chatid, txt, playbook_menu)
@@ -2019,28 +2002,84 @@ class MessageCounter(telepot.helper.ChatHandler):
 
         elif self.menu_id == keys_dict[opt_pbusr]:
             if resp == ps_userdata :
-                fn = "userdata.html"
-                write2html(self.userdata, title='LEARNERS INFO', filename=fn)
-                bot.sendDocument(chat_id, document=open(fn, 'rb'))
+                query = "SELECT a.studentid, a.username, b.email, a.amt, a.stage FROM userdata a "
+                query += "INNER JOIN user_master b ON a.client_name=b.client_name "
+                query += f"AND a.studentid=b.studentid WHERE a.client_name = '{self.client_name}' "
+                query += f"AND a.courseid='{self.courseid}' ORDER BY a.studentid;"                
+                df = rds_df( query)
+                if df is None:
+                    retmsg = "There is no information for this course at the moment"
+                else:
+                    df.columns = ['studentid','username','email','amt','stage']
+                    title_name = "List of learners from " + self.courseid
+                    html_list(self.bot, chat_id, df,df.columns, [10,20,28,8,8], title_name,8)
             elif resp == ps_schedule :
-                fn = "schedule.html"
                 if self.stagetable is None:
                     retmsg = "The schedule information is not available"
                 else:
-                    write2html(self.stagetable, title='COURSE SCHEDULE', filename=fn)
-                    bot.sendDocument(chat_id, document=open(fn, 'rb'))
-            elif resp == ps_stage  :
-                fn = "stages_master.html"
-                #query = f"select module_code,id,stage,name as stagename,days,f2f,mcq,assignment,flipclass,IU from stages_master where client_name = '{self.client_name}';"
-                query = f"select * from stages_master where client_name = '{self.client_name}';"
-                df = rds_df(query)
-                if df is None:
-                    retmsg = "The module stage information is not available"
+                    title_name = "Course Schedule for " + self.courseid
+                    cols = ['id', 'stage', 'name', 'startdate', 'stagedate', 'IU']
+                    df = self.stagetable[cols]
+                    html_list(self.bot, chat_id, df, cols, [5,5,10,10,10,40], title_name,8)
+            elif resp == ps_stage:
+                if self.stagetable is None:
+                    retmsg = "The unit guides information is not available"
                 else:
-                    #df.columns = "module_code,id,stage,stagename,days,f2f,mcq,assignment,flipclass,IU".split(",")
-                    df.columns = get_columns("stages")
-                    write2html(df, title='Module Stage Information', filename=fn)
-                bot.sendDocument(chat_id, document=open(fn, 'rb'))
+                    title_name = "Unit guides for " + self.courseid
+                    cols = ['id', 'stage', 'name', 'mcq', 'assignment']
+                    df = self.stagetable[cols]
+                    if len(df)==0:
+                        retmsg = "The unit guides information is not available"
+                    else:
+                        html_list(self.bot, chat_id, df, cols, [5,5,10,30,30], title_name,8)
+            elif resp == ps_mcqzero:
+                if self.userdata is None:
+                    retmsg = "Learners information is not available"
+                else:
+                    title_name = "Learners with MCQ test pending for " + self.courseid
+                    cols = ['studentid', 'username', 'stage', 'mcq_zero']
+                    df = self.userdata[cols]
+                    df = df[df.mcq_zero!='[]']
+                    if len(df)==0:
+                        retmsg = "no one missed the mcq test so far"
+                    else:
+                        html_list(self.bot, chat_id, df, cols, [10, 15, 10, 40], title_name,8)
+            elif resp == ps_mcqfailed:
+                if self.userdata is None:
+                    retmsg = "Learners information is not available"
+                else:
+                    title_name = "Learners with MCQ test failed for " + self.courseid
+                    cols = ['studentid', 'username', 'stage', 'mcq_failed']
+                    df = self.userdata[cols]
+                    df = df[df.mcq_failed!='[]']
+                    if len(df)==0:
+                        retmsg = "no one failed the mcq test so far"
+                    else:
+                        html_list(self.bot, chat_id, df, cols,  [10, 15, 10, 40], title_name,8)
+            elif resp == ps_aszero:
+                if self.userdata is None:
+                    retmsg = "Learners information is not available"
+                else:
+                    title_name = "Learners with Assignment test pending for " + self.courseid
+                    cols = ['studentid', 'username', 'stage', 'as_zero']
+                    df = self.userdata[cols]
+                    df = df[df.as_zero!='[]']
+                    if len(df)==0:
+                        retmsg = "no one missed the assignment test so far"
+                    else:
+                        html_list(self.bot, chat_id, df, cols,  [10, 15, 10, 40], title_name,8)
+            elif resp == ps_asfailed:
+                if self.userdata is None:
+                    retmsg = "Learners information is not available"
+                else:
+                    title_name = "Learners with Assignment test failed for " + self.courseid
+                    cols = ['studentid', 'username', 'stage', 'as_failed']
+                    df = self.userdata[cols]
+                    df = df[df.as_failed!='[]']
+                    if len(df)==0:
+                        retmsg = "no one failed the assignment test so far"
+                    else:
+                        html_list(self.bot, chat_id, df, cols, [10, 15, 10, 40], title_name,8)
             elif (resp == option_back) or (resp == "0"):
                 txt = 'You are in playbooks maintainence mode.'
                 bot_prompt(self.bot, self.chatid, txt, playbook_menu)
@@ -2051,38 +2090,48 @@ class MessageCounter(telepot.helper.ChatHandler):
             bot_prompt(self.bot, self.chatid, txt, course_menu)
             self.menu_id = keys_dict[opt_pbusr]
 
+        elif self.menu_id == keys_dict[opt_analysis]:
+            if (resp == option_back) or (resp == "0"):
+                txt = 'Please select the following mode:'
+                bot_prompt(self.bot, self.chatid, txt, self.menu_home)
+                self.menu_id = 1
+            elif self.load_courseinfo(resp) == 1:
+                self.courseid = resp
+                txt = 'Please select the following mode:'
+                bot_prompt(self.bot, self.chatid, txt, analysis_menu)
+                self.menu_id = keys_dict[option_analysis]
+            else:  
+                newlist = [[x] for x in self.list_courseids if resptxt in x.lower()]
+                if len(newlist)==0:
+                    txt = 'Please select the following mode:'
+                    bot_prompt(self.bot, self.chatid, txt, self.menu_home)
+                    self.menu_id = 1
+                else:
+                    txt = "Please select from the list of course id below:"
+                    btn_list = build_menu([x for x in self.list_courseids if resptxt in x.lower()],1)
+                    bot_prompt(self.bot, self.chatid, txt,btn_list)
+                    return
+
         elif self.menu_id == keys_dict[option_analysis]:
             if (resp == option_back) or (resp == "0"):
                 txt = 'Please select the following mode:'
                 bot_prompt(self.bot, self.chatid, txt, self.menu_home)
                 self.menu_id = 1
-            elif resp in [ an_mcqd , an_chart , an_mcq , ml_grading]:
-                idx = [ an_mcqd , an_chart , an_mcq , ml_grading ].index(resp)
-                txt = "Let's take a look on the following courses."
-                courseid_menu = build_menu([x for x in self.list_courseids],1)
-                bot_prompt(self.bot, self.chatid, txt, courseid_menu)
-                self.menu_id = keys_dict[[ an_mcqd , an_chart , an_mcq , ml_grading ][idx]]
-
-        elif self.menu_id == keys_dict[an_mcqd]:
-            if (resp == option_back) or (resp == "0"):
-                txt = 'Please select the following mode:'
-                bot_prompt(self.bot, self.chatid, txt, analysis_menu)
-                self.menu_id = keys_dict[option_analysis]
-            elif self.load_courseinfo(resp) == 1:                
-                self.menu_id = keys_dict[opt_mcqd]
+            elif resp == ml_grading:
+                sid_list = self.grad_prediction()
+                btn_list = build_menu( sid_list, 6, option_back, [])
+                self.records['progress_sid'] = sid_list
+                txt = "Select the student id to see the progress :"
+                bot_prompt(self.bot, self.chatid, txt, btn_list)
+                self.menu_id = keys_dict[opt_aig]
+            elif resp == an_mcq:
+                analyze_cohort(self.client_name, self.courseid, self.bot, self.chatid)
+            elif resp == an_mcqd:
                 txt = "MCQ Difficulty Analysis by:"
                 bot_prompt(self.bot, self.chatid, txt, mcqdiff_menu)
-            else:  
-                newlist = [[x] for x in self.list_courseids if resptxt in x.lower()]
-                if len(newlist)>0:
-                    txt = "Please select from the list of course id below:"
-                    btn_list = build_menu([x for x in self.list_courseids if resptxt in x.lower()],1)
-                    bot_prompt(self.bot, self.chatid, txt,btn_list)
-                    return
-                else:
-                    txt = 'Please select the following mode:'
-                    bot_prompt(self.bot, self.chatid, txt, analysis_menu)
-                    self.menu_id = keys_dict[option_analysis]
+                self.menu_id = keys_dict[opt_mcqd]
+            elif resp == an_chart:
+                self.mcqas_chart(True)
 
         elif self.menu_id == keys_dict[opt_mcqd]:
             if (resp == option_back) or (resp == "0"):
@@ -2091,26 +2140,20 @@ class MessageCounter(telepot.helper.ChatHandler):
                 self.menu_id = keys_dict[option_analysis]
             elif resp == an_avgatt:            
                 mcq_analysis.load_mcqdata(self.client_name, self.courseid)
-                if mcq_analysis.top10attempts() is None:
+                df = mcq_analysis.top10attempts()
+                if df is None:
                     retmsg = 'There is no data for this course.'                    
                 else:
-                    plt.draw()
-                    fn = "attempts_" + str(chat_id) +".png"
-                    plt.savefig(fn, dpi=100)
-                    plt.clf()
-                    f = open(fn, 'rb')
-                    self.bot.sendPhoto(chat_id, f)
+                    tt = "MCQ Analysis Difficulty By MCQ Attempts"
+                    html_list(self.bot, chat_id, df, df.columns, [25,8,8,8], tt, 10)
             elif resp == an_avgscore:
                 mcq_analysis.load_mcqdata(self.client_name, self.courseid)
-                if mcq_analysis.top10score() is None:
+                df = mcq_analysis.top10score()
+                if df is None:
                     retmsg = 'There is no data for this course.'
                 else:
-                    plt.draw()
-                    fn = "score_" + str(chat_id) +".png"
-                    plt.savefig(fn, dpi=100)
-                    plt.clf()
-                    f = open(fn, 'rb')
-                    self.bot.sendPhoto(chat_id, f)
+                    tt = "MCQ Analysis Difficulty By MCQ Scores"
+                    html_list(self.bot, chat_id, df, df.columns, [25,8,8,8,8], tt, 10)
             elif resp == an_mcqavg:
                 df = self.userdata
                 client_name = list(df['client_name'])[0]
@@ -2132,105 +2175,23 @@ class MessageCounter(telepot.helper.ChatHandler):
         elif self.menu_id == keys_dict[opt_mcqavg]:            
             if resp.isnumeric() :
                 mcq_analysis.load_mcqdata(self.client_name, self.courseid)
-                if mcq_analysis.mcq_summary(int(resp)) is None:                
+                df = mcq_analysis.mcq_summary(int(resp))
+                if df is None:                
                     retmsg = 'There is no data for this course.'
                 else:
-                    plt.draw()
-                    fn = "attempts_" + str(chat_id) +".png"
-                    plt.savefig(fn, dpi=100)
-                    plt.clf()
-                    f = open(fn, 'rb')
-                    self.bot.sendPhoto(chat_id, f)
+                    tt = f"MCQ Analysis Difficulty By MCQ Average for MCQ Test {resp}"
+                    html_list(self.bot, chat_id, df, df.columns, [10, 10, 10], tt, 20)
             elif (resp == option_back) or (resp == "0"):
                 self.menu_id = keys_dict[opt_mcqd]
                 txt = "MCQ Difficulty Analysis by:"
                 bot_prompt(self.bot, self.chatid, txt, mcqdiff_menu)
 
-        elif self.menu_id == keys_dict[an_chart]:
-            if self.load_courseinfo(resp) == 1:
-                self.mcqas_chart(True)
-                txt = 'Please select the following mode:'
-                bot_prompt(self.bot, self.chatid, txt, analysis_menu)
-                self.menu_id = keys_dict[option_analysis]
-            elif (resp == option_back) or (resp == "0"):
-                txt = 'Please select the following mode:'
-                bot_prompt(self.bot, self.chatid, txt, analysis_menu)
-                self.menu_id = keys_dict[option_analysis]
-            else:  
-                newlist = [[x] for x in self.list_courseids if resptxt in x.lower()]
-                if len(newlist)>0:
-                    txt = "select the course id below:"
-                    btn_list = build_menu([x for x in self.list_courseids if resptxt in x.lower()],1)
-                    bot_prompt(self.bot, self.chatid, txt,btn_list)
-                    return
-                else:
-                    txt = 'Please select the following mode:'
-                    bot_prompt(self.bot, self.chatid, txt, analysis_menu)
-                    self.menu_id = keys_dict[option_analysis]
-
-        elif self.menu_id == keys_dict[an_mcq]:
-            txt = ""
-            if self.load_courseinfo(resp) == 1:                
-                if analyze_cohort(self.client_name, resp) is not None:                    
-                    fn='analyze_cohort_' + str(self.chatid) + '.png'
-                    plt.savefig(fn, dpi=100)
-                    plt.clf()
-                    f = open(fn, 'rb')
-                    self.bot.sendPhoto(self.chatid, f)
-            elif (resp == option_back) or (resp == "0"):
-                txt = 'You are back to the analysis menu:'
-                bot_prompt(self.bot, self.chatid, txt, analysis_menu)
-                self.menu_id = keys_dict[option_analysis]
-            else:
-                newlist = [[x] for x in self.list_courseids if resptxt in x.lower()]
-                if len(newlist)>0:
-                    txt = "select the course id below:"                    
-                    btn_list = build_menu([x for x in self.list_courseids if resptxt in x.lower()],1)
-                    bot_prompt(self.bot, self.chatid, txt, btn_list)
-                    return
-            txt = 'You are back to the analysis menu:' if txt=="" else txt
-            bot_prompt(self.bot, self.chatid, txt, analysis_menu)
-            self.menu_id = keys_dict[option_analysis]
-
-        elif self.menu_id == keys_dict[ml_grading]:
-            txt = ""
-            if self.load_courseinfo(resp) == 1:
-                self.courseid = resp                
-                sid_list = self.grad_prediction()
-                btn_list = build_menu( sid_list, 4, option_back, [])
-                self.records['progress_sid'] = sid_list
-                txt = "Select the student id to see the progress :"
-                bot_prompt(self.bot, self.chatid, txt, btn_list)
-                self.menu_id = keys_dict[opt_aig]
-                return
-            elif (resp == option_back) or (resp == "0"):
-                txt = 'Select your option:'
-                bot_prompt(self.bot, self.chatid, txt, analysis_menu)
-                self.menu_id = keys_dict[option_analysis]
-                return
-            else:
-                newlist = [[x] for x in self.list_courseids if resptxt in x.lower()]                
-                if len(newlist)>0:
-                    txt = "select the course id below:"
-                    btn_list = build_menu([x for x in self.list_courseids if resptxt in x.lower()],1)
-                    bot_prompt(self.bot, self.chatid, txt,btn_list)
-                    return
-            txt = txt = 'Select your option:' if txt=="" else txt
-            bot_prompt(self.bot, self.chatid, txt, analysis_menu)
-            self.menu_id = keys_dict[option_analysis]
-
-        elif self.menu_id == keys_dict[opt_aig]:            
+        elif self.menu_id == keys_dict[opt_aig]:
             if resp.isnumeric() :
                 sid = int(resp)
                 df = self.records['progress_df'][sid]
                 tt = self.records['progress_tt'][sid]
-                tbl=render_table(df, header_columns=0, col_width=3, title_name=tt)
-                if tbl is not None:
-                    fn='test_result_' + resp + '.png'
-                    plt.savefig(fn, dpi=100)
-                    plt.clf()
-                    f = open(fn, 'rb')
-                    self.bot.sendPhoto(self.chatid, f)
+                html_list(self.bot, chat_id, df, df.columns, [10,10,10,10,10], tt, 10)
             elif (resp == option_back) or (resp == "0"):
                 txt = 'Select your option:'
                 bot_prompt(self.bot, self.chatid, txt, analysis_menu)
@@ -2256,68 +2217,27 @@ class MessageCounter(telepot.helper.ChatHandler):
                 bot_prompt(self.bot, self.chatid, txt, [[option_back]])
                 self.menu_id = keys_dict[option_resetuser]                
 
-        elif self.menu_id ==  keys_dict[option_searchbyname]:            
+        elif self.menu_id in [keys_dict[option_searchbyname],keys_dict[option_searchbyemail]] :
             if (resp == option_back) or (resp == "0"):
                 txt = "You are back to the user management menu."
                 bot_prompt(self.bot, self.chatid, txt, users_menu)
                 self.menu_id = keys_dict[option_usermgmt]
                 return
-            query = f"select * from user_master where client_name = '{self.client_name}' and lower(username) like '%{resptxt}%' ;"
+            idx = [keys_dict[option_searchbyname],keys_dict[option_searchbyemail]].index(self.menu_id)
+            if idx==0:
+                query = f"select studentid,username,email from user_master where client_name = '{self.client_name}' and lower(username) like '%{resptxt}%' ;"
+                result = "Name search matching " + resp + "\n"
+            if idx==1:
+                query = f"select studentid,username,email from user_master where client_name = '{self.client_name}' and lower(email) like '%{resptxt}%' ;"
+                result = "Email search matching " + resp + "\n"
             df = rds_df(query)
             if df is None:
                 self.sender.sendMessage("Sorry, no results found.")
                 return
-            df.columns = get_columns("user_master")
-            sid_list = [x for x in df.studentid]
-            name_list = [x for x in df.username]
-            email_list = [x for x in df.email]
-            df = pd.DataFrame({
-                'StudentID' : sid_list,   
-                'Username' : name_list,
-                'Email' : email_list
-            })
-            title = "Name search matching " + resp
-            fn = "userbyname.png"
-            if len(sid_list)>20:
-                df = df[:20]
-                self.sender.sendMessage("This list is too long, we only shows top 20.")
-            if render_table(df, header_columns=0, col_width=6, title_name=title) is not None:
-                plt.savefig(fn, dpi=100)
-                plt.clf()
-                f = open(fn, 'rb')
-                self.bot.sendPhoto(self.chatid, f)
-
-        elif self.menu_id ==  keys_dict[option_searchbyemail]:            
-            if (resp == option_back) or (resp == "0"):
-                txt = "You are back to the user management menu."
-                bot_prompt(self.bot, self.chatid, txt, users_menu)
-                self.menu_id = keys_dict[option_usermgmt]
-                return
-            query = f"select * from user_master where client_name = '{self.client_name}' and lower(email) like '%{resptxt}%' ;"
-            df = rds_df(query)
-            if df is None:
-                self.sender.sendMessage("Sorry, no results found.")
-                return
-            df.columns = get_columns("user_master")
-            sid_list = [x for x in df.studentid]
-            name_list = [x for x in df.username]
-            email_list = [x for x in df.email]
-            df = pd.DataFrame({
-                'StudentID' : sid_list,   
-                'Username' : name_list,
-                'Email' : email_list
-            })
-            title = "Name search matching " + resp
-            fn = "userbyname.png"
-            if len(sid_list)>20:
-                df = df[:20]
-                self.sender.sendMessage("This list is too long, we only shows top 20.")
-            if render_table(df, header_columns=0, col_width=6, title_name=title) is not None:
-                plt.savefig(fn, dpi=100)
-                plt.clf()
-                f = open(fn, 'rb')
-                self.bot.sendPhoto(self.chatid, f)
-
+            df.columns = ['studentid','username','email']
+            html_list(self.bot, chat_id, df, df.columns, [10,30,40], result, 20)
+            return
+            
         elif self.menu_id ==  keys_dict[option_resetuser]:            
             if (resp == option_back) or (resp == "0"):
                 txt = "You are back to the user management menu."
@@ -2341,7 +2261,6 @@ class MessageCounter(telepot.helper.ChatHandler):
                     retmsg = "Unable to find the matchnig record. Please try again."
                 else:
                     df.columns = get_columns("user_master")
-                    #sid = [x for x in df.studentid][0]
                     rec = df.iloc[0]
                     sid = rec['studentid']
                     self.student_id = sid
@@ -2920,15 +2839,16 @@ def mcq_avg_dict(client_name, course_id, xvar, rsum, avgmode = True):
             rdict = dict(zip( list1 , list2))    
     return rdict
 
-def analyze_cohort(client_name, course_id):
-    global dt_model
+def analyze_cohort(client_name, course_id, bot, chat_id):
+    global vmbot, dt_model
     try:
         x = dt_model.score
     except:
         dt_model = vmaiglib.MLGrader()
         dt_model.load_model("dt_model.bin")
     itemlist = lambda x,y : "\n".join([ ",".join(x[n*y:][:y]) for n in range(int((len(x)+y-1)/y))])
-    result_table = [ [' ' for m in range(4)] for n in range(18) ]
+    result_table = [ [' ' for m in range(4)] for n in range(13) ]
+    summary_table = [ [' ' for m in range(2)] for n in range(9) ]
     avgsum_list = vmedxlib.count_avg_cols(client_name, course_id, 13, "mcq_avg")
     rr = [ 1 if r>0 else 0 for r in avgsum_list ]
     rsum = sum(rr)
@@ -2941,25 +2861,18 @@ def analyze_cohort(client_name, course_id):
                 idx+=1
         rdict = mcq_avg_dict(client_name, course_id, "mcq_avg", rsum, True)
         xdict = mcq_avg_dict(client_name, course_id, "mcq_attempts", rsum, True)
-        ydict = mcq_avg_dict(client_name, course_id, "mcq_attempts", rsum, False)
-        result_table[idx][0] = "Avg MCQ Score"
-        result_table[idx][1] = "Student #"
-        idx += 1
-        result_table[idx][0] = ">= 70%"
-        rlist = [str(r) for r in rdict if rdict[r] >= 0.7]
-        result_table[idx][1] = itemlist(rlist,7)
-        idx += 1
-        result_table[idx][0] = "between 30% & 70%"
-        rlist = [ str(r) for r in rdict if rdict[r] > 0.3 and rdict[r] < 0.7 ]
-        result_table[idx][1] = itemlist(rlist,7)
-        idx += 1
-        result_table[idx][0] = "below 30%"
-        rlist = [ str(r) for r in rdict if rdict[r] <= 0.3 ]
-        result_table[idx][1] = itemlist(rlist,7)
-        idx += 1
-        result_table[idx][0] = "Avg Attempts >= 2"
-        rlist = [ str(r) for r in xdict if xdict[r] >= 2 ]
-        result_table[idx][1] = itemlist(rlist,7)
+        summary_table[0][0] = "Avg MCQ"
+        summary_table[0][1] = "Student #"
+        summary_table[1][0] = ">= 70%"
+        summary_table[1][1] = ','.join([str(r) for r in rdict if rdict[r] >= 0.7])
+        summary_table[2][0] = "30% to 70%"        
+        summary_table[2][1] = ','.join([str(r) for r in rdict if rdict[r] > 0.3 and rdict[r] < 0.7])
+        summary_table[3][0] = "below 30%"
+        summary_table[3][1] = ','.join([ str(r) for r in rdict if rdict[r] <= 0.3 ])
+        summary_table[4][0] = "#Att >= 2"
+        summary_table[4][1] = ','.join([ str(r) for r in xdict if xdict[r] >= 2 ])
+        if summary_table[4][1]=='':
+            summary_table[4][1] = 'None'
 
     avgsum_list = vmedxlib.count_avg_cols(client_name, course_id, 13, "as_avg")
     rr = [ 1 if r>0 else 0 for r in avgsum_list ]
@@ -2973,30 +2886,25 @@ def analyze_cohort(client_name, course_id):
                 idx+=1
         rdict = mcq_avg_dict(client_name, course_id, "as_avg", rsum, True)
         xdict = mcq_avg_dict(client_name, course_id, "as_attempts", rsum, True)
-        ydict = mcq_avg_dict(client_name, course_id, "as_attempts", rsum, False)
-        result_table[idx][2] = "Avg Assignment Score"
-        result_table[idx][3] = "Student #"
-        idx += 1
-        result_table[idx][2] = ">= 70%"
-        rlist = [str(r) for r in rdict if rdict[r] >= 0.7]
-        result_table[idx][3] = itemlist(rlist,7)
-        idx += 1
-        result_table[idx][2] = "between 30% & 70%"
-        rlist = [ str(r) for r in rdict if rdict[r] > 0.3 and rdict[r] < 0.7 ]
-        result_table[idx][3] = itemlist(rlist,7)
-        idx += 1
-        result_table[idx][2] = "below 30%"
-        rlist = [ str(r) for r in rdict if rdict[r] <= 0.3 ]
-        result_table[idx][3] = itemlist(rlist,7)
-        idx += 1
-        result_table[idx][2] = "Avg Attempts >= 2"
-        rlist = [ str(r) for r in xdict if xdict[r] >= 2 ]
-        result_table[idx][3] = itemlist(rlist,7)
+        summary_table[5][0] = "Assignment"
+        summary_table[5][1] = "Student #"
+        summary_table[6][0] = ">= 70%"
+        summary_table[6][1] = ','.join([str(r) for r in rdict if rdict[r] >= 0.7])
+        summary_table[7][0] = "30% to 70%"
+        summary_table[7][1] = ','.join([ str(r) for r in rdict if rdict[r] > 0.3 and rdict[r] < 0.7 ])
+        summary_table[8][0] = "below 30%"
+        summary_table[8][1] = ','.join([ str(r) for r in rdict if rdict[r] <= 0.3 ])
     df =  pd.DataFrame( result_table )
     df.columns = ['MCQ Test #', 'Average Score' , 'Assignment Test #', 'Average Score']
-    tt = "Assignment & MCQ Summary for " + course_id
-    tbl = render_table(df, header_columns=0, col_width=6, title_name=tt) 
-    return tbl
+    if len(df)==0:
+        bot.sendMessage(chat_id, "There is no information available at the moment.")
+        return
+    tt = "Assignment & MCQ Score Summary for " + course_id
+    html_list(bot, chat_id, df, df.columns, [5,10,5,10], tt, 15)
+    df =  pd.DataFrame( summary_table )
+    df.columns = ['Grouping', "Student #"]
+    html_list(bot, chat_id, df, df.columns, [10,120], tt, 10) # course-v1:Lithan+FOS-0620A+17Jun2020
+    return
 
 def checkjoblist(vmbot):
     client_name = vmbot.client_name

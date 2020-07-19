@@ -225,8 +225,10 @@ class MessageCounter(telepot.helper.ChatHandler):
             self.parentbot.broadcast('System shutting down.')
             self.parentbot.bot_running = False            
             retmsg = 'System already shutdown.'
-
+           
         elif resp == '/start':
+            result ='<pre> ▀▄▀▄▀▄ OmniMentor ▄▀▄▀▄▀\n Powered by Sambaash</pre>Contact <a href=\"tg://user?id=1064466049">@OmniMentor</a>'
+            bot.sendMessage(chat_id,result,parse_mode='HTML')
             self.reset
             if chat_id == adminchatid :
                 self.is_admin = True
@@ -404,9 +406,8 @@ class MessageCounter(telepot.helper.ChatHandler):
                     retmsg = "Information not available"
                 else:
                     df.columns = get_columns("job_list")
-                    write2html(df, title='System Jobs', filename=fn)
+                    result = write2html(df, title='System Jobs', filename=fn)
                     bot.sendDocument(chat_id, document=open(fn, 'rb'))
-
         elif self.menu_id == keys_dict[option_2fa]:
             code2FA = self.parentbot.code2fa_list[chat_id]
             if code2FA == resp:

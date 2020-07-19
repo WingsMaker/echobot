@@ -28,7 +28,7 @@ api = Api(app)
 
 @app.route("/")
 def main():
-    msg = 'example:<br>http://127.0.0.1:6452/view?studentid=6116&courseid=FOS-0620A'
+    msg = 'example:<br>http://127.0.0.1:5000/view?studentid=6116&courseid=FOS-0620A'
     print(msg)
     #return jsonify({'reply':msg})
     return msg
@@ -65,4 +65,4 @@ def view():
 if __name__ == '__main__':
     vmsvclib.rds_connstr = ""
     vmsvclib.rdscon = None
-    app.run(port='6452')  
+    app.run()  

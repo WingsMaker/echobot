@@ -759,65 +759,28 @@ def generate_mcq_as(client_name):
     return
 
 def update_userdf(userdf, client_name):
-    # Status : Tested
-    df = rds_df(f"select * from user_master where client_name='{client_name}';" )
+    query = f"select distinct studentid from user_master where client_name = '{client_name}' order by studentid;"
+    df = rds_df(query)    
     if df is None:
-        ut_dict = dict()
-        cs_dict = dict()
-        ct_dict = dict()
-        bd_dict = dict()
+        sid_list = []
     else:
-        #df.drop_duplicates(keep=False,inplace=True)
-        df.columns = get_columns("user_master")
-        sl = [x for x in df.studentid]
-        ut = [x for x in df.usertype]
-        cs = [x for x in df.courseid]
-        ct = [x for x in df.chat_id]
-        bd = [x for x in df.binded]
-        ut_dict = dict(zip(sl,ut))
-        cs_dict = dict(zip(sl,cs))
-        ct_dict = dict(zip(sl,ct))
-        bd_dict = dict(zip(sl,bd))
-        for x in list(cs_dict): 
-            if cs_dict[x]=='':    cs_dict.pop(x)
-        for x in list(ct_dict):
-            if ct_dict[x]==0:    ct_dict.pop(x)
-        for x in list(bd_dict):
-            if bd_dict[x]==0:    bd_dict.pop(x)
-    # eliminate duplicates    
-    query = "select distinct client_name, studentid, max(username) as username, max(email) AS email, "
-    query += "max(usertype) AS usertype, max(chat_id) AS chat_id, max(courseid) as course_id from user_master "
-    query += f"where client_name = '{client_name}' group by client_name, studentid;"
-    df1 = rds_df(query)
-    if df1 is not None:
-        if len(df) == len(df1):
-            print("no duplicates found.")
-        else:
-            query = f"Delete FROM user_master WHERE client_name = '{client_name}';"
-            rds_update(query)
-            copydbtbl(df1,"user_master")
-            
+        df.columns = ['studentid']
+        sid_list = [ x for x in df.studentid]
     df = userdf    
     df.rename(columns={'course_id':'courseid','student_id':'studentid'} , inplace=True)
     df['client_name'] = client_name 
-    # no more hardcoding email filter to identify admin
+    df['courseid'] = ''
+    df['chat_id'] = 0
+    df['binded'] = 0
+    df['usertype'] = 1
+    df['existed'] = df.apply(lambda x: 1 if x['studentid'] in sid_list else 0, axis=1)
+    df = df[df.existed == 0]    
+    df = df[['client_name','studentid','username','email','usertype','binded','chat_id','courseid']] 
+    if len(df)==0:
+        return df
     email_filter = rds_param(f"SELECT `value` from params WHERE  `key` = 'email_filter' and client_name = '{client_name}';")
-    efilter = email_filter.split(',')    
-    sl2 = [x for x in df.studentid]
-    cs2 = [x for x in df.courseid]
-    ut2_dict = dict()
-    cs2_dict = dict(zip(sl2,cs2))
-    ct2_dict = dict()
-    bd2_dict = dict()
-    for x in list(cs_dict):    cs2_dict[x] = cs_dict[x]
-    for x in sl2:    ct2_dict[x] = ct_dict[x] if x in list(ct_dict) else 0
-    for x in sl2:    ut2_dict[x] = ut_dict[x] if x in list(ut_dict) else 0
-    for x in sl2:    bd2_dict[x] = bd_dict[x] if x in list(bd_dict) else 0
-    df['courseid'] = df.apply(lambda x: cs2_dict[x['studentid']], axis=1)
-    df['chat_id'] = df.apply(lambda x: ct2_dict[x['studentid']], axis=1)
-    df['binded'] = df.apply(lambda x: bd2_dict[x['studentid']], axis=1)
+    efilter = email_filter.split(',')
     df['usertype'] = df.apply(lambda x: 11 if x['email'].lower().split('@')[1] in efilter else 1, axis=1)
-    df = df [['client_name','studentid','username','email','usertype','binded','chat_id','courseid']] 
     return df
 
 def get_calendar_json(api_url):
@@ -1175,12 +1138,10 @@ def mass_update_usermaster(client_name):
     if df is None:
         print("Failed to perform user master update")
         return
-    #query = "DELETE um.* FROM user_master um INNER JOIN userdata ud ON um.client_name=ud.client_name"
-    #query += f" AND um.studentid=ud.studentid where um.client_name = '{client_name}';"        
-    query = f"delete from user_master where client_name = '{client_name}';"    
-    rds_update(query)
+    if len(df)==0:
+        print("nothing to update")
+        return
     copydbtbl(df,"user_master")    
-    #
     print(f"mass_update_usermaster completed for {client_name}")        
     return
 
@@ -1296,13 +1257,13 @@ def perform_unit_tests(client_name = 'Sambaash', course_id = "course-v1:Lithan+F
 
 if __name__ == "__main__":    
     global use_edxapi, edx_api_header, edx_api_url
-    with open("vmbot.json") as json_file:  
-        bot_info = json.load(json_file)
-    client_name = bot_info['client_name']
+    #with open("vmbot.json") as json_file:  
+    #    bot_info = json.load(json_file)
+    #client_name = bot_info['client_name']
     #edx_api_url = "https://om.sambaash.com/edx/v1"
     edx_api_url = "https://omnimentor.lithan.com/edx/v1"
     edx_api_header = {'Authorization': 'Basic ZWR4YXBpOlVzM3VhRUxJVXZENUU4azNXdG9E', 'Content-Type': 'text/plain'}
-    client_name = "Sambaash"    
+    #client_name = "Sambaash"    
     #client_name = "Lithan"    
     vmsvclib.rds_connstr = ""
     vmsvclib.rdscon = None
@@ -1310,10 +1271,10 @@ if __name__ == "__main__":
     #course_id = "course-v1:Lithan+ICO-0520A+15Jul2020"
     #course_id = "course-v1:Lithan+FOS-0520A+06May2020"  # 5709
     sid = 6464
-    attendance_dates = sms_attendance(course_id, sid)
-    print(list(attendance_dates))
-    missing_dates = sms_missingdates(client_name, course_id, sid)
-    print(missing_dates)
+    #attendance_dates = sms_attendance(course_id, sid)
+    #print(list(attendance_dates))
+    #missing_dates = sms_missingdates(client_name, course_id, sid)
+    #print(missing_dates)
     #print(course_id, sid, f2f)
     #edx_daystart = edx_day0(course_id)
     #print( edx_daystart ) #2020-05-05
@@ -1328,9 +1289,9 @@ if __name__ == "__main__":
     #
     #=====================================
     #mass_update_schedule(client_name)
+    #mass_update_usermaster(client_name)
     #perform_unit_tests(client_name, course_id, sid)
     #=====================================
-    #mass_update_usermaster(client_name)
     #
     #print("check user_master")
     print("This is vmedxlib.py")
