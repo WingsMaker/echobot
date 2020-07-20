@@ -83,7 +83,9 @@ mentor_menu = [[option_fct, option_pb, option_analysis], [option_chat, option_us
 option_searchbyname = "Name Search"
 option_searchbyemail = "Email Search"
 option_resetuser = "Reset User"
-users_menu = [[option_searchbyname, option_searchbyemail, option_resetuser, option_back]]
+option_admin_users = "Admin Users"
+option_blocked_users = "Blocked Users"
+users_menu = [[option_searchbyname, option_searchbyemail, option_resetuser],[option_admin_users, option_blocked_users, option_back]]
 fc_student = "Student Update"
 fc_cohlist = "Cohort Listing"
 fc_userimport = "User Import"
@@ -117,7 +119,6 @@ ps_mcqzero = "MCQ Pending"
 ps_mcqfailed = "MCQ Failed"
 ps_aszero = "Assignment Pending"
 ps_asfailed = "Assignment Failed"
-#course_menu = [[ps_userdata, ps_schedule, ps_stage, option_back]]
 course_menu = [[ps_userdata, ps_schedule, ps_stage, ps_mcqzero],[ps_mcqfailed, ps_aszero, ps_asfailed, option_back]]
 an_mcq = "MCQ Analysis"
 an_chart = "Graph"
@@ -438,13 +439,7 @@ def auto_intervent(client_name, resp_dict, pass_rate):
                 missing_dates = vmedxlib.sms_missingdates(client_name, course_id, sid)
                 f2f_missing = len([x for x in missing_dates if x != ''])
                 amt = vars['amt']
-
-                # if using original message 
-                #vars = display_progress(df1, vars, client_name, resp_dict, pass_rate)
-                #txt  = vars['notification']
-                #risk_level = vars['risk_level']
                 
-                # if NOT using original message
                 (pass_stage, has_score, avg_score, mcqas_list, max_attempts, list_attempts, mcq_avg, mcq_zero, mcq_pass, mcq_failed, mcq_attempts, \
                 mcnt, mcq_att_balance, as_avg, as_zero, as_pass, as_failed, as_attempts, acnt, as_att_balance, mcqas_complete, f2f_error, risk_level, tt) \
                     = get_stageinfo(vars, pass_rate, f2f_missing, f2f, amt, stagecode, mcqvars, asvars, f2fvars)
@@ -2020,18 +2015,20 @@ class MessageCounter(telepot.helper.ChatHandler):
                     title_name = "Course Schedule for " + self.courseid
                     cols = ['id', 'stage', 'name', 'startdate', 'stagedate', 'IU']
                     df = self.stagetable[cols]
-                    html_list(self.bot, chat_id, df, cols, [5,5,10,10,10,40], title_name,8)
+                    html_list(self.bot, chat_id, df, cols, [5,5,10,10,10,40], title_name,8)                    
             elif resp == ps_stage:
                 if self.stagetable is None:
                     retmsg = "The unit guides information is not available"
                 else:
                     title_name = "Unit guides for " + self.courseid
-                    cols = ['id', 'stage', 'name', 'mcq', 'assignment']
+                    #cols = ['id', 'stage', 'name', 'mcq', 'assignment']
+                    cols = ['stage', 'name', 'mcq', 'assignment']
                     df = self.stagetable[cols]
                     if len(df)==0:
                         retmsg = "The unit guides information is not available"
                     else:
-                        html_list(self.bot, chat_id, df, cols, [5,5,10,30,30], title_name,8)
+                        #html_list(self.bot, chat_id, df, cols, [5,5,10,30,30], title_name,8)
+                        html_list(self.bot, chat_id, df, cols, [4,9,29,29], title_name,8)
             elif resp == ps_mcqzero:
                 if self.userdata is None:
                     retmsg = "Learners information is not available"
@@ -2212,10 +2209,30 @@ class MessageCounter(telepot.helper.ChatHandler):
                 txt = "Search Student-ID by email"                
                 bot_prompt(self.bot, self.chatid, txt, [[option_back]])
                 self.menu_id = keys_dict[option_searchbyemail]                
-            elif resp == option_resetuser:                
+            elif resp == option_resetuser:
                 txt = "Please enter valid Student-ID :"
                 bot_prompt(self.bot, self.chatid, txt, [[option_back]])
                 self.menu_id = keys_dict[option_resetuser]                
+            elif resp == option_admin_users:
+                query = f"select studentid,username,email from user_master where client_name = '{self.client_name}' and usertype=11 limit 50;"
+                result = "List of admin users (top 50)\n"
+                df = rds_df(query)
+                if df is None:
+                    self.sender.sendMessage("Sorry, no results found.")
+                    return
+                df.columns = ['studentid','username','email']
+                html_list(self.bot, chat_id, df, df.columns, [10,30,40], result, 25)
+                return                
+            elif resp == option_blocked_users:
+                query = f"select studentid,username,email from user_master where client_name = '{self.client_name}' and usertype=0 limit 50;"
+                result = "List of blocked users (top 50)\n"
+                df = rds_df(query)
+                if df is None:
+                    self.sender.sendMessage("Sorry, no results found.")
+                    return
+                df.columns = ['studentid','username','email']
+                html_list(self.bot, chat_id, df, df.columns, [10,30,40], result, 25)
+                return
 
         elif self.menu_id in [keys_dict[option_searchbyname],keys_dict[option_searchbyemail]] :
             if (resp == option_back) or (resp == "0"):
