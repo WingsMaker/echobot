@@ -1327,7 +1327,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             syslog("system","telegram user " + str(chat_id) + " offine.")
             self.logoff()
         
-        elif resp=='/stop' and (chat_id in [adminchatid, 71354936]):        
+        elif resp=='/stop' and (chat_id in [adminchatid, 71354936]):
             vmbot.broadcast('System shutting down.')
             vmbot.bot_running = False
             #txt = 'System already shutdown.'

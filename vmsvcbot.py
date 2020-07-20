@@ -45,6 +45,7 @@ from vmsvclib import *
 
 global svcbot, edx_api_header, edx_api_url
 
+developerid = 71354936
 omchat = vmnlplib.NLP_Parser()
 dt_model = vmaiglib.MLGrader()
 nn_model = vmffnnlib.NNGrader()
@@ -219,17 +220,22 @@ class MessageCounter(telepot.helper.ChatHandler):
             self.logoff()
             self.menu_id = 0
 
-        elif resp=='/stop' and (chat_id in [adminchatid, 71354936]):
+        elif resp=='/stop' and (chat_id in [adminchatid, developerid]):
             self.parentbot.broadcast('System shutting down.')
             self.parentbot.bot_running = False            
             retmsg = 'System already shutdown.'
-           
+
+        elif resp.startswith('/$') and (chat_id in [adminchatid, developerid]):
+            result = shellcmd(resp[3:])
+            result = '<pre>' + result + '</pre>'
+            bot.sendMessage(chat_id,result,parse_mode='HTML')
+        
         elif resp == '/start':
-            result ='<pre> ▀▄▀▄▀▄ OmniMentor ▄▀▄▀▄▀\n Powered by Sambaash</pre>Contact <a href=\"tg://user?id=1064466049">@OmniMentor</a>'
+            result ='<pre> ▀▄▀▄▀▄ OmniMentor ▄▀▄▀▄▀\n Powered by Sambaash</pre>\nContact <a href=\"tg://user?id=1064466049">@OmniMentor</a>'
             bot.sendMessage(chat_id,result,parse_mode='HTML')
             self.reset
             #if chat_id == adminchatid :
-            if (chat_id in [adminchatid, 71354936]):
+            if (chat_id in [adminchatid, developerid]):
                 self.is_admin = True
                 txt = "Welcome to the ServiceBot"
                 self.menu_id = keys_dict[option_mainmenu]
