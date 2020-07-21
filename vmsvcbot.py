@@ -12,8 +12,6 @@
 # ∙∙·▫▫ᵒᴼᵒ▫ₒₒ▫ᵒᴼ OmniMentor Service Bot ᴼᵒ▫ₒₒ▫ᵒᴼᵒ▫▫·∙∙
 #------------------------------------------------------------------------------------------------------
 #
-# Note : vmedxlib.py merged into vmsvcbot.py to function as the edxbot.
-#
 import warnings
 
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -72,8 +70,13 @@ ml_graph = "ML Graph"
 ml_menu = [[ml_data, ml_pipeline, ml_report],[ml_graph, ml_train, option_back]]
 sys_import = "Mass Import"
 sys_update = "Mass Update"
+sys_params = "System Parameters"
+sys_logs = "System Logs"
 sys_jobs = "System Jobs"
-system_menu = [[sys_import, sys_update, sys_jobs, option_back]]
+option_client = "Client_Name"
+option_cmd = "Commands Shell 📺"
+#system_menu = [[sys_import, sys_update, sys_jobs],[option_client, option_cmd, option_back]]
+system_menu = [[sys_params, sys_logs, sys_jobs],[option_client, option_cmd, option_back]]
 
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
 string2date = lambda x,y : datetime.datetime.strptime(x,y).date()
@@ -105,7 +108,6 @@ class BotInstance():
         self.define_keys(ml_menu, self.keys_dict[option_ml])
         self.define_keys(system_menu, self.keys_dict[option_syscfg])
         self.keys_dict[option_2fa] = (self.keys_dict[option_mainmenu]*10) + 1
-
         #print(*(self.keys_dict).items(), sep = '\n')
 
         self.bot = telepot.DelegatorBot(Token, [
@@ -224,17 +226,11 @@ class MessageCounter(telepot.helper.ChatHandler):
             self.parentbot.broadcast('System shutting down.')
             self.parentbot.bot_running = False            
             retmsg = 'System already shutdown.'
-
-        elif resp.startswith('/$') and (chat_id in [adminchatid, developerid]):
-            result = shellcmd(resp[3:])
-            result = '<pre>' + result + '</pre>'
-            bot.sendMessage(chat_id,result,parse_mode='HTML')
-        
+          
         elif resp == '/start':
             result ='<pre> ▀▄▀▄▀▄ OmniMentor ▄▀▄▀▄▀\n Powered by Sambaash</pre>\nContact <a href=\"tg://user?id=1064466049">@OmniMentor</a>'
             bot.sendMessage(chat_id,result,parse_mode='HTML')
-            self.reset
-            #if chat_id == adminchatid :
+            self.reset            
             if (chat_id in [adminchatid, developerid]):
                 self.is_admin = True
                 txt = "Welcome to the ServiceBot"
@@ -266,7 +262,6 @@ class MessageCounter(telepot.helper.ChatHandler):
                 bot_prompt(self.bot, self.chatid, txt, ml_menu)
                 self.menu_id = keys_dict[option_ml]
             elif resp == option_syscfg :
-                #txt = "This section is for SQL commands, shell scripts or python codes"
                 txt = banner_msg("System Mode", "This section updates master data at the background")
                 bot_prompt(bot, chat_id, txt, system_menu)
                 self.menu_id = keys_dict[option_syscfg]
@@ -396,15 +391,24 @@ class MessageCounter(telepot.helper.ChatHandler):
             if resp == option_back :
                 bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
                 self.menu_id = keys_dict[option_mainmenu]
-            elif resp == sys_import :
-                job_request("ServiceBot", adminchatid, client_name, "edx_mass_import", "")
-                retmsg = "Mass import function has been scheduled at the background"
-            elif resp == sys_update :
-                job_request("ServiceBot", adminchatid, client_name, "mass_update_assignment", "")                
-                job_request("ServiceBot", adminchatid, client_name, "mass_update_mcq", "")
-                job_request("ServiceBot", adminchatid, client_name, "mass_update_schedule", "")
-                job_request("ServiceBot", adminchatid, client_name, "mass_update_usermaster", "")
-                retmsg = "Mass update functions have been scheduled at the background"
+            elif resp == sys_params:
+                fn = "system_params.html"
+                df = rds_df(f"select * from params where client_name = '{client_name}';")
+                if df is None:
+                    self.sender.sendMessage("Information not available")
+                else:
+                    df.columns = get_columns("params")
+                    write2html(df, title='System Parameters', filename=fn)
+                    bot.sendDocument(chat_id, document=open(fn, 'rb'))
+            elif resp == sys_logs:
+                fn = "system_logs.html"
+                df = rds_df(f"select * from syslog;")
+                if df is None:
+                    self.sender.sendMessage("Information not available")
+                else:
+                    df.columns = get_columns("syslog")
+                    write2html(df, title='System Parameters', filename=fn)
+                    bot.sendDocument(chat_id, document=open(fn, 'rb'))
             elif resp == sys_jobs :
                 fn = "joblist.html"
                 qry = f"select * from job_list"
@@ -415,6 +419,40 @@ class MessageCounter(telepot.helper.ChatHandler):
                     df.columns = get_columns("job_list")
                     result = write2html(df, title='System Jobs', filename=fn)
                     bot.sendDocument(chat_id, document=open(fn, 'rb'))
+            elif resp == option_client :
+                df = rds_df("select distinct client_name from user_master order by client_name;")
+                if df is None:
+                    retmsg = "Information not available"
+                else:
+                    df.columns = ['client_name']
+                    client_list = [x for x in df.client_name]
+                    bot_prompt(bot, chat_id, "Select client_name :", [client_list])
+                    self.menu_id = keys_dict[option_client]
+            elif resp == option_cmd :                    
+                txt = "You are now connected to Cmd mode.\nType cmd to list out the commands."
+                txt = banner_msg("Service Console", txt)
+                bot_prompt(bot, chat_id, txt, [[option_back]])
+                self.menu_id = keys_dict[option_cmd]
+            
+        elif self.menu_id == keys_dict[option_client]:
+            svcbot.client_name = client_name = resp
+            bot_prompt(bot, chat_id, f"Default client_name set to {resp}", system_menu)
+            self.menu_id = keys_dict[option_syscfg]
+            
+        elif self.menu_id == keys_dict[option_cmd]:
+            if resp == option_back :
+                bot_prompt(bot, chat_id, "You are back in the main menu", system_menu)
+                self.menu_id = keys_dict[option_syscfg]
+            else:
+                txt = shellcmd(resp)
+                txt_list = txt.split('\n')
+                cnt = int((len(txt_list)+19)/20)
+                for n in range(cnt):
+                    m = n*20
+                    result = '\n'.join(txt_list[m:][:20])
+                    result = '<pre>' + result + '</pre>'
+                    bot.sendMessage(chat_id, result, parse_mode='HTML')
+                    
         elif self.menu_id == keys_dict[option_2fa]:
             code2FA = self.parentbot.code2fa_list[chat_id]
             if code2FA == resp:
@@ -614,13 +652,6 @@ def do_main():
     #svcbot.bot.sendMessage(adminchatid, "Click /start to connect the ServiceBot")
     #edx_cnt = 0
     while svcbot.bot_running:  
-        #checkjoblist(svcbot)
-        #timenow = time_hhmm(gmt)
-        #if (edx_time > 0) and (timenow==edx_time) and (edx_cnt==0) :
-        #    edx_cnt = 1
-        #    job_request("ServiceBot",adminchatid,client_name,"edx_mass_import","")
-        #if (edx_time > 0) and (timenow > edx_time) and (edx_cnt==1):
-        #    edx_cnt = 0        
         time.sleep(3)
     try:
         os.kill(os.getpid(), 9)

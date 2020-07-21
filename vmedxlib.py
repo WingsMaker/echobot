@@ -1,6 +1,3 @@
-# Note
-# this code already merged into vmsvcbot.py for the next implementation
-# keeping this file for reference
 #------------------------------------------------------------------------------------------------------# 
 # / _ \ _ __ ___  _ __ (_)  \/  | ___ _ __ | |_ ___  _ __
 #| | | | '_ ` _ \| '_ \| | |\/| |/ _ \ '_ \| __/ _ \| '__|
@@ -267,13 +264,8 @@ def sms_missingdates(client_name, course_id, student_id):
         df.columns = get_columns("stages")
         stgid_list = [x for x in df.id]
         fsf_dates = [string2date(x,"%d/%m/%Y") for x in df.startdate]
-        #fsf_dates = [x for x in df.startdate]
         stage_list = [x for x in df.stage]
         arr_stgf2f = dict(zip(stage_list, fsf_dates))
-        #stage_dates=[string2date(arr_stgf2f[x],"%d/%m/%Y") for x in stage_list if x[:2]=='FC' or x[:2]=='PM']
-        #mdat = [x.strftime('%d/%m/%Y') for x in stage_dates if x not in date_list]
-        #mstg = [x for x in stage_list if string2date(arr_stgf2f[x],"%d/%m/%Y").strftime('%d/%m/%Y') in mdat]
-        #missed_fsf = dict(zip(mstg,mdat))
         missed_fsf = [f2flag(stage_list[n],fsf_dates[n]) for n in range(len(stgid_list))]
     return missed_fsf
 
@@ -308,25 +300,21 @@ def update_schedule(course_id, client_name):
     cohort_date = lambda x : string2date(dstr(x),dtype(x))
     cohort_id = piece(piece(course_id,':',1),'+',1)
     stage_list = get_google_calendar(course_id, client_name)
-
-    #if stage_list == []:
-    #    print(f"no data from google calendar for {course_id}")
-    #    return
-    
-    try:
+    #try:
+    if True:
         stage_list = update_stage_table(stage_list, course_id, client_name)
         if stage_list == []:
-            #print(f"{course_id} is not ready for schedule update")
             return
         dt = string2date(stage_list[0][3],"%d/%m/%Y")
         stg=[x for x in stage_list if x[0]=='EOC']
         eoc_date = string2date(stg[0][4],"%d/%m/%Y")
         date_today = datetime.datetime.now().date()
         days = (date_today - eoc_date).days
-    except:
-        print("update_stage_table failed")
-        return
-
+    #except:
+        #print(f"update_stage_table failed for {course_id}")
+        #sys.exit(0)
+        #return
+        
     condqry = "client_name = '_c_' and courseid = '_x_';"
     condqry = condqry.replace('_c_', client_name)
     condqry = condqry.replace('_x_', course_id)
@@ -343,7 +331,6 @@ def update_schedule(course_id, client_name):
         days_list = [x for x in df.days]
         as_str = [x for x in df.assignment]
         mcq_str = [x for x in df.mcq]
-
     for n in range(len( days_list )):
         stg = stage_list[n]
         dd = days_list[n] 
@@ -586,8 +573,6 @@ def edx_import(course_id, client_name):
             query = "delete from stages where " + condqry
             rds_update(query)
             df.drop(columns=['module_code'], inplace=True)
-            #for fld in ['stagedate','fcdate','eldate','mcqdate','asdate']:
-            #    df[fld] = ''
             df['stagedate'] = ''                
             df['courseid'] = course_id
             df1 = df[['client_name','courseid', 'id', 'stage', 'name', 'desc', 'days', 'f2f', 'mcq', 'flipclass', 'assignment', 'IU', 'stagedate']]
@@ -601,7 +586,6 @@ def edx_import(course_id, client_name):
     query = "delete from userdata where " + condqry
     rds_update(query)
     
-    #query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{course_id}' AND STR_TO_DATE(stagedate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
     query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{course_id}' AND STR_TO_DATE(startdate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
     stage = rds_param(query)                
     if stage=="":
@@ -939,20 +923,27 @@ def get_google_calendar(course_id, client_name):
     return stage_list
 
 def update_stage_table(stage_list, course_id, client_name):
-    # Status : Tested
+    # Status : Tested  f2f field got loss of data
     qry = " client_name = '_c_' and courseid = '_x_';"
     qry = qry.replace('_c_', client_name)
     qry = qry.replace('_x_', course_id)    
     mcq_dict = {}
-    ast_dict = {}    
-    for x in stage_list:
-        mcq_dict[ x[0] ] = ""
-        ast_dict[ x[0] ] = ""
-    query = "select * from stages where " + qry
-    df = rds_df(query)
-    mcq_dict = {}
     ast_dict = {}
     stg_list = []    
+    fc_dict = {}
+    iu_dict = {}
+    f2f_dict = {}
+    #if stage_list==[]:
+    #    print("stage list is empty")
+    #for x in stage_list:
+    #    mcq_dict[ x[0] ] = ""
+    #    ast_dict[ x[0] ] = ""
+    #    fc_dict[ x[0] ] = "0"
+    #    iu_dict[ x[0] ] = "0"
+    #    f2f_dict[ x[0] ] = 0    
+
+    query = "select * from stages where " + qry
+    df = rds_df(query)
     if (df is None) or (len(stage_list)==0):        
         cohort_id = piece(piece(course_id,':',1),'+',1)
         module_code = piece(cohort_id,'-',0)
@@ -965,11 +956,16 @@ def update_stage_table(stage_list, course_id, client_name):
         stgname_list = [x for x in df.name]
         stgdesc_list = [x for x in df.desc]
         stgdays_list = [x for x in df.days]
-        iu_list = [x for x in df.IU]
         mcq_list = [x for x in df.mcq]
         ast_list = [x for x in df.assignment]
+        fc_list = [x for x in df.flipclass]
+        iu_list = [x for x in df.IU]
+        f2f_list = [x for x in df.f2f]
         mcq_dict = dict(zip(stg_list,mcq_list))
         ast_dict = dict(zip(stg_list,ast_list))
+        fc_dict = dict(zip(stg_list,fc_list))
+        iu_dict = dict(zip(stg_list,iu_list))
+        f2f_dict = dict(zip(stg_list,f2f_list))
         dt0 = edx_day0(course_id)
         stage_list = []
         id = 0
@@ -992,41 +988,50 @@ def update_stage_table(stage_list, course_id, client_name):
         stg_list = [x for x in df.stage]
         mcq_list = [x for x in df.mcq]
         ast_list = [x for x in df.assignment]
+        fc_list = [x for x in df.flipclass]
+        iu_list = [x for x in df.IU]
+        f2f_list = [x for x in df.f2f]
         mcq_dict = dict(zip(stg_list,mcq_list))
         ast_dict = dict(zip(stg_list,ast_list))
+        fc_dict = dict(zip(stg_list,fc_list))
+        iu_dict = dict(zip(stg_list,iu_list))
+        f2f_dict = dict(zip(stg_list,f2f_list))
 
     m = len(stage_list)    
-    if m==0:
-        print("stage_list is empty")
+    if m==0:        
         return []
-        
+    
     for x in stage_list:
-        #print(x)
         if x[0] not in stg_list:
             mcq_dict[ x[0] ] = "0"
             ast_dict[ x[0] ] = "0"
-    
+            fc_dict[ x[0] ] = "0"
+            iu_dict[ x[0] ] = "0"
+            f2f_dict[ x[0] ] = 0    
     for x in stage_list:
-        #print(x)
         x.append( mcq_dict[x[0]] )
         x.append( ast_dict[x[0]] )
-        
+        x.append( fc_dict[x[0]] )
+        x.append( iu_dict[x[0]] )
+        x.append( f2f_dict[x[0]] )
+    
     query = "delete from stages where " + qry
     rds_update(query)
     
     n = 0
     for n in range(len(stage_list)):
         stg = stage_list[n][0]
-        query = "insert into stages(client_name, courseid, id, stage, `name` , `desc` ,days, f2f, stagedate, startdate,"
-        query += "mcq, assignment, IU, flipclass) values("
-        query += "'" + client_name + "','" + course_id + "'," + str(n+1)
-        query += ",'" + str(stage_list[n][0]) + "','"  
-        query += str(stage_list[n][1]) + "','"  
-        query += str(stage_list[n][2]) + "',"   
-        query += str(stage_list[n][6]) + ",0,'','','" 
-        query += str(stage_list[n][7]) + "','"   
-        query += str(stage_list[n][8]) + "','" 
-        query += str(stage_list[n][5])  + "','" + str(stage_list[n][5]) + "')"         
+        query = "insert into stages(client_name,courseid,id,stage,`name`,`desc`,days,f2f,mcq,assignment,IU,flipclass) values("
+        query += "'" + client_name + "','" + course_id + "'," + str(n+1) # client_name, courseid, id
+        query += ",'" + str(stage_list[n][0]) + "','"  # stage
+        query += str(stage_list[n][1]) + "','"         # stage_name
+        query += str(stage_list[n][2]) + "',"          # stage_desc
+        query += str(stage_list[n][6]) + ","           # days 
+        query += str(stage_list[n][11]) + ",'"         # f2f
+        query += str(stage_list[n][7]) + "','"         # mcq
+        query += str(stage_list[n][8]) + "','"         # assignment
+        query += str(stage_list[n][10])  + "','"       # IU
+        query += str(stage_list[n][9]) + "')"          # flipclass
         rds_update(query)
     
     arr_stagedate = [ x[3] for x in stage_list]
@@ -1039,28 +1044,28 @@ def update_stage_table(stage_list, course_id, client_name):
         start_date = arr_stagedate[n] 
         stg_date = arr_stagedate[id] 
         query = f"update stages set startdate = '{start_date}', stagedate = '{stg_date}' where id = {id} and " + qry        
-        try:
-            rds_update(query)
-        except:
-            print(query)
+        #try:
+        rds_update(query)
+        #except:
+        #    print(query)
     
     start_date = arr_stagedate[-1] 
     eoc_date = string2date(stage_list[-1][4],"%d/%m/%Y")
     stg_date = eoc_date.strftime('%d/%m/%Y')
     query = f"update stages set startdate = '{start_date}',stagedate = '{stg_date}' where id = {m} and " + qry
-    try:
-        rds_update(query)           
-    except:
-        print(query)
+    #try:
+    rds_update(query)           
+    #except:
+    #    print(query)
         
     query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{course_id}' AND STR_TO_DATE(stagedate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
     stage = rds_param(query)                
     if stage != "":
         query=f"update userdata set stage='{stage}' WHERE client_name = '{client_name}' AND courseid='{course_id}' ;"
-        try:            
-            rds_update(query)
-        except:
-            print(query)
+        #try:            
+        rds_update(query)
+        #except:
+        #    print(query)
     return stage_list
 
 def update_playbooklist(course_id, client_name, course_name):
@@ -1263,22 +1268,23 @@ if __name__ == "__main__":
     #edx_api_url = "https://om.sambaash.com/edx/v1"
     edx_api_url = "https://omnimentor.lithan.com/edx/v1"
     edx_api_header = {'Authorization': 'Basic ZWR4YXBpOlVzM3VhRUxJVXZENUU4azNXdG9E', 'Content-Type': 'text/plain'}
-    #client_name = "Sambaash"    
+    client_name = "Sambaash"    
     #client_name = "Lithan"    
     vmsvclib.rds_connstr = ""
     vmsvclib.rdscon = None
     course_id = "course-v1:Lithan+FOS-0620A+17Jun2020" # 6116
     #course_id = "course-v1:Lithan+ICO-0520A+15Jul2020"
     #course_id = "course-v1:Lithan+FOS-0520A+06May2020"  # 5709
-    sid = 6464
+    sid = 6116
     #attendance_dates = sms_attendance(course_id, sid)
-    #print(list(attendance_dates))
+    #print('\n'.join([str(x) for x in attendance_dates]))
     #missing_dates = sms_missingdates(client_name, course_id, sid)
     #print(missing_dates)
     #print(course_id, sid, f2f)
     #edx_daystart = edx_day0(course_id)
     #print( edx_daystart ) #2020-05-05
     #test_google_calendar(course_id)
+    #course_id ="course-v1:Lithan+CPI-0220A+13Jul2020"
     #update_schedule(course_id, client_name)
     #query = f"SELECT * FROM stages WHERE courseid = '{course_id}' AND client_name = '{client_name}';"
     #df = rds_df(query)
@@ -1288,7 +1294,7 @@ if __name__ == "__main__":
     #    print(df1)
     #
     #=====================================
-    #mass_update_schedule(client_name)
+    mass_update_schedule(client_name)
     #mass_update_usermaster(client_name)
     #perform_unit_tests(client_name, course_id, sid)
     #=====================================
