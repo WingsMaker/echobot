@@ -84,8 +84,10 @@ option_searchbyname = "Name Search"
 option_searchbyemail = "Email Search"
 option_resetuser = "Reset User"
 option_admin_users = "Admin Users"
+option_active_users = "Active Users"
 option_blocked_users = "Blocked Users"
-users_menu = [[option_searchbyname, option_searchbyemail, option_resetuser],[option_admin_users, option_blocked_users, option_back]]
+option_binded_users = "Binded Users"
+users_menu = [[option_searchbyname, option_searchbyemail, option_resetuser, option_active_users],[option_admin_users, option_binded_users, option_blocked_users, option_back]]
 fc_student = "Student Update"
 fc_cohlist = "Cohort Listing"
 fc_userimport = "User Import"
@@ -597,9 +599,8 @@ class BotInstance():
         #printdict(bot_info)
         Token = bot_info['BotToken']
         client_name = bot_info['client_name']
-        
         df = rds_df("select * from params where client_name = 'System';")
-        if df is None:                        
+        if df is None:
             print("Unable to access params table from RDS")
             return 
         df.columns = ['client_name','key', 'value']
@@ -1936,15 +1937,7 @@ class MessageCounter(telepot.helper.ChatHandler):
 
         elif self.menu_id == keys_dict[option_pb]:
             if resp==pb_config:
-                fn = "pbconfig.html"
-                qry = f"select * from playbooks where client_name = '{self.client_name}'"
-                df = rds_df( qry)
-                if df is None:
-                    self.sender.sendMessage("There is no information available at the moment")
-                    return
-                df.columns = get_columns('playbooks')
-                write2html(df, title='PLAYBOOKS LIST', filename=fn)
-                bot.sendDocument(chat_id, document=open(fn, 'rb'))
+                html_table(self.bot, self.chatid, self.client_name, "playbooks", "PLAYBOOKS LIST", "pbconfig.html")
             elif resp == pb_userdata:
                 txt = "Let's take a look on the persona playbooks."
                 playbooklist_menu = [[x] for x in self.list_courseids]
@@ -2219,6 +2212,28 @@ class MessageCounter(telepot.helper.ChatHandler):
                 df.columns = ['studentid','username','email']
                 html_list(self.bot, chat_id, df, df.columns, [10,30,40], result, 25)
                 return
+            elif resp == option_binded_users :
+                query = f"UPDATE user_master SET binded=0 WHERE chat_id=0 and client_name = '{self.client_name}';"
+                rds_update(query)
+                query = f"select studentid,username,email,chat_id from user_master where client_name = '{self.client_name}' and binded=1 limit 50;"
+                result = "List of binded users (top 50)\n"
+                df = rds_df(query)
+                if df is None:
+                    self.sender.sendMessage("Sorry, no results found.")
+                    return
+                df.columns = ['studentid','username','email','chat_id']
+                html_list(self.bot, chat_id, df, df.columns, [10,30,40,20], result, 25)
+                return
+            elif resp == option_active_users :
+                query = f"select studentid,username,email,chat_id from user_master where client_name = '{self.client_name}' and usertype>0 limit 50;"
+                result = "List of active users (top 50)\n"
+                df = rds_df(query)
+                if df is None:
+                    self.sender.sendMessage("Sorry, no results found.")
+                    return
+                df.columns = ['studentid','username','email','chat_id']
+                html_list(self.bot, chat_id, df, df.columns, [10,30,40,20], result, 25)
+                return
 
         elif self.menu_id in [keys_dict[option_searchbyname],keys_dict[option_searchbyemail]] :
             if (resp == option_back) or (resp == "0"):
@@ -2296,7 +2311,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                 query = f"update user_master set binded = 0, chat_id = 0 where client_name = '{self.client_name}' and studentid = {self.student_id} ;"
                 rds_update(query)
                 retmsg = f"User telegram account has been unbinded from Student-ID {self.student_id}."
-            
+
         elif self.menu_id == keys_dict[option_chatlist]:
             if chat_id in vmbot.chat_list:
                 tid = vmbot.chat_list[ chat_id ]
@@ -2958,7 +2973,7 @@ def runbotjob(vmbot):
             vmedxlib.generate_mcq_as(func_param)
             txt += " completed successfully."
         except:
-            txt += " failed."               
+            txt += " failed."
     elif func_req in ["edx_mass_import", "mass_update_assignment", "mass_update_mcq", "mass_update_schedule", "mass_update_usermaster"]:
         #try:
         #    func_svc = "vmedxlib." + func_req + "(client_name)"
