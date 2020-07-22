@@ -557,10 +557,10 @@ if __name__ == "__main__":
     global rdscon, rds_connstr
     rds_connstr = ""
     rdscon = None
-    rdscon = rds_connector()    
-    #rds_update("update user_master set binded = 0 where chat_id=0;")    
-    df = rds_df("select * from user_master limit 10")    
-    df.columns = get_columns('user_master')
-    print(df)
+    rdscon = rds_connector()        
+    #df = rds_df("select * from userdata")    
+    #df.columns = get_columns("userdata")    
+    #copy2omdb(df,"userdata")
+    print(df.head(10))
     #
     print("End of vmsvclib.py")

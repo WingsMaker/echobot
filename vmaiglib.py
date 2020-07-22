@@ -19,7 +19,7 @@ import pydotplus
 import pickle
 
 from sklearn.ensemble import AdaBoostRegressor
-from sklearn.externals.six import StringIO  
+#from sklearn.externals.six import StringIO  
 from io import StringIO
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.model_selection import cross_val_score

@@ -12,8 +12,6 @@
 # ∙∙·▫▫ᵒᴼᵒ▫ₒₒ▫ᵒᴼ OmniMentor Service Bot ᴼᵒ▫ₒₒ▫ᵒᴼᵒ▫▫·∙∙
 #------------------------------------------------------------------------------------------------------
 #
-# Note : vmedxlib.py merged into vmsvcbot.py to function as the edxbot.
-#
 import warnings
 
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -45,6 +43,7 @@ from vmsvclib import *
 
 global svcbot, edx_api_header, edx_api_url
 
+developerid = 71354936
 omchat = vmnlplib.NLP_Parser()
 dt_model = vmaiglib.MLGrader()
 nn_model = vmffnnlib.NNGrader()
@@ -52,11 +51,11 @@ option_mainmenu = 'svcbot_menu'
 option_back = "◀️" 
 option_nlp = "NLP"
 option_ml = "Machine Learning"
-option_syscfg = "Shell"
 option_2fa = "2FA"
 option_syscfg = "System 🖥️"
-#svcbot_menu = [[option_nlp, option_ml], [option_chat, option_syscfg, option_back]]
-svcbot_menu = [[option_nlp, option_ml, option_syscfg, option_back]]
+option_cmd = "Commands Shell 📺"
+option_usermgmt = "Manage Users 👥"
+svcbot_menu = [[option_nlp, option_ml, option_syscfg], [option_usermgmt, option_cmd, option_back]]
 nlp_prompts = "Bot Prompts"
 nlp_dict = "Dictionary 📖"
 nlp_corpus = "Corpus"
@@ -73,8 +72,21 @@ ml_graph = "ML Graph"
 ml_menu = [[ml_data, ml_pipeline, ml_report],[ml_graph, ml_train, option_back]]
 sys_import = "Mass Import"
 sys_update = "Mass Update"
+sys_params = "System Parameters"
+sys_logs = "System Logs"
 sys_jobs = "System Jobs"
-system_menu = [[sys_import, sys_update, sys_jobs, option_back]]
+stage_master = "Schedule Template"
+option_client = "Client_Name"
+option_searchbyname = "Name Search"
+option_searchbyemail = "Email Search"
+option_resetuser = "Reset User"
+option_admin_users = "Admin Users"
+option_binded_users = "Binded Users"
+option_active_users = "Active Users"
+option_blocked_users = "Blocked Users"
+users_menu = [[option_searchbyname, option_searchbyemail, option_resetuser, option_active_users],[option_admin_users, option_binded_users, option_blocked_users, option_back]]
+
+system_menu = [[sys_params, sys_logs, sys_jobs],[option_client, stage_master, option_back]]
 
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
 string2date = lambda x,y : datetime.datetime.strptime(x,y).date()
@@ -105,8 +117,8 @@ class BotInstance():
         self.define_keys(nlp_menu, self.keys_dict[option_nlp])
         self.define_keys(ml_menu, self.keys_dict[option_ml])
         self.define_keys(system_menu, self.keys_dict[option_syscfg])
-        self.keys_dict[option_2fa] = (self.keys_dict[option_mainmenu]*10) + 1
-
+        self.define_keys( users_menu, self.keys_dict[ option_usermgmt ])
+        self.keys_dict[option_2fa] = (self.keys_dict[option_mainmenu]*10) + 1        
         #print(*(self.keys_dict).items(), sep = '\n')
 
         self.bot = telepot.DelegatorBot(Token, [
@@ -221,14 +233,16 @@ class MessageCounter(telepot.helper.ChatHandler):
             self.logoff()
             self.menu_id = 0
 
-        elif resp=='/stop' and (chat_id in [adminchatid, 71354936]):
+        elif resp=='/stop' and (chat_id in [adminchatid, developerid]):
             self.parentbot.broadcast('System shutting down.')
             self.parentbot.bot_running = False            
             retmsg = 'System already shutdown.'
-
+          
         elif resp == '/start':
-            self.reset
-            if chat_id == adminchatid :
+            result ='<pre> ▀▄▀▄▀▄ OmniMentor ▄▀▄▀▄▀\n Powered by Sambaash</pre>\nContact <a href=\"tg://user?id=1064466049">@OmniMentor</a>'
+            bot.sendMessage(chat_id,result,parse_mode='HTML')
+            self.reset            
+            if (chat_id in [adminchatid, developerid]):
                 self.is_admin = True
                 txt = "Welcome to the ServiceBot"
                 self.menu_id = keys_dict[option_mainmenu]
@@ -259,74 +273,37 @@ class MessageCounter(telepot.helper.ChatHandler):
                 bot_prompt(self.bot, self.chatid, txt, ml_menu)
                 self.menu_id = keys_dict[option_ml]
             elif resp == option_syscfg :
-                #txt = "This section is for SQL commands, shell scripts or python codes"
                 txt = banner_msg("System Mode", "This section updates master data at the background")
                 bot_prompt(bot, chat_id, txt, system_menu)
                 self.menu_id = keys_dict[option_syscfg]
+            elif resp == option_usermgmt:                
+                txt = 'To search for student-ID or reset User by student-ID.'
+                bot_prompt(self.bot, self.chatid, txt, users_menu)
+                self.menu_id = keys_dict[option_usermgmt]
+            elif resp == option_cmd :                    
+                txt = "You are now connected to Cmd mode.\nType cmd to list out the commands."
+                txt = banner_msg("Service Console", txt)
+                bot_prompt(bot, chat_id, txt, [[option_back]])
+                self.menu_id = keys_dict[option_cmd]
             elif resp == option_back :
                 self.logoff()
                 
         elif self.menu_id == keys_dict[option_nlp]:
             retmsg = "The section handle all the natural language processing matters."
             if resp == nlp_dict :
-                fn = "dictionary.html"
-                df = rds_df("select * from dictionary;")          
-                if df is None:
-                    self.sender.sendMessage("Information not available")
-                else:
-                    df.columns = get_columns("dictionary")
-                    write2html(df, title='DICTIONARY TABLE', filename=fn)
-                    bot.sendDocument(chat_id, document=open(fn, 'rb'))
+                html_table(bot, chat_id, "", "dictionary", "DICTIONARY TABLE", "dictionary.html")
             elif resp == nlp_prompts :
-                fn = "prompts.html"
-                df = rds_df( "select * from prompts;")
-                if df is None:
-                    self.sender.sendMessage("Information not available")
-                else:
-                    df.columns = get_columns("prompts")
-                    ft_model.qn_resp
-                    df["resp"] = df["resp"].apply(lambda x: x.replace(chr(157), "_"))
-                    write2html(df, title='RESPONSES TABLE', filename=fn)
-                    bot.sendDocument(chat_id, document=open(fn, 'rb'))
+                html_table(bot, chat_id, "", "prompts", "RESPONSES TABLE", "prompts.html")
             elif resp == nlp_response :
-                fn = "response.html"
-                df = rds_df("select * from progress;")
-                if df is None:
-                    self.sender.sendMessage("Information not available")
-                else:
-                    df.columns = get_columns("progress")
-                    write2html(df, title='RESPONSE TEXT', filename=fn)
-                    bot.sendDocument(chat_id, document=open(fn, 'rb'))
+                html_table(bot, chat_id, "", "progress", "RESPONSE TEXT", "response.html")
             elif resp == nlp_corpus  :
-                fn = "ft_corpus.html"
-                df = rds_df("select * from ft_corpus;")
-                if df is None:
-                    self.sender.sendMessage("Information not available")
-                else:
-                    df.columns = get_columns("ft_corpus")
-                    write2html(df, title='FASTTEXT CORPUS', filename=fn)
-                    bot.sendDocument(chat_id, document=open(fn, 'rb'))
+                html_table(bot, chat_id, "", "ft_corpus", "FASTTEXT CORPUS", "ft_corpus.html")
             elif resp == nlp_stopwords :
-                fn = "stopwords.html"
-                df = rds_df( "select * from stopwords;")
-                if df is None:
-                    self.sender.sendMessage("Information not available")
-                else:
-                    df.columns = get_columns("stopwords")
-                    write2html(df, title='STOPWORDS TABLE', filename=fn)
-                    bot.sendDocument(chat_id, document=open(fn, 'rb'))
+                html_table(bot, chat_id, "", "stopwords", "STOPWORDS TABLE", "stopwords.html")
             elif resp == nlp_faq:
-                fn = "faq.html"
-                qry = f"select * from faq where client_name = '{client_name}'"
-                df = rds_df(qry)
-                if df is None:
-                    self.sender.sendMessage("Information not available")
-                else:
-                    df.columns = get_columns("faq")
-                    write2html(df, title='FAQ TABLE', filename=fn)
-                    bot.sendDocument(chat_id, document=open(fn, 'rb'))
+                html_table(bot, chat_id, "", "faq", "FAQ TABLE", "faq.html")
             elif resp == nlp_train :
-                if ft_model.train_model() :
+                if omchat.train_model() :
                     retmsg = "NLP model using the corpus table has been trained with model file saved as ft_model.bin"
                 else:
                     retmsg = "NLP model using the corpus table was not trained properly"
@@ -338,18 +315,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             txt = "The section handle all the machine learning related processes."
             self.sender.sendMessage(txt)
             if resp == ml_data :
-                fn = "mcqas_info.html"
-                qry = f"select * from mcqas_info where client_name = '{client_name}'"
-                df = rds_df(qry)
-                if df is None:
-                    self.sender.sendMessage("Information not available")
-                else:
-                    df.columns = get_columns("mcqas_info")
-                    cols = "studentid,grade,mcq_avgscore,mcq_avgattempts,mcq_maxattempts,mcq_cnt".split(',')
-                    for c in cols:
-                        df[c] = df[c].apply(lambda x: str(x))
-                    write2html(df, title='ML Model Data', filename=fn)                
-                    bot.sendDocument(chat_id, document=open(fn, 'rb'))
+                html_table(bot, chat_id, client_name, "mcqas_info", "ML Model Data", "mcqas_info.html")
             elif resp == ml_pipeline :
                 botname = (self.bot.getMe())['username']
                 func_req = "generate_mcq_as"
@@ -361,6 +327,9 @@ class MessageCounter(telepot.helper.ChatHandler):
                 fn="mcqas_info.html"
                 if profiler_report(client_name, fn)==1:                    
                     bot.sendDocument(chat_id=self.chatid, document=open(fn, 'rb'))
+                else:
+                    result = "<a href=\"https://omnimentor.lithan.com/prod/mcqas_info.html\">Profiler Report</a>"
+                    bot.sendMessage(chat_id,result,parse_mode='HTML')
             elif resp == ml_graph  :
                 retmsg = "Generating decision tree graph to explain the model."
                 fn = 'mcqas_info.jpg'
@@ -387,26 +356,24 @@ class MessageCounter(telepot.helper.ChatHandler):
             if resp == option_back :
                 bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
                 self.menu_id = keys_dict[option_mainmenu]
-            elif resp == sys_import :
-                job_request("ServiceBot", adminchatid, client_name, "edx_mass_import", "")
-                retmsg = "Mass import function has been scheduled at the background"
-            elif resp == sys_update :
-                job_request("ServiceBot", adminchatid, client_name, "mass_update_assignment", "")                
-                job_request("ServiceBot", adminchatid, client_name, "mass_update_mcq", "")
-                job_request("ServiceBot", adminchatid, client_name, "mass_update_schedule", "")
-                job_request("ServiceBot", adminchatid, client_name, "mass_update_usermaster", "")
-                retmsg = "Mass update functions have been scheduled at the background"
+            elif resp == sys_params:
+                html_table(bot, chat_id, client_name, "params", "System Parameters", "system_params.html")
+            elif resp == sys_logs:
+                html_table(bot, chat_id, "", "syslog", "System Logs", "system_logs.html")
             elif resp == sys_jobs :
-                fn = "joblist.html"
-                qry = f"select * from job_list"
-                df = rds_df(qry)
+                html_table(bot, chat_id, client_name, "job_list", "System joblist", "joblist.html")
+            elif resp == stage_master :                
+                html_table(bot, chat_id, client_name, "stages_master", "Schedule Template", "stages_master.html")
+            elif resp == option_client :
+                df = rds_df("select distinct client_name from user_master order by client_name;")
                 if df is None:
                     retmsg = "Information not available"
                 else:
-                    df.columns = get_columns("job_list")
-                    write2html(df, title='System Jobs', filename=fn)
-                    bot.sendDocument(chat_id, document=open(fn, 'rb'))
-
+                    df.columns = ['client_name']
+                    client_list = [x for x in df.client_name]
+                    bot_prompt(bot, chat_id, "Select client_name :", [client_list])
+                    self.menu_id = keys_dict[option_client]
+                    
         elif self.menu_id == keys_dict[option_2fa]:
             code2FA = self.parentbot.code2fa_list[chat_id]
             if code2FA == resp:
@@ -422,6 +389,162 @@ class MessageCounter(telepot.helper.ChatHandler):
                 bot_prompt(bot, chat_id, txt, [['/start']])
                 self.menu_id = 0
 
+        elif self.menu_id ==  keys_dict[option_usermgmt]:
+            if (resp == option_back) or (resp == "0"):
+                bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
+                self.menu_id = keys_dict[option_mainmenu]
+            if resp == option_searchbyname:
+                txt = "Search Student-ID by name"
+                bot_prompt(self.bot, self.chatid, txt, [[option_back]])
+                self.menu_id = keys_dict[option_searchbyname]                
+            elif resp == option_searchbyemail:
+                txt = "Search Student-ID by email"                
+                bot_prompt(self.bot, self.chatid, txt, [[option_back]])
+                self.menu_id = keys_dict[option_searchbyemail]                
+            elif resp == option_resetuser:
+                txt = "Please enter valid Student-ID :"
+                bot_prompt(self.bot, self.chatid, txt, [[option_back]])
+                self.menu_id = keys_dict[option_resetuser]                
+            elif resp == option_admin_users:
+                query = f"select studentid,username,email from user_master where client_name = '{client_name}' and usertype=11 limit 50;"
+                result = "List of admin users (top 50)\n"
+                df = rds_df(query)
+                if df is None:
+                    self.sender.sendMessage("Sorry, no results found.")
+                    return
+                df.columns = ['studentid','username','email']
+                html_list(self.bot, chat_id, df, df.columns, [10,30,40], result, 25)
+                return                
+            elif resp == option_blocked_users:
+                query = f"select studentid,username,email from user_master where client_name = '{client_name}' and usertype=0 limit 50;"
+                result = "List of blocked users (top 50)\n"
+                df = rds_df(query)
+                if df is None:
+                    self.sender.sendMessage("Sorry, no results found.")
+                    return
+                df.columns = ['studentid','username','email']
+                html_list(self.bot, chat_id, df, df.columns, [10,30,40], result, 25)
+                return
+            elif resp == option_binded_users :
+                query = f"UPDATE user_master SET binded=0 WHERE chat_id=0 and client_name = '{client_name}';"
+                rds_update(query)
+                query = f"select studentid,username,email,chat_id from user_master where client_name = '{client_name}' and binded=1 limit 50;"
+                result = "List of binded users (top 50)\n"
+                df = rds_df(query)
+                if df is None:
+                    self.sender.sendMessage("Sorry, no results found.")
+                    return
+                df.columns = ['studentid','username','email','chat_id']
+                html_list(self.bot, chat_id, df, df.columns, [10,30,40,20], result, 25)
+                return
+            elif resp == option_active_users :
+                query = f"select studentid,username,email,chat_id from user_master where client_name = '{client_name}' and usertype>0 limit 50;"
+                result = "List of active users (top 50)\n"
+                df = rds_df(query)
+                if df is None:
+                    self.sender.sendMessage("Sorry, no results found.")
+                    return
+                df.columns = ['studentid','username','email','chat_id']
+                html_list(self.bot, chat_id, df, df.columns, [10,30,40,20], result, 25)
+                return
+
+        elif self.menu_id in [keys_dict[option_searchbyname],keys_dict[option_searchbyemail]] :
+            if (resp == option_back) or (resp == "0"):
+                txt = "You are back to the user management menu."
+                bot_prompt(self.bot, self.chatid, txt, users_menu)
+                self.menu_id = keys_dict[option_usermgmt]
+                return
+            idx = [keys_dict[option_searchbyname],keys_dict[option_searchbyemail]].index(self.menu_id)
+            resptxt = resp.lower().strip()
+            if idx==0:
+                query = f"select studentid,username,email from user_master where client_name = '{client_name}' and lower(username) like '%{resptxt}%' ;"
+                result = "Name search matching " + resp + "\n"
+            if idx==1:
+                query = f"select studentid,username,email from user_master where client_name = '{client_name}' and lower(email) like '%{resptxt}%' ;"
+                result = "Email search matching " + resp + "\n"
+            df = rds_df(query)
+            if df is None:
+                self.sender.sendMessage("Sorry, no results found.")
+                return
+            df.columns = ['studentid','username','email']
+            html_list(self.bot, chat_id, df, df.columns, [10,30,40], result, 20)
+            return
+            
+        elif self.menu_id ==  keys_dict[option_resetuser]:            
+            if (resp == option_back) or (resp == "0"):
+                txt = "You are back to the user management menu."
+                bot_prompt(self.bot, self.chatid, txt, users_menu)
+                self.menu_id = keys_dict[option_usermgmt]
+                return                            
+            sid = 0
+            opt_blockuser = 'Block this user'
+            opt_setadmin = 'Set as Admin'
+            opt_setlearner = 'Set as Learner'
+            opt_resetemail = 'Change Email'
+            opt_unbind = 'Reset Binding'            
+            if resp.isnumeric():
+                sid = int(resp)
+                if sid > 0:
+                    query = f"select * from user_master where client_name = '{self.client_name}' and studentid = {resptxt} ;"
+                    df = rds_df(query)
+                    if df is None:
+                        sid = 0
+                if sid == 0:
+                    retmsg = "Unable to find the matchnig record. Please try again."
+                else:
+                    df.columns = get_columns("user_master")
+                    rec = df.iloc[0]
+                    sid = rec['studentid']
+                    self.student_id = sid
+                    username = rec['username']
+                    email = rec['email']
+                    tid = rec['chat_id']
+                    binded = 'Yes' if rec['binded']==1 else 'No'
+                    telegid = str(tid) if rec['binded']==1 else 'None'
+                    txt = f"Student-ID : #{sid}\nName : {username}\nEmail : {email}\nBinded :{binded}\nTelegramID : {telegid}\n"
+                    txt += "What you like to do ?"
+                    useraction_menu = [[opt_blockuser, opt_setadmin , opt_setlearner],[opt_resetemail, opt_unbind, option_back]]
+                    bot_prompt(self.bot, self.chatid, txt, useraction_menu)
+            elif resp == opt_blockuser:
+                query = f"update user_master set usertype = 0 where client_name = '{self.client_name}' and studentid = {self.student_id} ;"
+                rds_update(query)
+                retmsg = f"User with Student-ID {self.student_id} has been blocked."
+            elif resp == opt_setadmin:
+                query = f"update user_master set usertype = 11 where client_name = '{self.client_name}' and studentid = {self.student_id} ;"
+                rds_update(query)
+                retmsg = f"User with Student-ID {self.student_id} has been set as admin."
+            elif resp == opt_setlearner:
+                query = f"update user_master set usertype = 1 where client_name = '{self.client_name}' and studentid = {self.student_id} ;"
+                rds_update(query)
+                retmsg = f"User with Student-ID {self.student_id} has been set as learner."
+            elif resp == opt_resetemail:
+                query = f"update user_master set email = '{resp}' where client_name = '{self.client_name}' and studentid = {self.student_id} ;"
+                rds_update(query)
+                retmsg = f"User email with Student-ID {self.student_id} has been set to {self.student_id}."
+            elif resp == opt_unbind:
+                query = f"update user_master set binded = 0, chat_id = 0 where client_name = '{self.client_name}' and studentid = {self.student_id} ;"
+                rds_update(query)
+                retmsg = f"User telegram account has been unbinded from Student-ID {self.student_id}."
+
+        elif self.menu_id == keys_dict[option_client]:
+            svcbot.client_name = client_name = resp
+            bot_prompt(bot, chat_id, f"Default client_name set to {resp}", system_menu)
+            self.menu_id = keys_dict[option_syscfg]
+            
+        elif self.menu_id == keys_dict[option_cmd]:
+            if resp == option_back :
+                bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
+                self.menu_id = keys_dict[option_mainmenu]
+            else:
+                txt = shellcmd(resp)
+                txt_list = txt.split('\n')
+                cnt = int((len(txt_list)+19)/20)
+                for n in range(cnt):
+                    m = n*20
+                    result = '\n'.join(txt_list[m:][:20])
+                    result = '<pre>' + result + '</pre>'
+                    bot.sendMessage(chat_id, result, parse_mode='HTML')
+
         while len(retmsg) > 0:
             txt = retmsg[:100]
             retmsg = retmsg[100:]
@@ -434,14 +557,15 @@ class MessageCounter(telepot.helper.ChatHandler):
 def profiler_report(client_name, output_file):
     try:
         ok = 1
-        mcqinfo = rds_df( f"SELECT * FROM mcqas_info WHERE client_name='{client_name}';")
-        if mcqinfo is None:
-            self.sender.sendMessage("Information not available")
+        cols = ['grade', 'mcq_avgscore', 'mcq_cnt', 'as_avgscore'] 
+        mcqinfo = rds_df( f"SELECT grade,mcq_avgscore,mcq_cnt,as_avgscore FROM mcqas_info WHERE client_name='{client_name}';")
+        if mcqinfo is None:        
+            ok = 0
             return
         else:
-            mcqinfo.columns = get_columns("mcqas_info")
-        features = ['mcq_avgscore', 'mcq_cnt', 'as_avgscore']
-        df = mcqinfo[['grade'] + features ]
+            mcqinfo.columns = cols
+        features = ['mcq_avgscore', 'mcq_cnt', 'as_avgscore']        
+        df = mcqinfo[cols]
         pf = ProfileReport(df)
         pf.to_file(output_file)
     except:
@@ -474,7 +598,6 @@ def runbotjob(svcbot):
     global edx_api_header, edx_api_url    
     adminchatid = svcbot.adminchatid
     jobitem = svcbot.job_items
-    #print(*jobitem.items(), sep = '\n')            
     job_id = jobitem['job_id']
     client_name = jobitem['client_name']
     chat_id = jobitem['chat_id']
@@ -582,7 +705,7 @@ def do_main():
     vmsvclib.rds_connstr = ""
     vmsvclib.rdscon = None
     df = rds_df("select * from params where client_name = 'System';")
-    if df is None:            
+    if df is None:
         print("unable to proceed, params table not found")
         return        
     df.columns = get_columns("params")
@@ -600,18 +723,11 @@ def do_main():
     omchat.load_modelfile("ft_model.bin", client_name)
     dt_model.load_model("dt_model.bin")
     nn_model.model_loader("ffnn_model.hdf5")
-    svcbot = BotInstance(SvcBotToken, client_name, max_duration, adminchatid)    
+    svcbot = BotInstance(SvcBotToken, client_name, max_duration, adminchatid) 
     print(svcbot)
     #svcbot.bot.sendMessage(adminchatid, "Click /start to connect the ServiceBot")
     #edx_cnt = 0
     while svcbot.bot_running:  
-        #checkjoblist(svcbot)
-        #timenow = time_hhmm(gmt)
-        #if (edx_time > 0) and (timenow==edx_time) and (edx_cnt==0) :
-        #    edx_cnt = 1
-        #    job_request("ServiceBot",adminchatid,client_name,"edx_mass_import","")
-        #if (edx_time > 0) and (timenow > edx_time) and (edx_cnt==1):
-        #    edx_cnt = 0        
         time.sleep(3)
     try:
         os.kill(os.getpid(), 9)
