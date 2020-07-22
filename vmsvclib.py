@@ -291,6 +291,10 @@ def get_attachment(bot, fid):
     return fname
     
 def get_columns(tablename):
+    if '.db' in rds_connstr:
+        df = querydf(rds_connstr, f"PRAGMA table_info('{tablename}');")
+        cols = [x for x in df.name]
+        return cols
     query = f"SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_NAME = '{tablename}';"
     df = rds_df(query)
     df.columns = ['COLUMN_NAME']
@@ -375,15 +379,20 @@ def rds_connector():
         with open("vmbot.json") as json_file:  
             bot_info = json.load(json_file)
         rds_connstr = bot_info['omdb']
-    conn_info = rds_connstr.split(":")    
-    user = conn_info[1].replace('/','')    
-    pwhost = conn_info[2].split('/')[0].split('@')
-    passwd = pwhost[0]
-    host = pwhost[1]   
-    if 'azure' in host:
-        rdscon = pymysql.connect(host=host, port=3306, user=user,passwd=passwd,db='omnimentor',ssl={'ca': 'BaltimoreCyberTrustRoot.crt.pem'})   
+    if ':' in rds_connstr:
+        conn_info = rds_connstr.split(":")    
+        user = conn_info[1].replace('/','')    
+        pwhost = conn_info[2].split('/')[0].split('@')
+        passwd = pwhost[0]
+        host = pwhost[1]
+        if 'azure' in host:
+            rdscon = pymysql.connect(host=host, port=3306, user=user,passwd=passwd,db='omnimentor',ssl={'ca': 'BaltimoreCyberTrustRoot.crt.pem'})   
+        else:
+            rdscon = pymysql.connect(host=host, port=3306, user=user,passwd=passwd,db='omnimentor')
+    elif '.db' in rds_connstr:
+        rdscon = sqlite3.connect(rds_connstr)
     else:
-        rdscon = pymysql.connect(host=host, port=3306, user=user,passwd=passwd,db='omnimentor')       
+        rdscon = None
     return rdscon
 
 #@debug
@@ -391,7 +400,7 @@ def rds_df(query):
     global rdscon
     df = None
     #try:
-    rdscon = rds_connector()    
+    rdscon = rds_connector()
     if rdscon is None:
         rdscon = rds_connector()
         if rdscon is None:
@@ -548,5 +557,10 @@ if __name__ == "__main__":
     global rdscon, rds_connstr
     rds_connstr = ""
     rdscon = None
+    rdscon = rds_connector()    
+    #rds_update("update user_master set binded = 0 where chat_id=0;")    
+    df = rds_df("select * from user_master limit 10")    
+    df.columns = get_columns('user_master')
+    print(df)
     #
     print("End of vmsvclib.py")

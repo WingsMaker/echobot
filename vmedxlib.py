@@ -283,6 +283,16 @@ def search_course_list(keyword):
             course_list = eval(data)               
     return course_list
 
+def edx_course_started(client_name, course_id):
+    query = "SELECT count(*) as cnt FROM stages WHERE id=1 and client_name ="
+    query += f"'{client_name}' AND courseid='{course_id}' AND STR_TO_DATE(stagedate,'%d/%m/%Y') > CURDATE();"
+    try:
+        cnt = rds_param(query)    
+        cnt = int(cnt)
+    except:
+        cnt = 0
+    return cnt
+
 def edx_endofcourse(client_name, course_id):
     query = "SELECT (case SUBSTRING(`name`,-3) when 'EOC' then 1 else 0 END) eoc FROM stages WHERE client_name ="
     query += f"'{client_name}' AND courseid='{course_id}' AND STR_TO_DATE(stagedate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
@@ -1275,6 +1285,7 @@ if __name__ == "__main__":
     course_id = "course-v1:Lithan+FOS-0620A+17Jun2020" # 6116
     #course_id = "course-v1:Lithan+ICO-0520A+15Jul2020"
     #course_id = "course-v1:Lithan+FOS-0520A+06May2020"  # 5709
+    #course_id = "course-v1:Lithan+CPI-0320A+27Jul2020"
     sid = 6116
     #attendance_dates = sms_attendance(course_id, sid)
     #print('\n'.join([str(x) for x in attendance_dates]))
@@ -1283,6 +1294,8 @@ if __name__ == "__main__":
     #print(course_id, sid, f2f)
     #edx_daystart = edx_day0(course_id)
     #print( edx_daystart ) #2020-05-05
+    #soc = edx_course_started(client_name, course_id)
+    #print(soc)
     #test_google_calendar(course_id)
     #course_id ="course-v1:Lithan+CPI-0220A+13Jul2020"
     #update_schedule(course_id, client_name)
@@ -1294,7 +1307,7 @@ if __name__ == "__main__":
     #    print(df1)
     #
     #=====================================
-    mass_update_schedule(client_name)
+    #mass_update_schedule(client_name)
     #mass_update_usermaster(client_name)
     #perform_unit_tests(client_name, course_id, sid)
     #=====================================
