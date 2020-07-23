@@ -69,10 +69,11 @@ class NLP_Parser():
         return temp_string  
 
     def load_modelfile(self, dumpfile, client_name):
-        try:                
+        #try:
+        if True:
             ok = 0                        
             vmsvclib.rdscon=vmsvclib.rds_connector()
-            df = rds_df("select * from `omnimentor`.`prompts`;")
+            df = rds_df("select * from prompts;")
             if df is None:
                 print("failed at prompts")
                 return 0
@@ -80,29 +81,27 @@ class NLP_Parser():
             self.qn_resp = df.copy()
             #print(df.head(10))
             
-            df = rds_df("select * from `omnimentor`.`ft_corpus`;")
+            df = rds_df("select * from ft_corpus;")
             if df is None:
                 print("failed at ft_corpus")
                 return 0
             df.columns = ['label', 'prompt', 'response']            
             self.corpus_df = df.copy()
-            #print(df.head(10))
             
-            #df = rds_df("select * from `omnimentor`.`faq`;")
             df1 = rds_df("select * from faq;")
             if df1 is None:
                 return 0
             df1.columns = ['questions']
             #print(df1.head(10))
             
-            df2 = rds_df("select * from `omnimentor`.`dictionary`;")
+            df2 = rds_df("select * from dictionary;")
             if df2 is None:
                 print("failed at dictionary")
                 return 0
             df2.columns = ['keywords']            
             #print(df2.head(10))
 
-            df3 = rds_df("select * from `omnimentor`.`stopwords`;")
+            df3 = rds_df("select * from stopwords;")
             if df3 is None:
                 print("failed at stopwords")
                 return 0
@@ -120,8 +119,8 @@ class NLP_Parser():
             #ft_model = fasttext.load_model(dumpfile)
             self.model = ft_model
             ok = 1
-        except:
-            TfidfVec = TfidfVectorizer(tokenizer=self.tokenizer, stop_words='english')            
+        #except:
+            #TfidfVec = TfidfVectorizer(tokenizer=self.tokenizer, stop_words='english')            
         self.TfidfVec = TfidfVec
         if ok==0:
             print("model is incomplete")
@@ -314,7 +313,8 @@ if __name__ == "__main__":
     with open("vmbot.json") as json_file:  
         bot_info = json.load(json_file)
     client_name = bot_info['client_name']
-    print(client_name)
+    vmsvclib.rds_connstr = ""
+    vmsvclib.rdscon = None 
     opts = [ 0 , 7 ]
     if 0 in opts :
         print("Loading model from pickle")

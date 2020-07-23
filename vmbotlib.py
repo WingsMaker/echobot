@@ -212,9 +212,10 @@ def do_main():
 def load_edxdata(client_name):
     global vmbot
     date_today = datetime.datetime.now().date()
+    sub_str  = vmbot.sub_str
     yrnow = str(date_today.strftime('%Y'))    
     query = f"SELECT DISTINCT courseid FROM userdata WHERE client_name = '{client_name}' " 
-    query += f" AND SUBSTRING(courseid,-4)='{yrnow}' ORDER BY courseid;"
+    query += f" AND {sub_str}(courseid,-4)='{yrnow}' ORDER BY courseid;"
     df = rds_df(query)
     if df is None:
         course_list = []
@@ -253,7 +254,11 @@ def auto_notify(client_name, resp_dict, pass_rate):
     # T -1 days currently, to be generic next time
     qry = "SELECT a.* FROM stages a INNER JOIN playbooks b ON a.client_name=b.client_name AND a.courseid=b.course_id "
     qry += "INNER JOIN course_module c ON b.client_name=c.client_name AND b.module_code=c.module_code WHERE c.enabled=1 and "
-    qry += f"a.client_name = '{client_name}' AND STR_TO_DATE(a.startdate,'%d/%m/%Y') = DATE_ADD(CURDATE() , INTERVAL 1 DAY);"
+    qry += f"a.client_name = '{client_name}' AND "
+    if ('.db' in vmsvclib.rds_connstr):
+        qry += f"strftime(substr(a.startdate,7,4)||'-'||substr(a.startdate,4,2)||'-'||substr(a.startdate,1,2))=strftime(date('now','+1 day'));"
+    else:
+        qry += f"STR_TO_DATE(a.startdate,'%d/%m/%Y') = DATE_ADD(CURDATE() , INTERVAL 1 DAY);"
     stagedf = rds_df(qry)
     if stagedf is None:
         return
@@ -397,13 +402,14 @@ def auto_notify(client_name, resp_dict, pass_rate):
 
 def auto_intervent(client_name, resp_dict, pass_rate):
     global vmbot
+    sub_str  = vmbot.sub_str
     date_today = datetime.datetime.now().date()
     yrnow = str(date_today.strftime('%Y'))
     query = "SELECT DISTINCT a.courseid FROM userdata a "
     query += " INNER JOIN playbooks b ON a.client_name=b.client_name AND a.courseid=b.course_id "
     query += " INNER JOIN course_module c ON b.client_name=c.client_name AND b.module_code=c.module_code "
     query += f" WHERE c.enabled=1 and a.client_name = '{client_name}' "
-    query += f" AND SUBSTRING(courseid,-4)='{yrnow}' ORDER BY courseid;"
+    query += f" AND {sub_str}(courseid,-4)='{yrnow}' ORDER BY courseid;"
     df = rds_df(query)
     if df is None:
         course_list = []
@@ -702,6 +708,7 @@ class BotInstance():
         self.edx_api_url = par_dict['edx_api_url']
         vmedxlib.edx_api_url = self.edx_api_url
         vmedxlib.edx_api_header = self.edx_api_header
+        self.sub_str  = "SUBSTRING" if ':' in vmsvclib.rds_connstr else "SUBSTR"
         if Token == "":
             Token = par_dict['BotToken']
         try:
@@ -1051,16 +1058,16 @@ class MessageCounter(telepot.helper.ChatHandler):
         client_name = vmbot.client_name
         if (client_name != "Demo") :
             self.sender.sendMessage("Please wait for a while.")
-            try:
+            try:            
                 vmedxlib.update_mcq(self.courseid, client_name, self.student_id)
                 vmedxlib.update_assignment(self.courseid, client_name, self.student_id)
                 #vmedxlib.update_schedule(self.courseid,  client_name)                
             except:
-                pass
+                pass            
         qry = "select * from userdata where client_name = '_c_' and courseid = '_x_';"
-        qry = qry.replace('_c_', self.client_name)
+        qry = qry.replace('_c_', client_name)
         qry = qry.replace('_x_', self.courseid)
-        df = rds_df( qry )
+        df = rds_df( qry )        
         if df is None:            
             self.userdata = None
             if self.client_name != "Demo":
@@ -1068,8 +1075,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                 df = rds_df( qry )
         if df is not None:
             df.columns = get_columns("userdata")
-            self.userdata = df
-            
+            self.userdata = df        
         qry = "select * from stages where client_name = '_c_' and courseid = '_x_';"
         qry = qry.replace('_c_', self.client_name)
         qry = qry.replace('_x_', self.courseid)
@@ -1267,11 +1273,19 @@ class MessageCounter(telepot.helper.ChatHandler):
         yrnow = str(date_today.strftime('%Y'))        
         if client_name == "":
             return (course_id_list, course_name_list)
+        if client_name == "Demo":
+            df = rds_df("select distinct course_id, course_name from playbooks where client_name='Demo';")
+            if df is not None:
+                df.columns = ['course_id','course_name']                
+                course_id_list = [x for x in df.course_id]
+                course_name_list = [x for x in df.course_name]
+            return (course_id_list, course_name_list)
         if stud==0:
+            sub_str  = self.parentbot.sub_str        
             #qry = f"SELECT DISTINCT course_id, course_name FROM playbooks WHERE client_name='{self.client_name}';"
             qry = f"SELECT DISTINCT a.course_id, a.course_name FROM playbooks a "
             qry += f"INNER JOIN course_module c ON a.client_name=c.client_name AND a.module_code=c.module_code "
-            qry += f"WHERE c.enabled=1 AND a.client_name='{self.client_name}' and SUBSTRING(course_id,-4)='{yrnow}' ORDER BY a.course_id;"
+            qry += f"WHERE c.enabled=1 AND a.client_name='{client_name}' and {sub_str}(course_id,-4)='{yrnow}' ORDER BY a.course_id;"
             df = rds_df(qry)
             if df is not None:            
                 df.columns = ['course_id','course_name']
@@ -2005,7 +2019,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                     retmsg = "There is no information found at the moment"
                 else:                    
                     title_name = "Searched course-id results"
-                    html_list(self.bot, chat_id, df, df.columns, [30], title_name, 15)                
+                    html_list(self.bot, chat_id, df, df.columns, [60], title_name, 15)                
                 txt = "You are now at faculty menu"
                 bot_prompt(self.bot, self.chatid, txt, faculty_menu)
                 self.menu_id = keys_dict[option_fct]
@@ -2530,11 +2544,6 @@ def verify_student(cname, userdata, student_id, courseid, stagedf):
     
     return (msg, vars)
 
-def schedule_stage(clt, courseid):
-    query = f"SELECT `name` FROM stages WHERE client_name = '{clt}' AND courseid='{courseid}' AND STR_TO_DATE(startdate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
-    result = rds_param(query)
-    return result
-
 def evaluate_progress(vars,iu_list,passingrate,var_prefix,var_title):    
     avg_prefix = var_prefix + "_avg"
     att_prefix = var_prefix + "_attempts"    
@@ -2583,7 +2592,7 @@ def evaluate_progress(vars,iu_list,passingrate,var_prefix,var_title):
     return (tt, score_avg, score_zero, score_pass, score_failed, iu_score , iu_attempts, iu_cnt, attempts_balance)
 
 def get_stageinfo(vars, pass_rate, f2f_missing, f2f, amt, stagecode, mcqvars, asvars, f2fvars):
-    ma_list = [] ; list_att = [] ; tt = "" ; t1 = '' ; t2 = ''
+    ma_list = [] ; list_att = [] ; tt = "" ; t1 = '' ; t2 = '' 
     mcnt = 0 ; mcq_avg = 0 ; mcq_zero = [] ; mcq_pass = [] ; mcq_failed = [] ; mbal = ""
     acnt = 0 ; as_avg = 0 ; as_zero = [] ; as_pass = [] ; as_failed = [] ; abal = ""
     mcq_att = [] ; as_att = []
@@ -2602,15 +2611,21 @@ def get_stageinfo(vars, pass_rate, f2f_missing, f2f, amt, stagecode, mcqvars, as
     ascore = round(ascore*100)/100
     mcqas_comp = 1 if len([n+1 for n in range(len(list_att)) if list_att[n]==0])==0 else 0
     max_att = 0 if len(list_att)==0 else max(list_att)
+    
     pass_stage = 0
     if stagecode.lower()=="soc" and amt == 0:
         pass_stage = 1
-    if mcqas_comp==1 and ascore>= pass_rate :
+    if (mcqas_comp==1) and (ascore>= pass_rate) and (mm>0):
         pass_stage = 1
     if f2f_missing==1:
         pass_stage = 1 if ((f2f_exception==1) or (f2f_user_ok==1)) else 0
-    if "eoc" in stagecode.lower():
+    if (mm==0) and (f2f_missing == 0):
         pass_stage = 1
+    if (mm==0) and (f2f_missing == 1) and (f2f_exception==1) :
+        pass_stage = 1
+    if "eoc" in stagecode.lower():
+        pass_stage = 0 if amt > 0 else 1
+        
     tt = t1 + t2
     risk_level = 0
     if len(mcq_zero) > 0:
@@ -2626,6 +2641,9 @@ def get_stageinfo(vars, pass_rate, f2f_missing, f2f, amt, stagecode, mcqvars, as
     if (f2f_missing == 1) and (f2f_exception==0) and (f2f_user_ok==0):
         risk_level = 3
         f2f_error = 1
+    if amt > 0 :
+        pass_stage = 0
+
     return (pass_stage, has_score, ascore, ma_list, max_att, list_att, mcq_avg, mcq_zero, mcq_pass, mcq_failed, mcq_att, mcnt, mbal, \
         as_avg, as_zero, as_pass, as_failed, as_att, acnt, abal, mcqas_comp, f2f_error, risk_level, tt)
 
@@ -2635,7 +2653,14 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     rec = df[df.studentid==student_id].iloc[0]
     courseid = rec['courseid']    
     sid = student_id
-    stagebyschedule = schedule_stage(client_name, courseid)
+    if ('.db' in vmsvclib.rds_connstr):
+        query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{courseid}' AND "
+        query += f"strftime(substr(startdate,7,4)||'-'||substr(startdate,4,2)||'-'||substr(startdate,1,2)) "
+        query += f"<= strftime(date('now')) ORDER BY id DESC LIMIT 1;"
+    else:
+        query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{courseid}' "
+        query += "AND STR_TO_DATE(startdate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
+    stagebyschedule = rds_param(query)
     if stagedf is None:
         query = f"SELECT * FROM stages WHERE client_name = '{client_name}' AND courseid='{courseid}';"
         df = rds_df(query)
@@ -2650,9 +2675,14 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
         return ("", "", vars)
     begin_date_list = [x for x in df.startdate]
     first_date = string2date(begin_date_list[0],"%d/%m/%Y")
+    last_date = string2date(begin_date_list[-1],"%d/%m/%Y")    
     date_today = datetime.datetime.now().date()
+    #if (date_today > last_date):        
+    #    return ("_eoc_", "", vars)
+    
     if (first_date > date_today):        
         return ("_soc_", "", vars)
+        
     due_date_list = [x for x in df.stagedate]
     stage_names_list = [x for x in df.name]
     stage_desc_list = [x for x in df.desc]
@@ -2661,8 +2691,12 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     asvars_list = [x for x in df.assignment]
     f2fvars_list = [x for x in df.f2f]
     f2f = vars['f2f']
-    amt = vars['amt']    
-    missing_dates = vmedxlib.sms_missingdates(client_name, courseid, sid)    
+    amt = vars['amt']
+    
+    if client_name == 'Demo':
+        missing_dates = []
+    else:
+        missing_dates = vmedxlib.sms_missingdates(client_name, courseid, sid)    
     stagebyprogress = ""
     statusbyprogress = ""
     mcnt = 0
@@ -2672,17 +2706,29 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     overall_passed = 1
     missed_stage = ""
     f2f_failed = 0
+    txt = ''
+    stage_date = ""
+    mcq_pending = []
+    assignment_pending = []
+    mfail = []
+    afail = []
     for n in range(stglen):
-        stagecode = stg_list[n]
+        stagecode = stg_list[n]        
         stagename = stage_names_list[n]
-        stage_missing = missing_dates[n] 
+        if client_name == 'Demo':
+            stage_missing = ''
+        else:
+            stage_missing = missing_dates[n] 
         f2f_missing = 0 if stage_missing=="" else 1
+        stg_date = due_date_list[n]
+        stagedesc = stage_desc_list[n]
+        stagedesc = stagedesc.replace('?','')
         (pass_stage, has_score, avg_score, mcqas_list, max_attempts, list_attempts, mcq_avg, mcq_zero, mcq_pass, mcq_failed, mcq_attempts, \
             mcnt, mcq_att_balance, as_avg, as_zero, as_pass, as_failed, as_attempts, acnt, as_att_balance, mcqas_complete, f2f_error, risk_level, tt) \
             = get_stageinfo(vars, pass_rate, f2f_missing, f2f, amt, stagecode, mcqvars_list[n], asvars_list[n], f2fvars_list[n])
         if (stagebyprogress == "") and (pass_stage == 0):
-            stagedesc = stage_desc_list[n]
-            stagedesc = stagedesc.replace('?','')
+            #stagedesc = stage_desc_list[n]
+            #stagedesc = stagedesc.replace('?','')
             stagebyprogress = stage_names_list[n]
             statusbyprogress = f"{stagename} ({stagedesc})"
             overall_passed = 0
@@ -2692,19 +2738,21 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
             assignment_pending = as_zero
             mfail = mcq_failed
             afail = as_failed
+            stage_date = stg_date            
         if stagebyschedule == stagename: 
             mcqvars = mcqvars_list[n]
             asvars = asvars_list[n],
-            f2fvars = f2fvars_list[n]
-            stage_desc = stage_desc_list[n]
+            f2fvars = f2fvars_list[n]            
+            stagedesc = stage_desc_list[n]
             stg_date = due_date_list[n]
             date_from = begin_date_list[n]
             stage_days = stage_daysnum_list[n]
             vars['stage'] = stagebyschedule
             txt = tt + "\n\n"
-            if stagebyprogress != "":
+            if stagebyprogress != "":                
                 break    
     pass_stage = overall_passed
+    stg_date = stage_date
     mcqdate = stg_date
     asdate  = stg_date
     eldate  = stg_date
@@ -2715,15 +2763,17 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     as_zero = assignment_pending
     mcq_failed = mfail
     as_failed = afail
+    stage_desc = stagedesc
     vars['stage'] =  stagebyprogress
     txt_hdr = resp_dict['stg0']
-    if "eoc" in stagebyschedule.lower():
+    # zz
+    if ("eoc" in stagebyschedule.lower()) and (pass_stage == 1):
         txt = ""
         txt_hdr = "_eoc_"
     else:
         txt_hdr += resp_dict['stg1']
     if '{stage_desc}' in txt_hdr:
-        txt_hdr = txt_hdr.replace('{stage_desc}' , stage_desc)
+        txt_hdr = txt_hdr.replace('{stage_desc}' , stage_desc)        
     if '{username}' in txt_hdr:
         txt_hdr = txt_hdr.replace('{username}' , vars['username'])
     if '{stage}' in txt_hdr:        
@@ -2734,7 +2784,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
         txt_hdr = txt_hdr.replace('{stagebyprogress}' , statusbyprogress)
     if '{lf}' in txt_hdr:
         txt_hdr = txt_hdr.replace('{lf}' , '\n')
-    query = f"update userdata set stage = '{stagebyprogress}' WHERE client_name = '{client_name}' AND courseid='{courseid}' AND studentid={sid};"    
+    query = f"update userdata set stage = '{stagebyprogress}' WHERE client_name = '{client_name}' AND courseid='{courseid}' AND studentid={sid};"
     rds_update(query)     
     for vv in ['stage', 'stagecode', 'mcqdate', 'asdate', 'eldate', 'fcdate', 'avg_score', 'mcqas_complete', 'mcq_pass', 'mcq_failed', 'missed_stage', \
             'has_score', 'pass_stage', 'max_attempts', 'mcqas_list', 'mcq_zero', 'mcq_avg', 'as_pass', 'as_failed', 'risk_level', 'stg_list', \
@@ -2770,23 +2820,32 @@ def display_progress(df, sid, vars, client_name, resp_dict, pass_rate=0.7):
     pass_stage = vars['pass_stage']
     pmlaststage = [ x for x in stg_list if x[:2]=='PM' ][-1]
     f2f_stage = vars['missed_stage']
+    risk_level = vars['risk_level']
+    mcq_zero = vars['mcq_zero']
+    mcq_failed = vars['mcq_failed']
+    as_zero = vars['as_zero']
+    as_failed = vars['as_failed']
+    amt = vars['amt']
     if vars['has_score'] == 1:
         txt += resp_dict['avg_score']
     if stg.lower() == "soc days":
-        if vars['amt'] == 0 :
+        #if vars['amt'] == 0 :
+        if amt == 0 :
             resp_amt0 = resp_dict['amt0']
             txt += resp_amt0 + "\n\n"
-        elif vars['amt'] > 0:
+        #elif vars['amt'] > 0:
+        elif amt > 0:
             resp_amt1 = resp_dict['amt1']
             txt += resp_amt1 + "\n\n"
     else:
-        if vars['amt'] > 0 :
+        #if vars['amt'] > 0 :
+        if amt > 0 :
             resp0 = resp_dict['resp0']
             txt += resp0 + "\n\n"
     if vars['mcqas_complete']==1 and vars['avg_score']>= pass_rate :
         resp1 = resp_dict['resp1']
         txt += resp1 + "\n\n"
-    if len(vars['mcq_zero']) > 0 and vars['avg_score'] == 0 :
+    if len(mcq_zero) > 0 and vars['avg_score'] == 0 :
         resp2 = resp_dict['resp2']
         txt += resp2 + "\n\n"        
     if len(vars['mcqas_list'])>0 and vars['avg_score'] < pass_rate and vars['max_attempts'] < 4 :
@@ -2796,12 +2855,12 @@ def display_progress(df, sid, vars, client_name, resp_dict, pass_rate=0.7):
         and vars['max_attempts'] >= 4 :
         resp4 = resp_dict['resp4']
         txt += resp4 + "\n\n"
-    if len(vars['mcq_zero']) > 0 :
+    if len(mcq_zero) > 0 :
         resp5 = resp_dict['resp5']
-        txt += resp5.replace("{mcqlist}", str(vars['mcq_zero'])) + "\n\n"
-    if len(vars['as_zero']) > 0 :
+        txt += resp5.replace("{mcqlist}", str(mcq_zero)) + "\n\n"
+    if len(as_zero) > 0 :
         resp6 = resp_dict['resp6']
-        txt += resp6.replace("{aslist}" , str(vars['as_zero'])) + "\n\n"
+        txt += resp6.replace("{aslist}" , str(as_zero)) + "\n\n"
     if f2f_error == 1:
         resp7 = resp_dict['resp7']
         txt += resp7 + "\n\n"
@@ -2821,7 +2880,8 @@ def display_progress(df, sid, vars, client_name, resp_dict, pass_rate=0.7):
     if '{avg_score}' in txt:
         txt = txt.replace('{avg_score}' , "{:.2%}".format(vars['avg_score']))
     if '{amt}' in txt:
-        txt = txt.replace('{amt}' ,  "{:8.2f}".format(vars['amt']).strip() )
+        #txt = txt.replace('{amt}' ,  "{:8.2f}".format(vars['amt']).strip() )
+        txt = txt.replace('{amt}' ,  "{:8.2f}".format(amt).strip() )
     if '{mcqdate}' in txt:
         txt = txt.replace('{mcqdate}' , vars['mcqdate'])
     if '{asdate}' in txt:
@@ -2831,6 +2891,15 @@ def display_progress(df, sid, vars, client_name, resp_dict, pass_rate=0.7):
     if '{fcdate}' in txt:
         txt = txt.replace('{fcdate}' ,  vars['fcdate'] )
     vars['notification'] = txt
+    
+    query = f"update userdata set risk_level = {risk_level}, mcq_zero = '{mcq_zero}' "
+    query += f" ,mcq_failed = '{mcq_failed}', as_zero = '{as_zero}', as_failed = '{as_failed}' "
+    query += f" where client_name='{client_name}' and courseid='{cid}' and studentid={sid};"
+    try:
+        rds_update(query)
+    except:
+        print(query)
+    
     return vars
 
 def grad_pred_text(vars, client_name, use_neural_network = False):
@@ -2868,7 +2937,7 @@ def load_vars(df, sid):
     return vars
 
 def job_request(bot_req,chat_id,client_name,func_req,func_param):
-    if func_req == "":
+    if (func_req == "") or ('.db' in vmsvclib.rds_connstr):
         return
     gen_job_id = lambda : (''.join(random.choice( "ABCDEFGHJKLMNPQRTUVWXY0123456789" ) for i in range(12))).upper()    
     date_now = time.strftime('%Y%m%d', time.localtime() )

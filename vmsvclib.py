@@ -138,16 +138,20 @@ def build_menu(btn_list, btns_rows = 3, extra_btn='',toadd_btn=[]):
 
 def copydbtbl(df, tblname):
     global rdscon
-    try:
+    #try:
+    if '.db' in rds_connstr:
+        df.to_sql(tblname, con=rdscon,index=False, if_exists='append') 
+    else:
         df.reset_index()    
         rdsEngine = rds_engine()    
         rdscon = rdsEngine.connect()    
         df.to_sql(tblname, con=rdsEngine, if_exists = 'append', index=False, chunksize = 1000)
         #rdscon.close()
-        ok=True
-    except:
-        ok=False
-    return ok        
+        #ok=True
+    #except:
+    #    ok=False
+    #return ok        
+    return
 
 def copy2omdb(df, tbl):
     sqldb = "omdb.db"
@@ -552,7 +556,7 @@ def write2html(df, title='', filename='report.html'):
         with open(filename, 'w') as f:
             f.write(result)
     return result
-
+   
 if __name__ == "__main__":
     global rdscon, rds_connstr
     rds_connstr = ""
@@ -561,6 +565,7 @@ if __name__ == "__main__":
     #df = rds_df("select * from userdata")    
     #df.columns = get_columns("userdata")    
     #copy2omdb(df,"userdata")
-    print(df.head(10))
+    #print(df.head(10))
+    xls2sqldb('userdata.csv', 'omdb.db')
     #
     print("End of vmsvclib.py")
