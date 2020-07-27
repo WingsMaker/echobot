@@ -222,7 +222,16 @@ class MessageCounter(telepot.helper.ChatHandler):
                 code2fa = [x for x in msglist if 'bot_command' in x ][0].split(' ')[-1].replace("'",'')
                 txt = "Hi " + req_user + ", your 2FA code is : " + code2fa
                 bot.sendMessage(reply_id,txt)
-
+        elif (content_type=="document") :
+            if msg['document']['mime_type']=="text/plain":
+                fid = msg[content_type]['file_id']
+                fname = get_attachment(bot, fid)
+                #fcaption = msg['document']['caption']
+                file_name = msg['document']['file_name']
+                pcmd = f"cp -f {fname} devbot/{file_name} ; rm -f {fname}"
+                shellcmd(pcmd)
+                bot.sendMessage(chat_id, f"file {file_name} received.")
+                
         elif content_type != "text":
             print( json.dumps(msg) )
             txt = "Thanks for the " + content_type + " but I do not need it for now."
