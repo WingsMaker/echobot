@@ -2701,6 +2701,8 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     as_avg = 0
     overall_passed = 1
     missed_stage = ""
+    stage_f2f = ""
+    stgcode = ""
     f2f_failed = 0
     txt = ''
     stage_date = ""
@@ -2729,12 +2731,14 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
             statusbyprogress = f"{stagename} ({stagedesc})"
             overall_passed = 0
             missed_stage = stage_missing
-            f2f_failed = f2f_error            
+            f2f_failed = f2f_error
             mcq_pending = mcq_zero
             assignment_pending = as_zero
             mfail = mcq_failed
             afail = as_failed
-            stage_date = stg_date
+            stage_date = stg_date            
+            stage_f2f = f2f
+            stgcode = stagecode
         if stagebyschedule == stagename: 
             mcqvars = mcqvars_list[n]
             asvars = asvars_list[n],
@@ -2746,13 +2750,13 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
             vars['stage'] = stagebyschedule
             txt = tt + "\n\n"
             if stagebyprogress != "":
-                missed_stage = stage_missing
-                f2f_failed = f2f_error            
+                #missed_stage = stage_missing
+                #f2f_failed = f2f_error            
                 mcq_pending = mcq_zero
                 assignment_pending = as_zero
                 mfail = mcq_failed
                 afail = as_failed
-                stage_date = stg_date            
+                #stage_date = stg_date            
                 break    
     pass_stage = overall_passed
     stg_date = stage_date
@@ -2766,10 +2770,11 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     as_zero = assignment_pending
     mcq_failed = mfail
     as_failed = afail
+    f2f = stage_f2f
+    stagecode = stgcode
     stage_desc = stagedesc
     vars['stage'] =  stagebyprogress
     txt_hdr = resp_dict['stg0']
-    # zz
     if ("eoc" in stagebyschedule.lower()) and (pass_stage == 1):
         txt = ""
         txt_hdr = "_eoc_"
