@@ -174,7 +174,8 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
             qn = 1
         return qn
     
-    df_mcq = pd.DataFrame.from_dict( {'client_name':[],'course_id':[],'student_id':[], 'score':[],'mcq':[],'qn':[],'attempts':[]} )    
+    df_mcq = pd.DataFrame.from_dict( {'client_name':[],'course_id':[],'student_id':[], 'score':[], \
+        'mcq':[],'qn':[],'attempts':[], 'avgscore': []} )    
     if student_id==0:
         url = f"{edx_api_url}/user/fetch/mcq/scores/list"
     else:
@@ -188,24 +189,32 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
         qn_list = []
         grade_list = []
         att_list = []
+        avgscore_list = []
         for rec in [ x for x in list(data) if 'attempts' in x['state']]  :            
             sc = rec['score']
             pp = rec['points_possible']
             qn = getnumstr(rec['options_display_name'])
             iu = getnumstr(rec['chapter_title'])
+            state = eval(rec['state'].replace('null','""').replace('false','0').replace('true','1'))
+            attempts = state['attempts']
+            statekey = list(state['correct_map'])[0]
+            correctness = state['correct_map'][statekey]['correctness']
+            qnscore = 1.0 if correctness=='correct' else 0            
             grade = 1.0 if pp==0 else float(sc/pp)
             course_id_list.append(rec['course_id'])
             student_id_list.append(rec['student_id'])                
             #iu_list.append(int(rec['IU']))
-            iu_list.append(iu)
+            iu_list.append(iu)            
             #qn_list.append(int(rec['options_display_name'].split('.')[0][1:]))
             qn_list.append(qn)
-            grade_list.append(grade)
-            attempts = eval(rec['state'].replace('null','""').replace('false','0').replace('true','1'))['attempts']
+            grade_list.append(qnscore)
+            #attempts = eval(rec['state'].replace('null','""').replace('false','0').replace('true','1'))['attempts']
             att_list.append(int(attempts))
+            # actual average score
+            avgscore_list.append(grade)
         client_list = [client_name for x in iu_list]        
         data = {'client_name':client_list, 'course_id': course_id_list, 'student_id':student_id_list, \
-            'score':grade_list ,'mcq':iu_list , 'qn':qn_list , 'attempts': att_list}            
+            'score':grade_list ,'mcq':iu_list , 'qn':qn_list , 'attempts': att_list,  'avgscore': avgscore_list}
         df_mcq = pd.DataFrame.from_dict(data)     
     return df_mcq
 
@@ -473,14 +482,19 @@ def update_mcq(course_id, client_name, student_id=0):
         mcq_df = edx_mcqinfo(client_name, course_id, student_id)        
         if len(mcq_df) > 0:            
             query = "delete from mcq_data where " + cond_qry
-            rds_update(query)
-        df = mcq_df[['client_name', 'course_id', 'student_id', 'score', 'mcq', 'qn', 'attempts']]        
+            rds_update(query)        
+        df = mcq_df[['client_name', 'course_id', 'student_id', 'score', 'mcq', 'qn', 'attempts']]
         copydbtbl(df, "mcq_data")
 
         # save into local database with tablename mcq_score with score/max_attempts per mcq tests/students/cohorts
-        query = "select client_name, course_id, student_id, mcq, count(*) as max, sum(score) as mcqscore, \
-            max(attempts) as max_attempts from mcq_data where " + cond_qry \
-            + " group by client_name, course_id, student_id, mcq order by client_name, course_id, student_id, mcq"
+        #query = "select client_name, course_id, student_id, mcq, count(*) as max, sum(score) as mcqscore, \
+        #    max(attempts) as max_attempts from mcq_data where " + cond_qry \
+        #    + " group by client_name, course_id, student_id, mcq order by client_name, course_id, student_id, mcq"
+        #query = "select client_name,course_id,student_id,mcq,avg(score) AS mcqscore,max(attempts) as max_attempts from mcq_data where " 
+        query = "select client_name,course_id,student_id,mcq,count(*) as max,sum(score) as score,max(attempts) as max_attempts from mcq_data where " 
+        query += cond_qry 
+        query += " group by client_name,course_id,student_id,mcq"
+        query += " order by client_name,course_id,student_id,mcq;"        
         scoredf = rds_df(query)        
         cnt = 0
         if scoredf is not None :
@@ -490,7 +504,6 @@ def update_mcq(course_id, client_name, student_id=0):
                 rds_update(query)                
                 scoredf.columns = ['client_name', 'courseid', 'studentid', 'mcq', 'max','score','max_attempts']
                 copydbtbl(scoredf, "mcq_score")                            
-
         # not all courses has the same total # of MCQ test, ususally 13
         if cnt == 0:
             max_mcq = 0
@@ -536,13 +549,6 @@ def update_mcq(course_id, client_name, student_id=0):
                 expr = ','.join( [ f"mcq_attempts{x} = {att_dict[x]}"  for x in mcq_list] )            
                 updqry = "update userdata set " + expr + f" WHERE client_name = '{client_name}' AND courseid = '{course_id}' AND studentid={sid};"
                 rds_update(updqry)        
-        # total number of questions per mcq test is independent
-        #print("max mcq score")
-        #query = "select mcq,  max(score) as maxscore from mcq_score where " + condqry + " group by courseid, mcq;"
-        query = "select mcq,  max(`max`) as maxscore from mcq_score where " + condqry + " group by courseid, mcq;"
-        df = rds_df(query)
-        df.columns = ['mcq' , 'maxscore']        
-        mcqmaxscore = dict(zip( [x for x in df.mcq] , [x for x in df.maxscore] ))
         
         # reset mcq scores 
         #print("reset mcq scores")
@@ -550,35 +556,21 @@ def update_mcq(course_id, client_name, student_id=0):
         updqry += condqry        
         rds_update(updqry)
         
-        # update on  mcq scores ( not average scores )
-        df = rds_df("SELECT studentid, mcq, score  from mcq_score WHERE mcq >0 AND " + condqry)
-        if df is None:
-            return
-        df.columns = ['studentid' , 'mcq', 'score']       
-        
-        df1 = pd.pivot_table(df, values='score', index=['studentid'],columns='mcq')
-        df1 = df1.fillna(0)        
-        cols = list(df1.columns)
-        cnt = len(cols)        
-        for index, row in df1.iterrows():            
-            list1 = list(row)            
-            updqry = ""    
-            for n in range(cnt):
-                try:
-                    m = mcqmaxscore[n+1]
-                except:
-                    m = 0
-                if m == 0 :
-                    list1[n] = 0
-                else:
-                    list1[n] = list1[n] / m                
-                m = n + 1
-                updqry += ",mcq_avg" + str(m) + " = " + str(list1[n])
-            updqry = "update userdata set " + updqry[1:] + " where studentid = " + str(index) + " and " + condqry
-            rds_update(updqry)  
+        # update on  mcq scores 
+        userlist = list(set([x for x in mcq_df.student_id]))
+        for sid in userlist:            
+            updqry = ""
+            df1 = mcq_df[mcq_df.student_id==sid][['mcq', 'avgscore']].copy()
+            mcq_list = list(set([x for x in df1.mcq]))
+            for mcq in mcq_list:
+                df2 = df1[ df1.mcq==mcq ]
+                score = df2.avgscore.values[0]
+                updqry += ",mcq_avg" + str(mcq) + " = " + str(score)
+            updqry = "update userdata set " + updqry[1:] + " where studentid = " + str(sid) + " and " + condqry
+            rds_update(updqry)
     #except:
         #pass
-    #print("update_mcq completed for course_id " + course_id)
+    print("update_mcq completed for course_id " + course_id)
     return
 
 def edx_import(course_id, client_name):
@@ -1317,9 +1309,17 @@ if __name__ == "__main__":
     #course_id = "course-v1:Lithan+FOS-0620A+17Jun2020" # 6116
     #course_id = "course-v1:Lithan+ICO-0520A+15Jul2020"
     #course_id = "course-v1:Lithan+FOS-0520A+06May2020"  # 5709
-    course_id = "course-v1:Lithan+FOS-0720A+08Jul2020" # 6633
-    course_id = "course-v1:Lithan+ICO-0520B+26Jun2020" # 6579
-    sid = 6579
+    #course_id = "course-v1:Lithan+ICO-0520B+26Jun2020" # 6579
+    course_id = "course-v1:Lithan+FOS-0720A+08Jul2020" # 6633 6614 6301
+    
+    #sid = 6301
+    #update_mcq(course_id, client_name, sid)
+    #df = edx_mcqinfo(client_name, course_id, sid)
+    #print(df)
+    
+    #course_id = "course-v1:Lithan+ADM-0120A+may2020"
+    #update_mcq(course_id, client_name, 4267)
+    
     #edx_import(course_id,  client_name)
     #update_schedule(course_id, client_name)
     #csid = input("Enter course id :")
@@ -1351,6 +1351,7 @@ if __name__ == "__main__":
     #    print(df1)
     #
     #=====================================
+    mass_update_mcq(client_name)
     #mass_update_schedule(client_name)
     #mass_update_usermaster(client_name)
     #perform_unit_tests(client_name, course_id, sid)

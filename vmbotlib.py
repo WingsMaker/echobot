@@ -797,10 +797,10 @@ class MessageCounter(telepot.helper.ChatHandler):
         self.menu_id = 0        
         return
 
-    def on_close(self, exception):
-        self.logoff()
-        self.sender.sendMessage('session time out.\nPress /start a few times to awake this bot.')
-        return 
+    #def on_close(self, exception):
+    #    self.logoff()
+    #    self.sender.sendMessage('session time out.\nPress /start a few times to awake this bot.')
+    #    return 
 
     def mcqas_chart(self, groupcht = False ):
         if self.userdata is None:
@@ -2819,8 +2819,9 @@ def display_progress(df, sid, vars, client_name, resp_dict, pass_rate=0.7):
     risk_level = vars['risk_level']
     mcq_zero = vars['mcq_zero']
     mcq_failed = vars['mcq_failed']
+    mcq_att = vars['mcq_attempts']
     as_zero = vars['as_zero']
-    as_failed = vars['as_failed']
+    as_failed = vars['as_failed']    
     amt = vars['amt']
     if vars['has_score'] == 1:
         txt += resp_dict['avg_score']

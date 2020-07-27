@@ -716,7 +716,8 @@ def do_main():
     adminchatid = int(par_dict['adminchatid'])
     client_name = par_dict['client_name']
     gmt = int(par_dict['GMT'])
-    max_duration = int(par_dict['max_duration'])
+    #max_duration = int(par_dict['max_duration'])
+    max_duration = 3600
     
     edx_time = edx_load_config(client_name)
     
