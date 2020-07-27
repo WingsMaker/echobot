@@ -381,11 +381,11 @@ def update_schedule(course_id, client_name):
     query += f"WHERE courseid = '{course_id}' AND client_name = '{client_name}';"    
     rds_update(query)
     if ('.db' in vmsvclib.rds_connstr):
-        query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{courseid}' AND "
+        query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{course_id}' AND "
         query += f"(strftime(substr(startdate,7,4)||'-'||substr(startdate,4,2)||'-'||substr(startdate,1,2)) "
         query += f"<= strftime(date('now'))) ORDER BY id DESC LIMIT 1;"
     else:
-        query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{courseid}' AND "
+        query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{course_id}' AND "
         query += "STR_TO_DATE(startdate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
     current_stage = rds_param(query) 
     query = f"update userdata set stage = '{current_stage}' where " + condqry 
@@ -477,8 +477,7 @@ def update_mcq(course_id, client_name, student_id=0):
     mcqcnt = edx_mcqcnt(course_id)
     if mcqcnt==0:
         return 
-    #try:
-    else:
+    try:        
         mcq_df = edx_mcqinfo(client_name, course_id, student_id)        
         if len(mcq_df) > 0:            
             query = "delete from mcq_data where " + cond_qry
@@ -568,9 +567,9 @@ def update_mcq(course_id, client_name, student_id=0):
                 updqry += ",mcq_avg" + str(mcq) + " = " + str(score)
             updqry = "update userdata set " + updqry[1:] + " where studentid = " + str(sid) + " and " + condqry
             rds_update(updqry)
-    #except:
-        #pass
-    print("update_mcq completed for course_id " + course_id)
+    except:
+        pass
+    #print("update_mcq completed for course_id " + course_id)
     return
 
 def edx_import(course_id, client_name):
@@ -584,8 +583,12 @@ def edx_import(course_id, client_name):
         print("incomplete information , edx_import stopped")
         return 
     
-    course_name = edx_coursename(course_id)    
-    update_playbooklist(course_id, client_name, course_name)
+    course_name = edx_coursename(course_id)  
+    eoc = edx_endofcourse(client_name, course_id)
+    update_playbooklist(course_id, client_name, course_name, eoc)
+    if eoc==1:
+        print(f"this course {course_id} already expired. No need to import again")
+        return
     
     cnt = rds_param("select count(*) as cnt from stages where client_name='{client_name}' and courseid='{course_id}';")
     cnt = int("0" + str(cnt))
@@ -931,20 +934,17 @@ def get_google_calendar(course_id, client_name):
         api_url = f"https://realtime.sambaash.com/v1/calendar/fetch?cohortId={course_code}%20:%20{cohort_id}"    
         #print(api_url)
         data  = get_calendar_json(api_url)
-    except:
-        print(api_url)
+    except:        
         data = {}
     if data == {}:
         try:
             cohort = cohort_id.replace("FOS","EIT")
             api_url = f"https://realtime.sambaash.com/v1/calendar/fetch?cohortId={cohort}"
             data  = get_calendar_json(api_url)
-        except:
-            print(933, api_url)
+        except:            
             data = {}        
     if data == {}:
-        #print("there is no data from google calendar")
-        print(937, api_url)
+        #print("there is no data from google calendar")        
         return []
     
     sorted_stage_list =  get_stage_list(data)
@@ -1101,18 +1101,20 @@ def update_stage_table(stage_list, course_id, client_name):
         #    print(query)
     return stage_list
 
-def update_playbooklist(course_id, client_name, course_name):
+def update_playbooklist(course_id, client_name, course_name, eoc):
     try:
         query = f"delete from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
         rds_update(query)
         cohort_id = piece(piece(course_id,':',1),'+',1)
         module_code = piece(cohort_id,'-',0)
-        query = "insert into playbooks(client_name,module_code,cohort_id,course_id,course_name) values('_c_', '_w_', '_x_', '_y_', '_z_');"                
+        query = "insert into playbooks(client_name,module_code,cohort_id,course_id,course_name,eoc) \
+            values('_c_', '_w_', '_x_', '_y_', '_z_',_e_);"
         query = query.replace("_c_", client_name)
         query = query.replace("_w_", module_code)
         query = query.replace("_x_", cohort_id)
         query = query.replace("_y_", course_id)
         query = query.replace("_z_", course_name)
+        query = query.replace("_e_", eoc)
         rds_update(query)
     except:
         #print("Unable to update playbook list")

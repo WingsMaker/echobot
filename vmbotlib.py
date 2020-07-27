@@ -212,8 +212,11 @@ def load_edxdata(client_name):
     date_today = datetime.datetime.now().date()
     sub_str  = vmbot.sub_str
     yrnow = str(date_today.strftime('%Y'))    
-    query = f"SELECT DISTINCT courseid FROM userdata WHERE client_name = '{client_name}' " 
-    query += f" AND {sub_str}(courseid,-4)='{yrnow}' ORDER BY courseid;"
+    #query = f"SELECT DISTINCT courseid FROM userdata WHERE client_name = '{client_name}' " 
+    #query += f" AND {sub_str}(courseid,-4)='{yrnow}' ORDER BY courseid;"
+    query = f"SELECT DISTINCT u.courseid FROM userdata u INNER JOIN playbooks p "
+    query += f" ON u.client_name=p.client_name AND u.courseid=p.course_id "
+    query += f"WHERE u.client_name = '{client_name}' AND p.eoc=0 AND {sub_str}(u.courseid,-4)='{yrnow}';"    
     df = rds_df(query)
     if df is None:
         course_list = []
@@ -228,12 +231,15 @@ def load_edxdata(client_name):
     email_filter = rds_param(f"SELECT `value` from params WHERE `key` = 'email_filter' and client_name = '{client_name}';")
     efilter = email_filter.split(',')
     for course_id in course_list:
-        eoc = vmedxlib.edx_endofcourse(client_name, course_id)
+        eoc = vmedxlib.edx_endofcourse(client_name, course_id)        
         if eoc == 0:
             vmedxlib.update_mcq(course_id, client_name)
             vmedxlib.update_assignment(course_id, client_name)
             vmedxlib.update_schedule(course_id, client_name)
             updated_courses.append(course_id)
+        if eoc == 1:
+            query = "update playbooks set eoc=1 where client_name='{client_name}' AND course_id='{course_id}';"
+            rds_update(query)
 
     course_list = vmedxlib.search_course_list(yrnow)    
     #print("edx_import")
@@ -1372,6 +1378,7 @@ class MessageCounter(telepot.helper.ChatHandler):
 
         #elif resp=='/z': # debug
             #auto_intervent(vmbot.client_name, vmbot.resp_dict, vmbot.pass_rate)            
+            #load_edxdata(vmbot.client_name)
             #self.logoff()
                 
         elif resp=='/end':
@@ -3170,7 +3177,7 @@ def runbotjob(vmbot):
         #except:
         #    txt += " failed."
     elif func_req == 'load_edxdata':
-        load_edxdata(client_name)    
+        load_edxdata(client_name)
     else:
         try:
             func_svc = func_req + "(" + func_param + ")"
