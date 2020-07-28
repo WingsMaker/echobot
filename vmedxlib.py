@@ -274,10 +274,10 @@ def sms_missingdates(client_name, course_id, student_id):
     if df is not None:
         df.columns = get_columns("stages")
         stgid_list = [x for x in df.id]
-        fsf_dates = [string2date(x,"%d/%m/%Y") for x in df.startdate]
+        f2f_dates = [string2date(x,"%d/%m/%Y") for x in df.startdate]
         stage_list = [x for x in df.stage]
-        arr_stgf2f = dict(zip(stage_list, fsf_dates))
-        missed_fsf = [f2flag(stage_list[n],fsf_dates[n]) for n in range(len(stgid_list))]
+        arr_stgf2f = dict(zip(stage_list, f2f_dates))
+        missed_fsf = [f2flag(stage_list[n],f2f_dates[n]) for n in range(len(stgid_list))]
     return missed_fsf
 
 def search_course_list(keyword):

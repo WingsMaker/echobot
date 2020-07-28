@@ -137,7 +137,7 @@ opt_mcqavg = "MCQ Avg Cohorts"
 opt_analysis = "Analysis Cohorts"
 mcqdiff_menu = [[an_avgatt,an_avgscore,an_mcqavg,option_back]]
 
-gen2fa = lambda : (''.join(random.choice( "ABCDEFGHJKLMNPQRTUVWXY0123456789" ) for i in range(32))).upper()
+#gen2fa = lambda : (''.join(random.choice( "ABCDEFGHJKLMNPQRTUVWXY0123456789" ) for i in range(32))).upper()
 string2date = lambda x,y : datetime.datetime.strptime(x,y).date()
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
 module_code = lambda x : piece(piece(piece(x,':',1),'+',1),'-',0)
@@ -177,11 +177,11 @@ def do_main():
             checkjoblist(vmbot)
             #zz = """
             timenow = time_hhmm(gmt)
-            if str(timenow) in ['0900']:
+            if timenow==900:
                 auto_notify(vmbot.client_name, vmbot.resp_dict, vmbot.pass_rate)
-                time.sleep(1)
+                time.sleep(30)
                 auto_intervent(vmbot.client_name, vmbot.resp_dict, vmbot.pass_rate)
-                time.sleep(1)
+                time.sleep(30)
             if (edx_time > 0) and (timenow==edx_time) and (edx_cnt==0) :
                 edx_cnt = 1
                 #job_request("ServiceBot",vmbot.adminchatid,vmbot.client_name,"edx_mass_import","")
@@ -380,7 +380,7 @@ def auto_notify(client_name, resp_dict, pass_rate):
                 try:
                     vmbot.bot.sendMessage(int(tid), txt)
                 except:
-                    print(txt)
+                    err_list.append(sid)
             del df1, df2
                     
         if len(err_list) > 0:
@@ -545,10 +545,10 @@ def auto_intervent(client_name, resp_dict, pass_rate):
                     #print(txt)  # debug
                 else:
                     try:
-                        vmbot.bot.sendMessage(int(tid), txt)                        
+                        vmbot.bot.sendMessage(int(tid), txt)
                         #vmbot.bot.sendMessage(vmbot.adminchatid, txt)                        
                     except:
-                        print(txt)
+                        err_list.append(sid)
                 query = f"update userdata set risk_level = {risk_level}, mcq_zero = '{mcq_zero}' "
                 query += f" ,mcq_failed = '{mcq_failed}', as_zero = '{as_zero}', as_failed = '{as_failed}' "
                 query += f" where client_name='{client_name}' and courseid='{course_id}' and studentid={sid};"
@@ -596,7 +596,7 @@ def loadconfig():
         #    print("Error loading nn_model")
         #    ok = False
         mcq_analysis = vmmcqdlib.MCQ_Diff()
-    except:  
+    except:
         ok = False  
     return ok
 
@@ -672,8 +672,8 @@ class BotInstance():
         par_key = [x for x in df.key]
         par_dict = dict(zip(par_key, par_val))            
         self.adminchatid = int(par_dict['adminchatid'])
-        #max_duration = int(par_dict['max_duration'])
-        max_duration = 3600
+        max_duration = int(par_dict['max_duration'])
+        #max_duration = 3600
         self.match_score = eval(par_dict['match_score'])
         self.use_regexpr = int(par_dict['regexpr'])
         self.pass_rate = float(par_dict['pass_rate'])
@@ -877,17 +877,21 @@ class MessageCounter(telepot.helper.ChatHandler):
         global vmbot        
         txt = "Summary:\n"
         if self.is_admin :
-            txt += '\nYou are the faculty adm\n\n'
+            txt += '\nYou are the faculty adm\n'
+            txt += 'Student id : ' + str(self.student_id) + "\n\n"
             if len(vmbot.user_list)==0:
                 txt += 'No students online\n'
             else:
-                txt += 'List of students online:\n'
-                txt += '\n'.join(['     '.join([str(d) for d in vmbot.user_list[r]]) for r in vmbot.user_list])
+                cnt = len(vmbot.user_list)
+                txt += f"{cnt} students online:\n"
+                #txt += 'List of students online:\n'
+                #txt += '\n'.join(['     '.join([str(d) for d in vmbot.user_list[r]]) for r in vmbot.user_list])
         else:
             if self.new_session:
                 txt += '\nsession already logged out.'
             else:
-                txt += '\nStudent id is ' + str(self.records['studentid'])
+                #txt += '\nStudent id is ' + str(self.records['studentid'])
+                txt += '\nStudent id : ' + str(self.student_id) 
                 txt += '\nCourse ID : ' + self.courseid
                 txt += '\nCourse Name : ' + self.coursename
                 cc = [x for x in self.list_courseids if self.courseid != x]
@@ -1233,7 +1237,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                 pass
             else:
                 grad_pred = dt_model.predict(mavg , aavg, mcnt) 
-            
+
             tbl.append( [vv , uu , "{:.2%}".format(grad_pred[0])] )
             progress_list = [ fz(n) for n in range(1,14) if gz(n) > 0]
             progress_list.append(['Avg', "{:.2%}".format(mavg) , " ",  "{:.2%}".format(aavg) , " "])
@@ -1278,7 +1282,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             qry += f"INNER JOIN course_module c ON a.client_name=c.client_name AND a.module_code=c.module_code "
             qry += f"WHERE c.enabled=1 AND a.client_name='{client_name}' and {sub_str}(course_id,-4)='{yrnow}' ORDER BY a.course_id;"
             df = rds_df(qry)
-            if df is not None:            
+            if df is not None:
                 df.columns = ['course_id','course_name']
                 course_id_list = [x for x in df.course_id]
                 course_name_list = [x for x in df.course_name]
@@ -1289,9 +1293,9 @@ class MessageCounter(telepot.helper.ChatHandler):
             userinfo = {}
         else:
             url = f"{api_url}/user/fetch/{stud}"
-            headers = self.parentbot.edx_api_header            
+            headers = self.parentbot.edx_api_header
             userinfo = edxapi_getuser(headers, url)
-        if userinfo == {} :            
+        if userinfo == {} :
             (course_id_list, course_name_list) = rds_loadcourse(client_name, stud)
         else:
             self.username = userinfo['username']
@@ -1379,7 +1383,7 @@ class MessageCounter(telepot.helper.ChatHandler):
         #elif resp=='/z': # debug
             #auto_intervent(vmbot.client_name, vmbot.resp_dict, vmbot.pass_rate)            
             #load_edxdata(vmbot.client_name)
-            #self.logoff()
+            #self.logoff()            
                 
         elif resp=='/end':
             self.endchat()
@@ -2030,7 +2034,8 @@ class MessageCounter(telepot.helper.ChatHandler):
                 bot_prompt(self.bot, self.chatid, txt, playbooklist_menu)
                 self.menu_id = keys_dict[pb_userdata]
             elif resp == pb_riskuser:
-                fn = f"risk_report_{chat_id}.html"
+                dt_str = str(datetime.datetime.now().date().strftime('%Y-%m-%d'))
+                fn = f"risk_report_{self.student_id}_{dt_str}.html"                
                 qry = f"SELECT courseid, studentid, username, risk_level, "
                 qry += f"mcq_zero AS mcq_pending, mcq_failed, "
                 qry += f"as_zero AS assignment_pending, as_failed AS assignment_failed "
@@ -2041,7 +2046,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                     self.sender.sendMessage("There is no information available at the moment")
                     return
                 df.columns = ['courseid','studentid','username','risk_level','mcq_pending','mcq_failed','assignment_pending','assignment_failed']
-                write2html(df, title="Learners at risk", filename=fn)
+                write2html(df, title=f"Learners at risk - dated {dt_str}", filename=fn)
                 bot.sendDocument(chat_id, document=open(fn, 'rb'))
             elif (resp == option_back) or (resp == "0"):
                 txt = 'Please select the following mode:'
@@ -2513,6 +2518,8 @@ def verify_student(cname, userdata, student_id, courseid, stagedf):
         return (msg, vars)
         
     vars = load_vars(userdata, student_id)    
+    if vars == {}:
+        return (f"Sorry there is no data for this student id {student_id}", vars)
     amt = vars['amt']
     student_name = vars['username']
     stage = vars['stage']
@@ -2936,6 +2943,11 @@ def grad_pred_text(vars, client_name, use_neural_network = False):
     return txt
     
 def load_vars(df, sid):
+    if df is None:
+        return {}
+    ulist = [x for x in df.studentid]
+    if sid not in ulist:
+        return {}
     vars = df[df.studentid==sid].iloc[0].to_dict()
     for x in list(vars):        
         if (x in ['amt', 'grade']) or ('_avg' in x):
@@ -3161,7 +3173,7 @@ def runbotjob(vmbot):
         elif func_req == "mass_update_schedule":
             vmedxlib.mass_update_schedule(client_name)
         elif func_req == "edx_mass_import":
-            vmedxlib.edx_mass_import(client_name)        
+            vmedxlib.edx_mass_import(client_name)
         txt += " completed successfully."
         #except:
         #    txt += " failed."
