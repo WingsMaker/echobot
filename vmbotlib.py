@@ -2676,7 +2676,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     stglen = len(stg_list)
     if stglen==0:
         return ("", "", vars)
-    begin_date_list = [x for x in df.startdate]
+    begin_date_list = [x[:10] for x in df.startdate]
     first_date = string2date(begin_date_list[0],"%d/%m/%Y")
     last_date = string2date(begin_date_list[-1],"%d/%m/%Y")    
     date_today = datetime.datetime.now().date()

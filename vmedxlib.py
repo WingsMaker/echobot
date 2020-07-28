@@ -274,10 +274,10 @@ def sms_missingdates(client_name, course_id, student_id):
     if df is not None:
         df.columns = get_columns("stages")
         stgid_list = [x for x in df.id]
-        f2f_dates = [string2date(x,"%d/%m/%Y") for x in df.startdate]
+        fsf_dates = [string2date(x,"%d/%m/%Y") for x in df.startdate]
         stage_list = [x for x in df.stage]
-        arr_stgf2f = dict(zip(stage_list, f2f_dates))
-        missed_fsf = [f2flag(stage_list[n],f2f_dates[n]) for n in range(len(stgid_list))]
+        arr_stgf2f = dict(zip(stage_list, fsf_dates))
+        missed_fsf = [f2flag(stage_list[n],fsf_dates[n]) for n in range(len(stgid_list))]
     return missed_fsf
 
 def search_course_list(keyword):
@@ -613,11 +613,11 @@ def edx_import(course_id, client_name):
     query = "delete from userdata where " + condqry
     rds_update(query)
     if ('.db' in vmsvclib.rds_connstr):
-        query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{courseid}' AND "
+        query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{course_id}' AND "
         query += f"(strftime(substr(startdate,7,4)||'-'||substr(startdate,4,2)||'-'||substr(startdate,1,2)) "
         query += f"<= strftime(date('now'))) ORDER BY id DESC LIMIT 1;"
     else:
-        query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{courseid}' AND "
+        query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{course_id}' AND "
         query += "STR_TO_DATE(startdate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
     stage = rds_param(query)                
     if stage=="":
@@ -1353,7 +1353,8 @@ if __name__ == "__main__":
     #    print(df1)
     #
     #=====================================
-    mass_update_mcq(client_name)
+    edx_mass_import(client_name)
+    #mass_update_mcq(client_name)
     #mass_update_schedule(client_name)
     #mass_update_usermaster(client_name)
     #perform_unit_tests(client_name, course_id, sid)
