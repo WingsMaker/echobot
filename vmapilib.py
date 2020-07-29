@@ -79,53 +79,6 @@ def viewprogress():
     msg = msg.replace("\n","<br>")
     return msg
     
-def test_surveydatapoint():
-    # https://docs.microsoft.com/en-us/sql/connect/python/pyodbc/step-3-proof-of-concept-connecting-to-sql-using-pyodbc?view=sql-server-ver15
-    # https://dataedo.com/kb/query/sql-server/list-table-columns-in-database
-    # pip install pyodbc
-    import pyodbc
-    driver = "SQL Server"
-    host = "lithanbidb.database.windows.net"
-    user = "LithanBI"
-    passwd = "Lithan4u$"
-    port = 1433 
-    db = "LithanSurvey"
-    pss_connstr = f"DRIVER={driver};SERVER=tcp:{host};DATABASE={db};UID={user};PWD={passwd}"
-    psscon = pyodbc.connect(pss_connstr)
-    if psscon is None:
-        print("unable to connect tb_pss")
-    psscur = psscon.cursor()
-    query = "SELECT @@version;"
-    qry_desctable = """SELECT column_name FROM (
-SELECT col.name as column_name,
-	col.column_id,
-	 schema_name(tab.schema_id) as schema_name,
-    tab.name as table_name        
-from sys.tables as tab
-	inner join sys.columns as col
-	on tab.object_id = col.object_id
-	left join sys.types as t
-	on col.user_type_id = t.user_type_id
-WHERE schema_name(tab.schema_id) = 'dbo' and 
-	tab.name = 'tb_pss' 	
-)  pss
-    """
-    fld_list = ['cohort', 'mode_of_session', 'learner_name', 'learner_email', 'content', 'content_comments', \
-    'duration', 'duration_comments', 'faculty', 'faculty_comments', 'support', 'support_comments', 'understanding', 'understanding_comments', \
-    'content_response', 'duration_response', 'faculty_response', 'support_response', 'understanding_response']
-    field_list = ','.join(fld_list)
-    query = f"select {field_list} from tb_pss where cohort = '0620A' and pillar='SM' and qualification = 'EIT'; "
-    psscur.execute(query)
-    row = psscur.fetchone() 
-    cnt=len(list(row))
-    print('='*50)
-    print( '\n'.join( [ fld_list[n] + ' : ' + str(row[n]) for n in range(2) ] ) )
-    print('-'*50)
-    while row:         
-        print( '\n'.join( [ fld_list[n] + ' : ' + str(row[n]) for n in range(cnt) if n>1] ) )
-        print('-'*50)
-        row = psscur.fetchone()        
-    return
     
 if __name__ == '__main__':
     global client_name, resp_dict
@@ -134,8 +87,6 @@ if __name__ == '__main__':
     client_name = bot_info['client_name']
     vmsvclib.rds_connstr = ""
     vmsvclib.rdscon = None
-    #resp_dict = vmbotlib.load_respdict()
-    #app.run(port='6452')
+    resp_dict = vmbotlib.load_respdict()
+    app.run(port='6452')
     #app.run()
-    test_surveydatapoint()
-
