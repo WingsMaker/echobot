@@ -2395,7 +2395,16 @@ class MessageCounter(telepot.helper.ChatHandler):
                     binded = 'Yes' if rec['binded']==1 else 'No'
                     telegid = str(tid) if rec['binded']==1 else 'None'
                     txt = f"Student-ID : #{sid}\nName : {username}\nEmail : {email}\nBinded :{binded}\nTelegramID : {telegid}\n"
-                    txt += "What you like to do ?"
+                    query = "select distinct a.courseid from userdata a inner join user_master b "
+                    query += " on a.client_name=b.client_name  and a.studentid=b.studentid where "
+                    query += f" a.client_name = '{self.client_name}' and a.studentid={sid} " 
+                    query += "order by a.courseid;"                    
+                    df = rds_df(query)
+                    if df is not None:
+                        df.columns = ['courseid']
+                        if len(df)>0:
+                            txt += "Courses:\n" + '\n'.join([x for x in df.courseid])
+                    txt += "\nWhat would you like to do ?"
                     useraction_menu = [[opt_blockuser, opt_setadmin , opt_setlearner],[opt_resetemail, opt_unbind, option_back]]
                     bot_prompt(self.bot, self.chatid, txt, useraction_menu)
             elif resp == opt_blockuser:

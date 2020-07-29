@@ -1,4 +1,6 @@
 #
+#
+#
 #  ______                        __ __       __                     __
 # /      \                      |  \  \     /  \                   |  \
 #|  ▓▓▓▓▓▓\______ ____  _______  \▓▓ ▓▓\   /  ▓▓ ______  _______  _| ▓▓_    ______   ______
@@ -494,7 +496,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             if resp.isnumeric():
                 sid = int(resp)
                 if sid > 0:
-                    query = f"select * from user_master where client_name = '{self.client_name}' and studentid = {resptxt} ;"
+                    query = f"select * from user_master where client_name = '{client_name}' and studentid = {str(sid)} ;"
                     df = rds_df(query)
                     if df is None:
                         sid = 0
