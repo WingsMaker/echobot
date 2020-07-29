@@ -171,13 +171,15 @@ def do_main():
     syslog('system',f"Bot {botname} started.")
     edx_cnt = 0
     edx_time = vmbot.edx_time
+    automsg = vmbot.automsg    
     gmt = vmbot.gmt
     while vmbot.bot_running :
         try:
             checkjoblist(vmbot)
             #zz = """
             timenow = time_hhmm(gmt)
-            if timenow==900:
+            #if timenow==900:
+            if (timenow==automsg) and (automsg>0):
                 auto_notify(vmbot.client_name, vmbot.resp_dict, vmbot.pass_rate)
                 time.sleep(30)
                 auto_intervent(vmbot.client_name, vmbot.resp_dict, vmbot.pass_rate)
@@ -322,20 +324,25 @@ def auto_notify(client_name, resp_dict, pass_rate):
         udict = dict(zip(ulist,uname_list))
         err_msg = ""
         err_list = []
+        sent_list = []
         for sid in ulist:
             uname = udict[sid]
             df1 = udf[ udf.studentid == sid ].copy()
             (tt, vars) = verify_student(client_name, df1, sid, course_id, sdf)
             df2 = mdf[ mdf.studentid == sid ].copy()
+            email = df2.email.values[0]
+            if email.lower().split('@')[1] in efilter:
+                del df1, df2
+                continue
+            usrtyp = df2.usertype.values[0]
+            if usrtyp != 1:
+                del df1, df2
+                continue
             tid = df2.chat_id.values[0]
             binded = df2.binded.values[0]
             tid = 0 if binded==0 else tid
-            email = df2.email.values[0]
-            if email.lower().split('@')[1] in efilter:
-                del df1
-                del df2
-                continue
-            f2f = vars['f2f']            
+                
+            f2f = vars['f2f']
             amt = vars['amt']
             (pass_stage, has_score, avg_score, mcqas_list, max_attempts, list_attempts, mcq_avg, mcq_zero, mcq_pass, mcq_failed, mcq_attempts, mcnt, \
             mcq_att_balance, as_avg, as_zero, as_pass, as_failed, as_attempts, acnt, as_att_balance, mcqas_complete, f2f_error, risk_level, tt) \
@@ -379,16 +386,21 @@ def auto_notify(client_name, resp_dict, pass_rate):
             else:
                 try:
                     vmbot.bot.sendMessage(int(tid), txt)
+                    sent_list.append(sid)
                 except:
                     err_list.append(sid)
             del df1, df2
-                    
+            
+        msg = ""    
+        if len(sent_list) > 0:
+            msg += f"Succesfully sent reminder to learners from {course_id} :\n{str(sent_list)} \n"
         if len(err_list) > 0:
-            err_msg = f"Unable to send intervention to learners from {course_id} :\n{str(err_list)} \n"
+            msg += f"Unable to send reminder to learners from {course_id} :\n{str(err_list)} \n"
+        if len(msg) > 0:
             try:
-                vmbot.bot.sendMessage(vmbot.adminchatid, err_msg)
+                vmbot.bot.sendMessage(vmbot.adminchatid, msg)
             except:
-                print(err_msg)
+                print(msg)
     syslog(client_name,"auto_notify completed")
     return
 
@@ -430,6 +442,7 @@ def auto_intervent(client_name, resp_dict, pass_rate):
     notif8 = resp_dict['notif8']
     s_cols = get_columns("stages")
     u_cols = get_columns("userdata")
+    risk_level = 0
     for course_id in course_list:
         eoc = vmedxlib.edx_endofcourse(client_name, course_id)
         soc = vmedxlib.edx_course_started(client_name, course_id)
@@ -445,6 +458,7 @@ def auto_intervent(client_name, resp_dict, pass_rate):
                 continue
             udf.columns = u_cols
             err_list = []
+            sent_list = []
             ulist = [x for x in udf.studentid]
             uname_list = [x for x in udf.username]
             udict = dict(zip(ulist,uname_list))
@@ -452,18 +466,17 @@ def auto_intervent(client_name, resp_dict, pass_rate):
                 uname = udict[sid]
                 df1 = udf[ udf.studentid == sid ].copy()
                 df2 = mdf[ mdf.studentid == sid ].copy()
-                tid = df2.chat_id.values[0]
                 email = df2.email.values[0]
-                binded = df2.binded.values[0]
+                if email.lower().split('@')[1] in efilter:
+                    del df1, df2
+                    continue                
                 usrtyp = df2.usertype.values[0]
                 if usrtyp != 1:
                     del df1, df2
                     continue
-                    
+                tid = df2.chat_id.values[0]
+                binded = df2.binded.values[0]                    
                 tid = 0 if binded==0 else tid
-                if email.lower().split('@')[1] in efilter:
-                    del df1, df2
-                    continue
                 
                 (tt, vars) = verify_student(client_name, df1, sid, course_id, sdf)
                 stage = vars['stage']
@@ -539,35 +552,37 @@ def auto_intervent(client_name, resp_dict, pass_rate):
                     txt = txt.replace('{due_date}', str(due_date))
                 if '{lf}' in txt:
                     txt = txt.replace('{lf}', "\n")
-            #zz = """
+
                 if tid <= 0:
-                    err_list.append(sid)
-                    #print(txt)  # debug
+                    err_list.append(sid)                
                 else:
                     try:
                         vmbot.bot.sendMessage(int(tid), txt)
+                        sent_list.append(sid)
                         #vmbot.bot.sendMessage(vmbot.adminchatid, txt)                        
                     except:
                         err_list.append(sid)
+
                 query = f"update userdata set risk_level = {risk_level}, mcq_zero = '{mcq_zero}' "
                 query += f" ,mcq_failed = '{mcq_failed}', as_zero = '{as_zero}', as_failed = '{as_failed}' "
                 query += f" where client_name='{client_name}' and courseid='{course_id}' and studentid={sid};"
                 try:
                     rds_update(query)
                 except:
-                    print(query)
+                    pass
                 del df1, df2
-                #"""
-            #zz = """
-            if len(err_list) > 0:
-                try:
-                    err_msg = f"Unable to send intervention to learners from {course_id} :\n{str(err_list)} \n"
-                    vmbot.bot.sendMessage(vmbot.adminchatid, err_msg)
-                except:
-                    print(err_msg)       
-            #"""
-            time.sleep(1)
             del udf
+            msg = ""    
+            if len(sent_list) > 0:
+                msg += f"Succesfully sent intervention to learners from {course_id} :\n{str(sent_list)} \n"
+            if len(err_list) > 0:
+                msg += f"Unable to send intervention to learners from {course_id} :\n{str(err_list)} \n"
+            if len(msg) > 0:
+                try:
+                    vmbot.bot.sendMessage(vmbot.adminchatid, msg)
+                except:
+                    print(msg)
+        time.sleep(1)            
     del mdf    
     syslog(client_name,"auto_intervent completed")
     return
@@ -692,8 +707,8 @@ class BotInstance():
         par_dict = dict(zip(par_key, par_val))
         email_filter = par_dict['email_filter']
         self.efilter = email_filter.split(',')
-        #self.updated_courses = []
-        self.edx_time = int(par_dict['edx_import'])    
+        self.edx_time = int(par_dict['edx_import']) if 'edx_import' in par_key else 0
+        self.automsg = int(par_dict['automsg']) if 'automsg' in par_key else 0
         hdr = par_dict['edx_api_header']        
         self.edx_api_header = eval(hdr)
         self.edx_api_url = par_dict['edx_api_url']
@@ -1610,7 +1625,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                     bot_prompt(self.bot, self.chatid,  txt, btn_course_list )
                 else:
                     self.chatid = chat_id                    
-                    if self.student_id == 0 or self.chatid == 0 :                        
+                    if self.student_id == 0 or self.chatid == 0 :                     
                         txt = 'My name is OmniMentor, I am your friendly learning facilitator at ' + self.client_name + '.\n'
                         txt += "\nplease enter your student id or email address :"
                         bot_prompt(self.bot, self.chatid, txt, [])
@@ -2672,11 +2687,17 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
         df.columns = get_columns("stages")
     else:
         df = stagedf.copy()
+    cols = df.columns
     stg_list = [x for x in df.stage]
     stglen = len(stg_list)
     if stglen==0:
         return ("", "", vars)
-    begin_date_list = [x[:10] for x in df.startdate]
+
+    try:
+        begin_date_list = ['' if x is None else x[:10] for x in df.startdate]
+    except:
+        print(df)        
+        return ("", "", vars)
     first_date = string2date(begin_date_list[0],"%d/%m/%Y")
     last_date = string2date(begin_date_list[-1],"%d/%m/%Y")    
     date_today = datetime.datetime.now().date()
@@ -2699,7 +2720,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     if client_name == 'Demo':
         missing_dates = []
     else:
-        missing_dates = vmedxlib.sms_missingdates(client_name, courseid, sid)    
+        missing_dates = vmedxlib.sms_missingdates(client_name, courseid, sid, cols)
     stagebyprogress = ""
     statusbyprogress = ""
     mcnt = 0
@@ -3145,7 +3166,7 @@ def runbotjob(vmbot):
     func_req = jobitem['func_req']
     func_param = jobitem['func_param']
     func_svc_list = ["update_assignment" , "update_mcq" , "edx_import", "update_schedule"]    
-    edx_time = vmbot.edx_time
+    #edx_time = vmbot.edx_time    
     txt = "job "
     updqry = f"update job_list set status = 'running', message = '' where job_id = '{job_id}';"
     rds_update(updqry)
@@ -3178,8 +3199,8 @@ def runbotjob(vmbot):
         #except:
         #    txt += " failed."
     elif func_req in func_svc_list :
-        course_id = func_param              
-        #try:            
+        course_id = func_param           
+        #try:     
         #    func_svc = "vmedxlib." + func_req + "(course_id, client_name)"
         #    status = eval(func_svc)        
         if func_req == "update_assignment":

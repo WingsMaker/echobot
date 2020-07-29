@@ -264,7 +264,7 @@ def sms_attendance(course_id, student_id):
         print(f"the api responsed with no data! code = {response.status_code}")
     return date_list
     
-def sms_missingdates(client_name, course_id, student_id):
+def sms_missingdates(client_name, course_id, student_id, cols):
     f2flag = lambda x,y : ('' if y in date_list else x) if x[:2] in ['FC', 'PM'] else ''
     if student_id==0:
         return 0
@@ -272,7 +272,8 @@ def sms_missingdates(client_name, course_id, student_id):
     missed_fsf = []
     df = rds_df(f"select * from stages where courseid = '{course_id}' and client_name = '{client_name}';")
     if df is not None:
-        df.columns = get_columns("stages")
+        #df.columns = get_columns("stages")
+        df.columns = cols
         stgid_list = [x for x in df.id]
         fsf_dates = [string2date(x,"%d/%m/%Y") for x in df.startdate]
         stage_list = [x for x in df.stage]
@@ -332,19 +333,17 @@ def update_schedule(course_id, client_name):
     cohort_id = piece(piece(course_id,':',1),'+',1)
     stage_list = get_google_calendar(course_id, client_name)
     try:
-        #if True:
         stage_list = update_stage_table(stage_list, course_id, client_name)
-        if stage_list == []:
+        if stage_list == []:        
             return
         dt = string2date(stage_list[0][3],"%d/%m/%Y")
-        stg=[x for x in stage_list if x[0]=='EOC']
-        eoc_date = string2date(stg[0][4],"%d/%m/%Y")
-        date_today = datetime.datetime.now().date()
-        days = (date_today - eoc_date).days
+        stg=[x for x in stage_list if x[0]=='EOC']    
+        eoc_date = string2date(stg[0][4],"%d/%m/%Y")    
+        date_today = datetime.datetime.now().date()    
+        days = (date_today - eoc_date).days    
     except:
         print(f"update_stage_table failed for {course_id}")
-        return
-        
+        return    
     condqry = "client_name = '_c_' and courseid = '_x_';"
     condqry = condqry.replace('_c_', client_name)
     condqry = condqry.replace('_x_', course_id)
@@ -389,6 +388,12 @@ def update_schedule(course_id, client_name):
         query += "STR_TO_DATE(startdate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
     current_stage = rds_param(query) 
     query = f"update userdata set stage = '{current_stage}' where " + condqry 
+    rds_update(query)
+    query = f"update stages set stagedate = '' where (stagedate is null) and " 
+    query += condqry 
+    rds_update(query)
+    query = f"update stages set startdate = '' where (startdate is null) and " 
+    query += condqry 
     rds_update(query)
     #print(f"update_schedule completed on {course_id}")    
     return
@@ -603,7 +608,7 @@ def edx_import(course_id, client_name):
             df['stagedate'] = ''                
             df['courseid'] = course_id
             df1 = df[['client_name','courseid', 'id', 'stage', 'name', 'desc', 'days', 'f2f', 'mcq', 'flipclass', 'assignment', 'IU', 'stagedate']]
-            copydbtbl(df1, "stages")
+            copydbtbl(df1, "stages")            
             
     df = edx_userdata(course_id)
     nrows = len(df)
@@ -1086,11 +1091,11 @@ def update_stage_table(stage_list, course_id, client_name):
     query = f"update stages set startdate = '{start_date}',stagedate = '{stg_date}' where id = {m} and " + qry
     rds_update(query)           
     if ('.db' in vmsvclib.rds_connstr):
-        query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{courseid}' AND "
+        query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{course_id}' AND "
         query += f"(strftime(substr(stagedate,7,4)||'-'||substr(stagedate,4,2)||'-'||substr(stagedate,1,2)) "
         query += f"<= strftime(date('now'))) ORDER BY id DESC LIMIT 1;"
     else:
-        query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{courseid}' AND "
+        query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{course_id}' AND "
         query += "STR_TO_DATE(stagedate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"    
     stage = rds_param(query)                
     if stage != "":
@@ -1104,7 +1109,7 @@ def update_stage_table(stage_list, course_id, client_name):
 def update_playbooklist(course_id, client_name, course_name, eoc):
     try:
         query = f"delete from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
-        rds_update(query)
+        rds_update(query)        
         cohort_id = piece(piece(course_id,':',1),'+',1)
         module_code = piece(cohort_id,'-',0)
         query = "insert into playbooks(client_name,module_code,cohort_id,course_id,course_name,eoc) \
@@ -1114,10 +1119,10 @@ def update_playbooklist(course_id, client_name, course_name, eoc):
         query = query.replace("_x_", cohort_id)
         query = query.replace("_y_", course_id)
         query = query.replace("_z_", course_name)
-        query = query.replace("_e_", eoc)
-        rds_update(query)
+        query = query.replace("_e_", str(eoc))        
+        rds_update(query)        
     except:
-        #print("Unable to update playbook list")
+        print("Unable to update playbook list")
         pass
     return
 
@@ -1150,7 +1155,7 @@ def edx_mass_update(func, clt):
         eoc = edx_endofcourse(client_name, course_id)
         #print( course_id , eoc)
         if eoc == 0:
-            print( "processing ", course_id )
+            #print( "processing ", course_id )
             func(course_id, client_name)
     return
 
@@ -1297,14 +1302,14 @@ def perform_unit_tests(client_name = 'Sambaash', course_id = "course-v1:Lithan+F
 
 if __name__ == "__main__":    
     global use_edxapi, edx_api_header, edx_api_url
-    #with open("vmbot.json") as json_file:  
-    #    bot_info = json.load(json_file)
-    #client_name = bot_info['client_name']
+    with open("vmbot.json") as json_file:  
+        bot_info = json.load(json_file)
+    client_name = bot_info['client_name']
     #edx_api_url = "https://om.sambaash.com/edx/v1"
     edx_api_url = "https://omnimentor.lithan.com/edx/v1"
     edx_api_header = {'Authorization': 'Basic ZWR4YXBpOlVzM3VhRUxJVXZENUU4azNXdG9E', 'Content-Type': 'text/plain'}
-    client_name = "Sambaash"    
-    #client_name = "Lithan"    
+    #client_name = "Sambaash"    
+    client_name = "Lithan"    
     #client_name = "Demo"
     vmsvclib.rds_connstr = ""
     vmsvclib.rdscon = None
@@ -1313,7 +1318,11 @@ if __name__ == "__main__":
     #course_id = "course-v1:Lithan+FOS-0520A+06May2020"  # 5709
     #course_id = "course-v1:Lithan+ICO-0520B+26Jun2020" # 6579
     course_id = "course-v1:Lithan+FOS-0720A+08Jul2020" # 6633 6614 6301
-    
+    #course_id = 'course-v1:Lithan+CPI-0120A+04Jun2020' #Lithan
+    #
+    #course_id = 'course-v1:Lithan+ICO-0620A+24Jul2020' #Sambaash
+    #update_schedule(course_id, client_name)    
+    #
     #sid = 6301
     #update_mcq(course_id, client_name, sid)
     #df = edx_mcqinfo(client_name, course_id, sid)
@@ -1334,7 +1343,8 @@ if __name__ == "__main__":
     #    print(x)
     #attendance_dates = sms_attendance(course_id, sid)
     #print('\n'.join([str(x) for x in attendance_dates]))
-    #missing_dates = sms_missingdates(client_name, course_id, sid)
+    # cols = get_columns("stages")
+    #missing_dates = sms_missingdates(client_name, course_id, sid, cols)
     #print(missing_dates)
     #
     #edx_daystart = edx_day0(course_id)

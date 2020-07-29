@@ -223,14 +223,14 @@ class MessageCounter(telepot.helper.ChatHandler):
                 txt = "Hi " + req_user + ", your 2FA code is : " + code2fa
                 bot.sendMessage(reply_id,txt)
         elif (content_type=="document") :
-            if msg['document']['mime_type']=="text/plain":
-                fid = msg[content_type]['file_id']
-                fname = get_attachment(bot, fid)
-                #fcaption = msg['document']['caption']
-                file_name = msg['document']['file_name']
-                pcmd = f"cp -f {fname} devbot/{file_name} ; rm -f {fname}"
-                shellcmd(pcmd)
-                bot.sendMessage(chat_id, f"file {file_name} received.")
+            #if msg['document']['mime_type']=="text/plain":
+            fid = msg[content_type]['file_id']
+            fname = get_attachment(bot, fid)
+            #fcaption = msg['document']['caption']
+            file_name = msg['document']['file_name']
+            pcmd = f"cp -f {fname} ~/om/{file_name} ; rm -f {fname}"
+            shellcmd(pcmd)
+            bot.sendMessage(chat_id, f"file {file_name} received.")
                 
         elif content_type != "text":
             print( json.dumps(msg) )
@@ -726,7 +726,7 @@ def do_main():
     client_name = par_dict['client_name']
     gmt = int(par_dict['GMT'])
     #max_duration = int(par_dict['max_duration'])
-    max_duration = 3600
+    max_duration = 300
     
     edx_time = edx_load_config(client_name)
     
