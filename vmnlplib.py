@@ -71,7 +71,7 @@ class NLP_Parser():
     def load_modelfile(self, dumpfile, client_name):
         #try:
         if True:
-            ok = 0                        
+            ok = 0
             vmsvclib.rdscon=vmsvclib.rds_connector()
             df = rds_df("select * from prompts;")
             if df is None:
@@ -113,6 +113,7 @@ class NLP_Parser():
             #stopwords = [ x for x in df3.keywords ]
             stopwords = [ x for x in df3.keywords ]
             stopwords_processed = self.LemNormalize(self.stopwords_processor(stopwords))            
+            self.stopwords = stopwords_processed            
             TfidfVec = TfidfVectorizer(tokenizer=self.LemNormalize, stop_words=stopwords_processed, ngram_range=(1,2))
             with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
                 ft_model = fasttext.load_model(dumpfile)
@@ -242,7 +243,8 @@ class NLP_Parser():
         
         resp = user_resp.lower()
         if resp in prompts_qn:
-            n = prompts_qn.index(user_resp)
+            #n = prompts_qn.index(user_resp)
+            n = prompts_qn.index(resp)
             return prompts_resp[n]
 
         for n in range(len(prompts_qn)):    
@@ -255,8 +257,7 @@ class NLP_Parser():
                     return prompts_resp[n]
         return ''        
 
-    def recommend_list(self, input_text):
-        #ft_model = self.model
+    def recommend_list(self, input_text):        
         output = []
         if '\n' in input_text:
             inp_txt = ' '.join([txt.strip() for txt in input_text.split('\n')])
@@ -265,8 +266,10 @@ class NLP_Parser():
         user_input = inp_txt.lower()
 
         matched_label = self.model.predict(inp_txt, k=1)[0][0]
-
         mask = (self.corpus_df.label == matched_label)
+        if matched_label=='__label__conversational':
+            first_word = [x for x in user_input.split(' ') if x not in self.stopwords][0]
+            mask = (self.corpus_df.prompt.str.contains(first_word))
         df = self.corpus_df[mask]
         questions = [ x for x in df.prompt if x[-1]=='?' ]
 

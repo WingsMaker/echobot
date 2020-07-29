@@ -56,7 +56,7 @@ option_learners = "Learners 👩"
 option_faculty = "Faculty"
 option_demo = "Demo"
 mainmenu = [[option_learners, option_faculty , option_back]]
-option_mycourse = "My course"
+option_mycourse = "My courses"
 option_updateprogress = "Update progress"
 option_faq = "FAQ"
 option_mychat = "LiveChat"
@@ -1007,11 +1007,11 @@ class MessageCounter(telepot.helper.ChatHandler):
                 syslog( "NLP" , txt )
         
         if txt == '':            
-            ( resp, accuracy ) = ft_model.find_matching( resp )
+            ( result, accuracy ) = ft_model.find_matching( resp )
             if accuracy > 0:
                 if accuracy < match_score:
-                    txt = 'do you mean this ? =>\n' + resp                    
-                    user_resp = resp.lower()
+                    txt = 'do you mean this ? =>\n' + result                    
+                    user_resp = result.lower()
                     self.sender.sendMessage(txt)
                 txt = ft_model.match_resp(user_resp)
                 syslog( "REG" , txt )
@@ -1019,8 +1019,8 @@ class MessageCounter(telepot.helper.ChatHandler):
         ## customized fullfillment with {variable} inside the response        
         if (txt != '') and re.search('.*\{.*', txt):
             stagedate = str(self.stagedate)
-            mcqlist = ""
-            aslist = ""
+            mcqlist = str(self.records['mcqlist']) if 'mcqlist' in list(self.records) else ''
+            aslist = str(self.records['aslist']) if 'aslist' in list(self.records) else ''
             amt = str( self.records['amt'] )
             mcqas_chart = ""
             mcqdate = stagedate
@@ -1051,7 +1051,8 @@ class MessageCounter(telepot.helper.ChatHandler):
                 txt = tt.replace('~~~','\n')
                 
         if txt == '':
-            txt = "I'm sorry, I do not understand you."
+            txt = "I'm sorry, I do not understand you but could you be more specific about your question related to "
+            txt += "'" + resp + "' ?"
 
         recommendation = ft_model.recommend_list(resp)
         if len(recommendation) > 0:
@@ -1110,8 +1111,8 @@ class MessageCounter(telepot.helper.ChatHandler):
             self.courseid = resp
             self.load_tables()
             ok = 1
-            del (self.list_courseids)[n]
-            del (self.list_coursename)[n]
+            #del (self.list_courseids)[n]
+            #del (self.list_coursename)[n]
         return ok
 
     def check_student(self, sid, chat_id):
@@ -1142,9 +1143,10 @@ class MessageCounter(telepot.helper.ChatHandler):
             vmbot.user_list[chat_id]=[self.courseid, self.student_id, self.username, chat_id, ""]
             self.records = load_vars(self.userdata, sid)
             vars = display_progress(self.userdata, sid, self.records, self.client_name, vmbot.resp_dict, vmbot.pass_rate)
+            for v in list(vars):
+                self.records[v] = vars[v]
             txt  = vars['notification']
             self.stage_name = vars['stage']            
-            #if 'incomplete' not in txt:
             if vars['course_alive'] == 1:
                 txt += grad_pred_text(vars, self.client_name)
             if txt == "":
@@ -1604,7 +1606,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                     btn_course_list = build_menu(stud_courselist, 1) 
                     txt = "Please select the course id from below:"
                     bot_prompt(self.bot, self.chatid, txt, btn_course_list)
-                    self.menu_id = keys_dict[option_learners]                    
+                    self.menu_id = keys_dict[option_learners]
                 else:
                     #btn_course_list = build_menu(stud_courselist, 1)
                     date_today = datetime.datetime.now().date()
@@ -1635,7 +1637,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                         sid = self.student_id
                         ch_id = self.chatid   
                         #self.load_tables()  
-                        #self.update_stage(sid)
+                        #self.update_stage(sid)                        
                         self.check_student(sid, ch_id)
 
         elif self.menu_id == keys_dict[lrn_start] :
@@ -1684,7 +1686,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                 self.courseid = courseid
                 self.load_tables()
                 (txt, self.records ) = verify_student(self.client_name, self.userdata, sid, self.courseid, None)
-                vars = display_progress(self.userdata, sid, self.records, self.client_name, vmbot.resp_dict, vmbot.pass_rate)
+                vars = display_progress(self.userdata, sid, self.records, self.client_name, vmbot.resp_dict, vmbot.pass_rate)                
                 retmsg  = vars['notification']
                 retmsg += grad_pred_text(vars, self.client_name)
                 self.menu_id = keys_dict[lrn_student]
@@ -2784,7 +2786,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
                 assignment_pending = as_zero
                 mfail = mcq_failed
                 afail = as_failed
-                #stage_date = stg_date            
+                stage_date = stg_date
                 break    
     pass_stage = overall_passed
     stg_date = stage_date
@@ -2802,6 +2804,8 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     stagecode = stgcode
     stage_desc = stagedesc
     vars['stage'] =  stagebyprogress
+    mcqlist = list(set(mcq_failed + mcq_zero))
+    aslist = list(set(as_failed + as_zero))
     txt_hdr = resp_dict['stg0']
     if ("eoc" in stagebyschedule.lower()) and (pass_stage == 1):
         txt = ""
@@ -2822,8 +2826,8 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
         txt_hdr = txt_hdr.replace('{lf}' , '\n')
     query = f"update userdata set stage = '{stagebyprogress}' WHERE client_name = '{client_name}' AND courseid='{courseid}' AND studentid={sid};"
     rds_update(query)     
-    for vv in ['stage', 'stagecode', 'mcqdate', 'asdate', 'eldate', 'fcdate', 'avg_score', 'mcqas_complete', 'mcq_pass', 'mcq_failed', 'missed_stage', \
-            'has_score', 'pass_stage', 'max_attempts', 'mcqas_list', 'mcq_zero', 'mcq_avg', 'as_pass', 'as_failed', 'risk_level', 'stg_list', \
+    for vv in ['stage', 'stagecode', 'mcqdate', 'asdate', 'eldate', 'fcdate', 'avg_score', 'mcqas_complete', 'mcq_pass', 'mcq_failed', 'missed_stage', "aslist", \
+            'has_score', 'pass_stage', 'max_attempts', 'mcqas_list', 'mcq_zero', 'mcq_avg', 'as_pass', 'as_failed', 'risk_level', 'stg_list', 'mcqlist', \
             'mcnt', 'acnt', 'as_avg', 'as_zero', 'f2f_error', 'stage_desc', 'mcq_attempts',  'mcq_att_balance', 'as_att_balance', 'as_attempts'] :
         vars[vv] = eval(vv)
     return (txt_hdr, txt, vars)
@@ -2860,22 +2864,20 @@ def display_progress(df, sid, vars, client_name, resp_dict, pass_rate=0.7):
     mcq_zero = vars['mcq_zero']
     mcq_failed = vars['mcq_failed']
     mcq_att = vars['mcq_attempts']
+    mcqlist = vars['mcqlist']
     as_zero = vars['as_zero']
     as_failed = vars['as_failed']    
     amt = vars['amt']
     if vars['has_score'] == 1:
         txt += resp_dict['avg_score']
     if stg.lower() == "soc days":
-        #if vars['amt'] == 0 :
         if amt == 0 :
             resp_amt0 = resp_dict['amt0']
             txt += resp_amt0 + "\n\n"
-        #elif vars['amt'] > 0:
         elif amt > 0:
             resp_amt1 = resp_dict['amt1']
             txt += resp_amt1 + "\n\n"
     else:
-        #if vars['amt'] > 0 :
         if amt > 0 :
             resp0 = resp_dict['resp0']
             txt += resp0 + "\n\n"
@@ -2916,8 +2918,7 @@ def display_progress(df, sid, vars, client_name, resp_dict, pass_rate=0.7):
         txt = txt.replace('{stage}' , stg)
     if '{avg_score}' in txt:
         txt = txt.replace('{avg_score}' , "{:.2%}".format(vars['avg_score']))
-    if '{amt}' in txt:
-        #txt = txt.replace('{amt}' ,  "{:8.2f}".format(vars['amt']).strip() )
+    if '{amt}' in txt:        
         txt = txt.replace('{amt}' ,  "{:8.2f}".format(amt).strip() )
     if '{mcqdate}' in txt:
         txt = txt.replace('{mcqdate}' , vars['mcqdate'])

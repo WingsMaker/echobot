@@ -87,10 +87,10 @@ def edx_ascnt(course_id):
     # https://om.sambaash.com/edx/v1/course/fetch/assignment/count
     global edx_api_header, edx_api_url
     ascnt = 0
-    url = f"{edx_api_url}/course/fetch/assignment/count"        
+    url = f"{edx_api_url}/course/fetch/assignment/count"
     response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)        
     if response.status_code==200:
-        data = response.content.decode('utf-8')            
+        data = response.content.decode('utf-8')
         ascnt = int("0" + str(data))    
     return ascnt
 
@@ -111,9 +111,9 @@ def edx_userdata(course_id):
             user_list = []
             course_list = []
             username_list = []
-            email_list = []            
+            email_list = []
             if rows_cnt > 0:
-                for usr in userinfo:                
+                for usr in userinfo:
                     if course_id in [x['course_id'] for x in usr['enrolments']]:
                         user_list.append(usr['user_id']) 
                         course_list.append(course_id)
@@ -134,7 +134,7 @@ def student_course_list(student_id):
     if response.status_code==200:
         userinfo = json.loads(response.content.decode('utf-8'))
         course_list = [x['course_id'] for x in userinfo['enrolments']]
-        df = pd.DataFrame.from_dict({'course_id':course_list})            
+        df = pd.DataFrame.from_dict({'course_id':course_list})
     return df
 
 def edx_grade(course_id, student_id=0):
@@ -142,17 +142,17 @@ def edx_grade(course_id, student_id=0):
     # https://om.sambaash.com/edx/api/swagger-ui/index.html?configUrl=/edx/v3/api-docs/swagger-config#/User/fetchUserGradesByCourseId
     # https://om.sambaash.com/edx/v1/user/fetch/grades/list
     global edx_api_header, edx_api_url
-    df = pd.DataFrame.from_dict( {'student_id' : [] , 'grade' : [] } )
+    df = pd.DataFrame.from_dict({'student_id':[], 'grade':[]})
     if student_id==0:
         url = f"{edx_api_url}/user/fetch/grades/list"
     else:
         url = f"{edx_api_url}/user/fetch/grades/list/{student_id}"
-    response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)        
+    response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)
     if response.status_code==200:
-        data = response.content.decode('utf-8')            
+        data = response.content.decode('utf-8')
         data = eval(data)
         stud = [x['student_id'] for x in data]
-        grade = [x['grade'] for x in data]            
+        grade = [x['grade'] for x in data]
         data = {'student_id' : stud , 'grade' : grade }
         df = pd.DataFrame.from_dict(data)
     return df
@@ -175,7 +175,7 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
         return qn
     
     df_mcq = pd.DataFrame.from_dict( {'client_name':[],'course_id':[],'student_id':[], 'score':[], \
-        'mcq':[],'qn':[],'attempts':[], 'avgscore': []} )    
+        'mcq':[],'qn':[],'attempts':[], 'avgscore': []} )
     if student_id==0:
         url = f"{edx_api_url}/user/fetch/mcq/scores/list"
     else:
@@ -599,16 +599,16 @@ def edx_import(course_id, client_name):
     cnt = int("0" + str(cnt))
     if cnt==0:
         qry = f"select * from stages_master where client_name = '{client_name}' and module_code = '{module_code}';"
-        df = rds_df(qry)        
+        df = rds_df(qry)
         if df is not None:
             df.columns = get_columns("stages_master")
             query = "delete from stages where " + condqry
             rds_update(query)
             df.drop(columns=['module_code'], inplace=True)
-            df['stagedate'] = ''                
+            df['stagedate'] = ''
             df['courseid'] = course_id
             df1 = df[['client_name','courseid', 'id', 'stage', 'name', 'desc', 'days', 'f2f', 'mcq', 'flipclass', 'assignment', 'IU', 'stagedate']]
-            copydbtbl(df1, "stages")            
+            copydbtbl(df1, "stages")
             
     df = edx_userdata(course_id)
     nrows = len(df)
@@ -1018,7 +1018,7 @@ def update_stage_table(stage_list, course_id, client_name):
             fld4 = dt1.strftime('%d/%m/%Y')
             fld5 = dt2.strftime('%d/%m/%Y')
             fld6 = iu_list[n]            
-            stage_list.append([fld1, fld2, fld3, fld4, fld5, fld6, fld7])            
+            stage_list.append([fld1, fld2, fld3, fld4, fld5, fld6, fld7])
     else:
         df.columns = get_columns("stages")        
         stg_list = [x for x in df.stage]
@@ -1226,7 +1226,7 @@ def edx_alluserdata():
     response = requests.get(url, headers=edx_api_header)      
     if response.status_code==200:
         userinfo = json.loads(response.content.decode('utf-8'))    
-        rows_cnt = len(list(userinfo))           
+        rows_cnt = len(list(userinfo))
         if rows_cnt == 0:
             return df
         user_list = []
@@ -1235,11 +1235,11 @@ def edx_alluserdata():
         email_list = []
         for usr in userinfo:
             uid = usr['user_id']
-            course_id = usr['enrolments'][0]['course_id']                 
+            course_id = usr['enrolments'][0]['course_id']
             user_list.append(uid) 
             course_list.append(course_id)
             username_list.append(usr['username'])
-            email_list.append(usr['email'])                
+            email_list.append(usr['email'])
         data = {'student_id':user_list,'course_id':course_list,'username':username_list,'email':email_list}
         df = pd.DataFrame.from_dict(data)
     return df
@@ -1313,54 +1313,7 @@ if __name__ == "__main__":
     #client_name = "Demo"
     vmsvclib.rds_connstr = ""
     vmsvclib.rdscon = None
-    #course_id = "course-v1:Lithan+FOS-0620A+17Jun2020" # 6116
-    #course_id = "course-v1:Lithan+ICO-0520A+15Jul2020"
-    #course_id = "course-v1:Lithan+FOS-0520A+06May2020"  # 5709
-    #course_id = "course-v1:Lithan+ICO-0520B+26Jun2020" # 6579
     course_id = "course-v1:Lithan+FOS-0720A+08Jul2020" # 6633 6614 6301
-    #course_id = 'course-v1:Lithan+CPI-0120A+04Jun2020' #Lithan
-    #
-    #course_id = 'course-v1:Lithan+ICO-0620A+24Jul2020' #Sambaash
-    #update_schedule(course_id, client_name)    
-    #
-    #sid = 6301
-    #update_mcq(course_id, client_name, sid)
-    #df = edx_mcqinfo(client_name, course_id, sid)
-    #print(df)
-    
-    #course_id = "course-v1:Lithan+ADM-0120A+may2020"
-    #update_mcq(course_id, client_name, 4267)
-    
-    #edx_import(course_id,  client_name)
-    #update_schedule(course_id, client_name)
-    #csid = input("Enter course id :")
-    #if csid == "":
-    #    csid = course_id
-    #course_id = csid
-    #sid = input("Enter student id :")
-    #stage_list = get_google_calendar(course_id, client_name)
-    #for x in stage_list:
-    #    print(x)
-    #attendance_dates = sms_attendance(course_id, sid)
-    #print('\n'.join([str(x) for x in attendance_dates]))
-    # cols = get_columns("stages")
-    #missing_dates = sms_missingdates(client_name, course_id, sid, cols)
-    #print(missing_dates)
-    #
-    #edx_daystart = edx_day0(course_id)
-    #print( edx_daystart ) #2020-05-05
-    #course_id = "course-v1:Lithan+DEM-2020Q2+08Jul2020"
-    #soc = edx_course_started(client_name, course_id)
-    #print(soc)
-    #test_google_calendar(course_id)
-    #course_id ="course-v1:Lithan+CPI-0220A+13Jul2020"
-    #update_schedule(course_id, client_name)
-    #query = f"SELECT * FROM stages WHERE courseid = '{course_id}' AND client_name = '{client_name}';"
-    #df = rds_df(query)
-    #if df is not None:
-    #    df.columns = get_columns("stages")
-    #    df1 = df[['id' , 'name' , 'desc', 'startdate', 'stagedate', 'days']]
-    #    print(df1)
     #
     #=====================================
     edx_mass_import(client_name)
