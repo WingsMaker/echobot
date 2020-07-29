@@ -182,7 +182,7 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
         url = f"{edx_api_url}/user/fetch/mcq/scores/list/{student_id}"
     response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)                
     if response.status_code==200:
-        data = json.loads(response.content.decode('utf-8'))
+        data = json.loads(response.content.decode('utf-8'))        
         course_id_list = []
         student_id_list = []
         iu_list = []
@@ -190,11 +190,12 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
         grade_list = []
         att_list = []
         avgscore_list = []
-        for rec in [ x for x in list(data) if 'attempts' in x['state']]  :            
+        for rec in [ x for x in list(data) if 'attempts' in x['state']]  :
             sc = rec['score']
             pp = rec['points_possible']
             qn = getnumstr(rec['options_display_name'])
-            iu = getnumstr(rec['chapter_title'])
+            #iu = getnumstr(rec['chapter_title'])
+            iu = int(rec['IU'])
             state = eval(rec['state'].replace('null','""').replace('false','0').replace('true','1'))
             attempts = state['attempts']
             statekey = list(state['correct_map'])[0]
@@ -1309,14 +1310,18 @@ if __name__ == "__main__":
     edx_api_url = "https://omnimentor.lithan.com/edx/v1"
     edx_api_header = {'Authorization': 'Basic ZWR4YXBpOlVzM3VhRUxJVXZENUU4azNXdG9E', 'Content-Type': 'text/plain'}
     #client_name = "Sambaash"    
-    client_name = "Lithan"    
+    #client_name = "Lithan"    
     #client_name = "Demo"
     vmsvclib.rds_connstr = ""
     vmsvclib.rdscon = None
     course_id = "course-v1:Lithan+FOS-0720A+08Jul2020" # 6633 6614 6301
+    #course_id = 'course-v1:Lithan+ICO-0520B+26Jun2020'# 1716
+    #df = edx_mcqinfo(client_name, course_id, 1716) 
+    #print( df[(df.mcq >= 6) & (df.mcq < 10)] )
     #
     #=====================================
-    edx_mass_import(client_name)
+    # edx_mass_import(client_name)
+    # zz
     #mass_update_mcq(client_name)
     #mass_update_schedule(client_name)
     #mass_update_usermaster(client_name)
