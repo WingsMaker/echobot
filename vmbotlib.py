@@ -43,6 +43,7 @@ import vmsvclib
 import vmedxlib
 from vmsvclib import *
 
+global debug_mode
 global vmbot, ft_model, dt_model, nn_model, mcq_analysis 
 global rdscon, rds_connstr, edx_api_header, edx_api_url
 
@@ -148,6 +149,7 @@ sorted_numlist = lambda y : list(set([int(x) for x in ''.join([z for z in y if z
 def do_main():
     global vmbot, dt_model, nn_model
     err = 0
+    debug_mode = False
     vmsvclib.rds_connstr = ""
     vmsvclib.rdscon = None
     if not loadconfig():
@@ -405,24 +407,26 @@ def auto_notify(client_name, resp_dict, pass_rate):
     return
 
 def auto_intervent(client_name, resp_dict, pass_rate):
-    global vmbot
+    global vmbot, debug_mode
     sub_str  = vmbot.sub_str
     date_today = datetime.datetime.now().date()
     yrnow = str(date_today.strftime('%Y'))
-    #zz = """
-    query = "SELECT DISTINCT a.courseid FROM userdata a "
-    query += " INNER JOIN playbooks b ON a.client_name=b.client_name AND a.courseid=b.course_id "
-    query += " INNER JOIN course_module c ON b.client_name=c.client_name AND b.module_code=c.module_code "
-    query += f" WHERE c.enabled=1 and a.client_name = '{client_name}' "
-    query += f" AND {sub_str}(courseid,-4)='{yrnow}' ORDER BY courseid;"
-    df = rds_df(query)
-    if df is None:
-        course_list = []
+    if debug_mode:
+        course_list = [ 'course-v1:Lithan+FOS-0720A+08Jul2020' ]
     else:
-        df.columns = ['courseid']
-        course_list= [x for x in df.courseid]
-    #"""
-    #course_list = [ 'course-v1:Lithan+FOS-0720A+08Jul2020' ] # debug
+        #zz = """
+        query = "SELECT DISTINCT a.courseid FROM userdata a "
+        query += " INNER JOIN playbooks b ON a.client_name=b.client_name AND a.courseid=b.course_id "
+        query += " INNER JOIN course_module c ON b.client_name=c.client_name AND b.module_code=c.module_code "
+        query += f" WHERE c.enabled=1 and a.client_name = '{client_name}' "
+        query += f" AND {sub_str}(courseid,-4)='{yrnow}' ORDER BY courseid;"
+        df = rds_df(query)
+        if df is None:
+            course_list = []
+        else:
+            df.columns = ['courseid']
+            course_list= [x for x in df.courseid]
+        #"""
     
     mdf = rds_df(f"SELECT * FROM user_master where client_name='{client_name}';")
     if mdf is None:
@@ -462,6 +466,8 @@ def auto_intervent(client_name, resp_dict, pass_rate):
             ulist = [x for x in udf.studentid]
             uname_list = [x for x in udf.username]
             udict = dict(zip(ulist,uname_list))
+            #if debug_mode:
+                #ulist = [6651]
             for sid in ulist:
                 uname = udict[sid]
                 df1 = udf[ udf.studentid == sid ].copy()
@@ -493,10 +499,10 @@ def auto_intervent(client_name, resp_dict, pass_rate):
                 mcq_failed = vars['mcq_failed']
                 as_zero = vars['as_zero']
                 as_failed = vars['as_failed']
+                asdate =  vars['asdate']
                 f2f_error = vars['f2f_error']
                 f2f = vars['f2f']
                 risk_level = vars['risk_level']
-
                 df = sdf[ sdf.stage == stagecode ].copy()
                 m=len(df)
                 stageid = df.id.values[0]
@@ -550,9 +556,14 @@ def auto_intervent(client_name, resp_dict, pass_rate):
                     txt = txt.replace('{mcq_failed_iu}', str(mcq_failed_iu))
                 if '{due_date}' in txt:
                     txt = txt.replace('{due_date}', str(due_date))
+                if '{asdate}' in txt:
+                    txt = txt.replace('{asdate}' ,  asdate )                    
                 if '{lf}' in txt:
                     txt = txt.replace('{lf}', "\n")
 
+                #if debug_mode:
+                    #vmbot.bot.sendMessage(71354936, txt)
+                    #return                    
                 if tid <= 0:
                     err_list.append(sid)                
                 else:
@@ -1334,7 +1345,7 @@ class MessageCounter(telepot.helper.ChatHandler):
         return (course_id_list, course_name_list)
 
     def on_chat_message(self, msg):
-        global ft_model, dt_model, mcq_analysis, vmbot
+        global ft_model, dt_model, mcq_analysis, vmbot, debug_mode
         try:
             content_type, chat_type, chat_id = telepot.glance(msg)
             bot = self.bot
@@ -1398,9 +1409,11 @@ class MessageCounter(telepot.helper.ChatHandler):
                 retmsg = "Sorry /demo is only supported for client Demo."
 
         #elif resp=='/z': # debug
+            #debug_mode = True
             #auto_intervent(vmbot.client_name, vmbot.resp_dict, vmbot.pass_rate)            
             #load_edxdata(vmbot.client_name)
             #self.logoff()            
+            
                 
         elif resp=='/end':
             self.endchat()
@@ -2775,7 +2788,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
             assignment_pending = as_zero
             mfail = mcq_failed
             afail = as_failed
-            stage_date = stg_date            
+            #stage_date = stg_date            
             stage_f2f = f2f
             stgcode = stagecode
         if stagebyschedule == stagename: 
@@ -3251,6 +3264,7 @@ if __name__ == "__main__":
         #do_main()
         vmsvclib.rds_connstr = ""
         vmsvclib.rdscon = None 
+        debug_mode = False
         client_name='Lithan'
         #resp_dict = load_respdict()
         #auto_notify(client_name, resp_dict, 0.7)

@@ -31,6 +31,7 @@ summary = """
 ║ get_attachment     download the telegram attachement file locally           ║▒▒
 ║ get_columns        product the dataframe header into python list            ║▒▒
 ║ html_list          process tabulated data into formatted telegram message   ║▒▒
+║ html_msg           transform text into formatted telegram message and send  ║▒▒
 ║ html_table         process tabulated data into formatted html document      ║▒▒
 ║ printdict          print the item details of the given dictionary object    ║▒▒
 ║ pycmd              execute python codes via eval()                          ║▒▒
@@ -324,6 +325,18 @@ def html_list(bot, chat_id, df, fld_list, gaps, title, maxrow=20):
     if cnt > 0:
         result += "</pre>"  
         bot.sendMessage(chat_id,result,parse_mode='HTML')
+    return
+
+def html_msg(bot, chat_id, title = "", body=""):
+    if (title == "") and (body==""):
+        return
+    if title == "":
+        result = "<pre>" + body +  "</pre>"
+    elif body == "":
+        result = "<b>" + title + "</b>"
+    else:
+        result = "<b>" + title + "</b>\n<pre>" + body +  "</pre>"
+    bot.sendMessage(chat_id,result,parse_mode='HTML')
     return
 
 def html_table(bot, chat_id, client_name, tblname, titlename, fn):
