@@ -180,9 +180,9 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
         url = f"{edx_api_url}/user/fetch/mcq/scores/list"
     else:
         url = f"{edx_api_url}/user/fetch/mcq/scores/list/{student_id}"
-    response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)                
+    response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)
     if response.status_code==200:
-        data = json.loads(response.content.decode('utf-8'))        
+        data = json.loads(response.content.decode('utf-8'))
         course_id_list = []
         student_id_list = []
         iu_list = []
@@ -260,17 +260,18 @@ def sms_attendance(course_id, student_id):
         data = response.content.decode('utf-8')
         if data != "":
             result  = eval(str(data))
-            date_list = [string2date(x['timetable_date'].split(' ')[0],"%m/%d/%Y") for x in result]
+            #date_list = [string2date(x['timetable_date'].split(' ')[0],"%m/%d/%Y") for x in result]
+            date_list = [string2date(x['timetable_date'].split(' ')[0],"%m/%d/%Y") for x in result if x['attendance_type_desc']=='Attend']
     else:
         print(f"the api responsed with no data! code = {response.status_code}")
     return date_list
     
 def sms_missingdates(client_name, course_id, student_id, cols):
     f2flag = lambda x,y : ('' if y in date_list else x) if x[:2] in ['FC', 'PM'] else ''
-    if student_id==0:
-        return 0
+    if (student_id==0) or (client_name=="") or (client_name=="Demo"):
+        return []
     date_list = sms_attendance(course_id, student_id)
-    missed_fsf = []
+    missed_fsf = []    
     df = rds_df(f"select * from stages where courseid = '{course_id}' and client_name = '{client_name}';")
     if df is not None:
         #df.columns = get_columns("stages")
@@ -489,7 +490,7 @@ def update_mcq(course_id, client_name, student_id=0):
             query = "delete from mcq_data where " + cond_qry
             rds_update(query)        
         df = mcq_df[['client_name', 'course_id', 'student_id', 'score', 'mcq', 'qn', 'attempts']]
-        copydbtbl(df, "mcq_data")
+        copydbtbl(df, "mcq_data")        
 
         # save into local database with tablename mcq_score with score/max_attempts per mcq tests/students/cohorts
         #query = "select client_name, course_id, student_id, mcq, count(*) as max, sum(score) as mcqscore, \
@@ -1309,19 +1310,23 @@ if __name__ == "__main__":
     #edx_api_url = "https://om.sambaash.com/edx/v1"
     edx_api_url = "https://omnimentor.lithan.com/edx/v1"
     edx_api_header = {'Authorization': 'Basic ZWR4YXBpOlVzM3VhRUxJVXZENUU4azNXdG9E', 'Content-Type': 'text/plain'}
-    #client_name = "Sambaash"    
+    client_name = "Sambaash"    
     #client_name = "Lithan"    
     #client_name = "Demo"
     vmsvclib.rds_connstr = ""
     vmsvclib.rdscon = None
-    course_id = "course-v1:Lithan+FOS-0720A+08Jul2020" # 6633 6614 6301
+    course_id = "course-v1:Lithan+FOS-0720A+08Jul2020" # 6633 6614 6301 6603
+    sid = 6603
+    #update_mcq(course_id, client_name, sid)
+    #date_list = sms_attendance(course_id, sid)
+    #print(date_list)
+    #cols = get_columns("stages")
+    #missing_dates = sms_missingdates(client_name, course_id, sid, cols)
+    #print(missing_dates)
     #course_id = 'course-v1:Lithan+ICO-0520B+26Jun2020'# 1716
-    #df = edx_mcqinfo(client_name, course_id, 1716) 
-    #print( df[(df.mcq >= 6) & (df.mcq < 10)] )
     #
     #=====================================
     # edx_mass_import(client_name)
-    # zz
     #mass_update_mcq(client_name)
     #mass_update_schedule(client_name)
     #mass_update_usermaster(client_name)

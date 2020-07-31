@@ -78,7 +78,7 @@ sys_params = "System Parameters"
 sys_logs = "System Logs"
 sys_jobs = "System Jobs"
 stage_master = "Schedule Template"
-option_client = "Client_Name"
+option_client = "Client Copy"
 option_searchbyname = "Name Search"
 option_searchbyemail = "Email Search"
 option_resetuser = "Reset User"
@@ -243,6 +243,9 @@ class MessageCounter(telepot.helper.ChatHandler):
             self.is_admin = (chat_id == adminchatid)
             self.logoff()
             self.menu_id = 0
+            
+        #if resp=='/z':
+            #print(client_name)        
 
         elif resp=='/stop' and (chat_id in [adminchatid, developerid]):
             self.parentbot.broadcast('System shutting down.')
@@ -381,10 +384,10 @@ class MessageCounter(telepot.helper.ChatHandler):
                     retmsg = "Information not available"
                 else:
                     df.columns = ['client_name']
-                    client_list = [x for x in df.client_name]
-                    bot_prompt(bot, chat_id, "Select client_name :", [client_list])
+                    client_list = [x for x in df.client_name if x not in ['Sambaash','Demo']] + [option_back]
+                    bot_prompt(bot, chat_id, "Client copy to Sambaash client from :", [client_list])
                     self.menu_id = keys_dict[option_client]
-                    
+                                    
         elif self.menu_id == keys_dict[option_2fa]:
             code2FA = self.parentbot.code2fa_list[chat_id]
             if code2FA == resp:
@@ -513,33 +516,59 @@ class MessageCounter(telepot.helper.ChatHandler):
                     binded = 'Yes' if rec['binded']==1 else 'No'
                     telegid = str(tid) if rec['binded']==1 else 'None'
                     txt = f"Student-ID : #{sid}\nName : {username}\nEmail : {email}\nBinded :{binded}\nTelegramID : {telegid}\n"
-                    txt += "What you like to do ?"
+                    query = "select distinct a.courseid from userdata a inner join user_master b "
+                    query += " on a.client_name=b.client_name  and a.studentid=b.studentid where "
+                    query += f" a.client_name = '{client_name}' and a.studentid={sid} " 
+                    query += "order by a.courseid;"                  
+                    df = rds_df(query)
+                    if df is not None:
+                        df.columns = ['courseid']
+                        if len(df)>0:
+                            txt += "Courses:\n" + '\n'.join([x for x in df.courseid])
+                    txt += "\nWhat would you like to do ?"
                     useraction_menu = [[opt_blockuser, opt_setadmin , opt_setlearner],[opt_resetemail, opt_unbind, option_back]]
                     bot_prompt(self.bot, self.chatid, txt, useraction_menu)
             elif resp == opt_blockuser:
-                query = f"update user_master set usertype = 0 where client_name = '{self.client_name}' and studentid = {self.student_id} ;"
+                query = f"update user_master set usertype = 0 where client_name = '{client_name}' and studentid = {self.student_id} ;"
                 rds_update(query)
                 retmsg = f"User with Student-ID {self.student_id} has been blocked."
             elif resp == opt_setadmin:
-                query = f"update user_master set usertype = 11 where client_name = '{self.client_name}' and studentid = {self.student_id} ;"
+                query = f"update user_master set usertype = 11 where client_name = '{client_name}' and studentid = {self.student_id} ;"
                 rds_update(query)
                 retmsg = f"User with Student-ID {self.student_id} has been set as admin."
             elif resp == opt_setlearner:
-                query = f"update user_master set usertype = 1 where client_name = '{self.client_name}' and studentid = {self.student_id} ;"
+                query = f"update user_master set usertype = 1 where client_name = '{client_name}' and studentid = {self.student_id} ;"
                 rds_update(query)
                 retmsg = f"User with Student-ID {self.student_id} has been set as learner."
             elif resp == opt_resetemail:
-                query = f"update user_master set email = '{resp}' where client_name = '{self.client_name}' and studentid = {self.student_id} ;"
+                query = f"update user_master set email = '{resp}' where client_name = '{client_name}' and studentid = {self.student_id} ;"
                 rds_update(query)
                 retmsg = f"User email with Student-ID {self.student_id} has been set to {self.student_id}."
             elif resp == opt_unbind:
-                query = f"update user_master set binded = 0, chat_id = 0 where client_name = '{self.client_name}' and studentid = {self.student_id} ;"
+                query = f"update user_master set binded = 0, chat_id = 0 where client_name = '{client_name}' and studentid = {self.student_id} ;"
                 rds_update(query)
                 retmsg = f"User telegram account has been unbinded from Student-ID {self.student_id}."
 
         elif self.menu_id == keys_dict[option_client]:
-            svcbot.client_name = client_name = resp
-            bot_prompt(bot, chat_id, f"Default client_name set to {resp}", system_menu)
+            #svcbot.client_name = client_name = resp            
+            #bot_prompt(bot, chat_id, f"Default client_name set to {resp}", system_menu)
+            if resp != option_back:                
+                self.sender.sendMessage(f"Copying from {resp} to Sambaash....")
+                table_list = ['course_module' , 'iu_stages', 'mcqas_info', 'mcq_data', 'mcq_score']
+                table_list += ['module_iu' , 'playbooks', 'stages', 'stages_master', 'userdata' , 'user_master']                
+                for tbl in table_list:
+                    #self.sender.sendMessage(f"Duplicating data for table {tbl}....")
+                    #print(f"Duplicating data for table {tbl}....")
+                    qry =  f"select * from {tbl} WHERE client_name = '{resp}';"
+                    df = rds_df(qry)
+                    if df is not None:
+                        df.columns = get_columns(tbl)
+                        df['client_name'] = 'Sambaash'
+                        qry = f"DELETE FROM {tbl} WHERE client_name = 'Sambaash';"
+                        rds_update(qry)
+                        copydbtbl(df, tbl)  
+                self.sender.sendMessage("Client copy  has been completed.")
+            bot_prompt(bot, chat_id, "You are back in the main menu", system_menu)
             self.menu_id = keys_dict[option_syscfg]
             
         elif self.menu_id == keys_dict[option_cmd]:
