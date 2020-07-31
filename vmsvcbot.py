@@ -74,11 +74,6 @@ ml_graph = "ML Graph"
 ml_menu = [[ml_data, ml_pipeline, ml_report],[ml_graph, ml_train, option_back]]
 sys_import = "Mass Import"
 sys_update = "Mass Update"
-sys_params = "System Parameters"
-sys_logs = "System Logs"
-sys_jobs = "System Jobs"
-stage_master = "Schedule Template"
-option_client = "Client Copy"
 option_searchbyname = "Name Search"
 option_searchbyemail = "Email Search"
 option_resetuser = "Reset User"
@@ -87,8 +82,12 @@ option_binded_users = "Binded Users"
 option_active_users = "Active Users"
 option_blocked_users = "Blocked Users"
 users_menu = [[option_searchbyname, option_searchbyemail, option_resetuser, option_active_users],[option_admin_users, option_binded_users, option_blocked_users, option_back]]
-
-system_menu = [[sys_params, sys_logs, sys_jobs],[option_client, stage_master, option_back]]
+sys_params = "System Parameters"
+sys_logs = "System Logs"
+sys_jobs = "System Jobs"
+sys_clientcopy = "Client Copy"
+sys_clientname = "Default Client"
+system_menu = [[sys_params, sys_logs, sys_jobs],[sys_clientcopy, sys_clientname, option_back]]
 
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
 string2date = lambda x,y : datetime.datetime.strptime(x,y).date()
@@ -376,9 +375,9 @@ class MessageCounter(telepot.helper.ChatHandler):
                 html_table(bot, chat_id, "", "syslog", "System Logs", "system_logs.html")
             elif resp == sys_jobs :
                 html_table(bot, chat_id, client_name, "job_list", "System joblist", "joblist.html")
-            elif resp == stage_master :                
-                html_table(bot, chat_id, client_name, "stages_master", "Schedule Template", "stages_master.html")
-            elif resp == option_client :
+            #elif resp == stage_master :                
+                #html_table(bot, chat_id, client_name, "stages_master", "Schedule Template", "stages_master.html")
+            elif resp == sys_clientcopy :
                 df = rds_df("select distinct client_name from user_master order by client_name;")
                 if df is None:
                     retmsg = "Information not available"
@@ -386,7 +385,16 @@ class MessageCounter(telepot.helper.ChatHandler):
                     df.columns = ['client_name']
                     client_list = [x for x in df.client_name if x not in ['Sambaash','Demo']] + [option_back]
                     bot_prompt(bot, chat_id, "Client copy to Sambaash client from :", [client_list])
-                    self.menu_id = keys_dict[option_client]
+                    self.menu_id = keys_dict[sys_clientcopy]
+            elif resp == sys_clientname :
+                df = rds_df("select distinct client_name from user_master order by client_name;")
+                if df is None:
+                    retmsg = "Information not available"
+                else:
+                    df.columns = ['client_name']
+                    client_list = [x for x in df.client_name] 
+                    bot_prompt(bot, chat_id, "Set the default client to :", [client_list])
+                    self.menu_id = keys_dict[sys_clientname]
                                     
         elif self.menu_id == keys_dict[option_2fa]:
             code2FA = self.parentbot.code2fa_list[chat_id]
@@ -549,7 +557,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                 rds_update(query)
                 retmsg = f"User telegram account has been unbinded from Student-ID {self.student_id}."
 
-        elif self.menu_id == keys_dict[option_client]:
+        elif self.menu_id == keys_dict[sys_clientcopy]:
             #svcbot.client_name = client_name = resp            
             #bot_prompt(bot, chat_id, f"Default client_name set to {resp}", system_menu)
             if resp != option_back:                
@@ -569,6 +577,11 @@ class MessageCounter(telepot.helper.ChatHandler):
                         copydbtbl(df, tbl)  
                 self.sender.sendMessage("Client copy  has been completed.")
             bot_prompt(bot, chat_id, "You are back in the main menu", system_menu)
+            self.menu_id = keys_dict[option_syscfg]
+            
+        elif self.menu_id == keys_dict[sys_clientname]:
+            svcbot.client_name = client_name = resp            
+            bot_prompt(bot, chat_id, f"Default client_name set to {resp}", system_menu)
             self.menu_id = keys_dict[option_syscfg]
             
         elif self.menu_id == keys_dict[option_cmd]:
