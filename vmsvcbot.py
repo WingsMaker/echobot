@@ -31,10 +31,16 @@ import re
 import requests
 
 import telepot
-from telepot.loop import MessageLoop
-from telepot.delegate import pave_event_space, per_chat_id, create_open, per_callback_query_chat_id
-from telepot.namedtuple import ReplyKeyboardMarkup
-from telepot.helper import IdleEventCoordinator
+#from telepot.loop import MessageLoop
+#from telepot.delegate import pave_event_space, per_chat_id, create_open, per_callback_query_chat_id
+#from telepot.namedtuple import ReplyKeyboardMarkup
+#from telepot.helper import IdleEventCoordinator
+# https://buildmedia.readthedocs.org/media/pdf/telepot/v12.5/telepot.pdf page 56
+# https://docs.telethon.dev/en/latest/concepts/asyncio.html
+import asyncio
+import telepot.aio
+from telepot.aio.loop import MessageLoop
+from telepot.aio.delegate import pave_event_space, per_chat_id, create_open
 
 import vmedxlib
 import vmnlplib
@@ -43,7 +49,7 @@ import vmffnnlib
 import vmsvclib
 from vmsvclib import *
 
-global svcbot, edx_api_header, edx_api_url
+global svcbot, bot_intance, edx_api_header, edx_api_url
 
 developerid = 71354936
 omchat = vmnlplib.NLP_Parser()
@@ -55,9 +61,9 @@ option_nlp = "NLP"
 option_ml = "Machine Learning"
 option_2fa = "2FA"
 option_syscfg = "System 🖥️"
-option_cmd = "Commands Shell 📺"
+option_client = "Clients"
 option_usermgmt = "Manage Users 👥"
-svcbot_menu = [[option_nlp, option_ml, option_syscfg], [option_usermgmt, option_cmd, option_back]]
+svcbot_menu = [[option_nlp, option_ml, option_syscfg], [option_usermgmt, option_client, option_back]]
 nlp_prompts = "Bot Prompts"
 nlp_dict = "Dictionary 📖"
 nlp_corpus = "Corpus"
@@ -81,23 +87,35 @@ option_admin_users = "Admin Users"
 option_binded_users = "Binded Users"
 option_active_users = "Active Users"
 option_blocked_users = "Blocked Users"
-users_menu = [[option_searchbyname, option_searchbyemail, option_resetuser, option_active_users],[option_admin_users, option_binded_users, option_blocked_users, option_back]]
+users_menu = [[option_searchbyname, option_searchbyemail, option_resetuser, option_active_users], \
+    [option_admin_users, option_binded_users, option_blocked_users, option_back]]
+opt_blockuser = 'Block this user'
+opt_setadmin = 'Set as Admin'
+opt_setlearner = 'Set as Learner'
+opt_resetemail = 'Change Email'
+opt_unbind = 'Reset Binding'
+useraction_menu = [[opt_blockuser, opt_setadmin , opt_setlearner],[opt_resetemail, opt_unbind, option_back]]    
 sys_params = "System Parameters"
 sys_logs = "System Logs"
 sys_jobs = "System Jobs"
+sys_pyt = "Python Shell 🐍"
+sys_cmd = "Commands Shell 📺"
+system_menu = [[sys_params, sys_logs, sys_jobs],[sys_pyt, sys_cmd, option_back]]
 sys_clientcopy = "Client Copy"
 sys_clientname = "Default Client"
-system_menu = [[sys_params, sys_logs, sys_jobs],[sys_clientcopy, sys_clientname, option_back]]
+client_menu = [[sys_clientname, sys_clientcopy, option_back]]
 
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
 string2date = lambda x,y : datetime.datetime.strptime(x,y).date()
-str2date = lambda x : string2date(x,"%d/%m/%Y")            
+str2date = lambda x : string2date(x,"%d/%m/%Y")       
 date_today = datetime.datetime.now().date()
 dmy_str = lambda v : piece(v,'-',2) + '/' + piece(v,'-',1) + '/' + piece(v,'-',0)
 ymd_str = lambda v : piece(v,'-',0) + '/' + piece(v,'-',1) + '/' + piece(v,'-',2)
 
 class BotInstance():
     def __init__(self, Token, client_name, max_duration, adminchatid):
+        global svcbot, bot_intance
+        bot_intance = self
         self.Token = ""
         self.bot_name = ""
         self.bot_id = ""
@@ -118,25 +136,20 @@ class BotInstance():
         self.define_keys(nlp_menu, self.keys_dict[option_nlp])
         self.define_keys(ml_menu, self.keys_dict[option_ml])
         self.define_keys(system_menu, self.keys_dict[option_syscfg])
-        self.define_keys( users_menu, self.keys_dict[ option_usermgmt ])
-        self.keys_dict[option_2fa] = (self.keys_dict[option_mainmenu]*10) + 1        
-        #print(*(self.keys_dict).items(), sep = '\n')
-
-        self.bot = telepot.DelegatorBot(Token, [
-            pave_event_space()( [per_chat_id(), per_callback_query_chat_id()],
-            create_open, MessageCounter, timeout=max_duration, include_callback_query=True),
-        ])
-        info = self.bot.getMe()
-        self.bot_name = info['username']
-        self.bot_id = info.get('id')
-        print('Frontend bot : ', self.bot_id)
-        msg = self.bot_name + ' started running. URL is https://t.me/' + self.bot_name
-        print(msg)
-        try:
-            MessageLoop(self.bot).run_as_thread()
-            self.bot_running = True
-        except:
-            print("Error running this bot instance")
+        self.define_keys(users_menu, self.keys_dict[option_usermgmt])
+        self.define_keys(useraction_menu, self.keys_dict[option_resetuser])
+        self.keys_dict[option_2fa] = (self.keys_dict[option_mainmenu]*10) + 1
+        self.define_keys( client_menu, self.keys_dict[option_client])        
+        self.bot = telepot.aio.DelegatorBot(Token, [
+            pave_event_space()( per_chat_id(),
+            create_open, MessageCounter, timeout=max_duration),            
+        ])        
+        svcbot = self.bot        
+        self.bot_running = True        
+        loop = asyncio.get_event_loop()
+        self.loop = loop
+        loop.create_task(MessageLoop(self.bot).run_forever())
+        loop.run_forever()
         return
 
     def __str__(self):
@@ -144,10 +157,6 @@ class BotInstance():
 
     def __repr__(self):
         return 'BotInstance()'
-
-    def broadcast(self, msg):
-        for d in self.user_list:
-            self.bot.sendMessage(d, msg)
 
     def define_keys(self, telegram_menu, start_key):
         button_list = lambda x : str(x).replace('[','').replace(']','').replace(", ",",").replace("'","").split(',')
@@ -158,8 +167,9 @@ class BotInstance():
                 self.keys_dict[menu_item] = menu_keys 
                 menu_keys += 1
         return 
+        
 
-class MessageCounter(telepot.helper.ChatHandler):
+class MessageCounter(telepot.aio.helper.ChatHandler):
     def __init__(self, *args, **kwargs):
         super(MessageCounter, self).__init__(*args, **kwargs)
         self.is_admin = False
@@ -168,7 +178,6 @@ class MessageCounter(telepot.helper.ChatHandler):
         self.edited = 0
         self.menu_id = 0
         self.mainmenu = []
-        self.parentbot = None
 
     def reset(self):
         self.__init__()
@@ -176,37 +185,47 @@ class MessageCounter(telepot.helper.ChatHandler):
 
     def logoff(self):
         try:
-            if self.chatid in self.parentbot.user_list:
-                self.parentbot.user_list.pop(self.chatid)
+            if self.chatid in bot_intance.user_list:
+                bot_intance.user_list.pop(self.chatid)
         except:
             pass
-        txt = "Have a great day!"
-        bot_prompt(self.bot, self.chatid, txt, [['/start']])
+        #txt = "Have a great day!"        
+        #self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup([['/start']]))        
         self.chatid = 0
         self.reset
         self.menu_id = 0
         return
 
     def on_close(self, exception):
+        txt = 'session time out, goodbye.\nPress \start to reconnect.'        
+        self.sender.sendMessage(txt)
         self.logoff()
-        self.sender.sendMessage('session time out, goodbye.')
         return
 
-    def on_chat_message(self, msg):
-        global svcbot
+    def reply_markup(self, buttons=[], opt_resize = True):
+        mark_up = None
+        if buttons == []:
+            mark_up = {'hide_keyboard': True}
+        else:
+            mark_up = ReplyKeyboardMarkup(keyboard=buttons,one_time_keyboard=True,resize_keyboard=opt_resize)
+        return mark_up
+
+    async def on_chat_message(self, msg):
+        global svcbot, bot_intance
         try:
             content_type, chat_type, chat_id = telepot.glance(msg)
-            self.parentbot = svcbot
-            self.mainmenu = svcbot.mainmenu            
-            bot = self.bot
+            bot = svcbot            
+            self.mainmenu = bot_intance.mainmenu
             self.chatid = chat_id
-            keys_dict = svcbot.keys_dict
-            adminchatid = svcbot.adminchatid
-            client_name = svcbot.client_name
+            keys_dict = bot_intance.keys_dict
+            adminchatid = bot_intance.adminchatid
+            client_name = bot_intance.client_name
         except:
             return
         resp = ""
         retmsg = ''
+        html_msglist = []
+        html_title = ""
         username = ""
         if content_type == 'text':
             resp = msg['text'].strip()
@@ -222,45 +241,45 @@ class MessageCounter(telepot.helper.ChatHandler):
                     req_user = [x for x in msglist if 'first_name' in x ][0].replace("'",'').split(':')[1].strip()
                 code2fa = [x for x in msglist if 'bot_command' in x ][0].split(' ')[-1].replace("'",'')
                 txt = "Hi " + req_user + ", your 2FA code is : " + code2fa
-                bot.sendMessage(reply_id,txt)
+                await bot.sendMessage(reply_id,txt)
         elif (content_type=="document") :
             #if msg['document']['mime_type']=="text/plain":
             fid = msg[content_type]['file_id']
             fname = get_attachment(bot, fid)
-            #fcaption = msg['document']['caption']
             file_name = msg['document']['file_name']
             pcmd = f"cp -f {fname} ~/om/{file_name} ; rm -f {fname}"
             shellcmd(pcmd)
-            bot.sendMessage(chat_id, f"file {file_name} received.")
+            await bot.sendMessage(chat_id, f"file {file_name} received.")
                 
         elif content_type != "text":
             print( json.dumps(msg) )
             txt = "Thanks for the " + content_type + " but I do not need it for now."
-            bot.sendMessage(chat_id,txt)
+            await bot.sendMessage(chat_id,txt)
 
         if resp=='/end':
             self.is_admin = (chat_id == adminchatid)
             self.logoff()
             self.menu_id = 0
+            txt = "sesson closed."
+            await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([['/start']]))
             
-        #if resp=='/z':
-            #print(client_name)        
-
         elif resp=='/stop' and (chat_id in [adminchatid, developerid]):
-            self.parentbot.broadcast('System shutting down.')
-            self.parentbot.bot_running = False            
-            retmsg = 'System already shutdown.'
+            for d in bot_intance.user_list:
+                await self.bot.sendMessage(d, "System shutting down.")
+            bot_intance.bot_running = False            
+            retmsg = 'System already shutdown.'            
+            bot_intance.loop.stop()
           
         elif resp == '/start':
             result ='<pre> ▀▄▀▄▀▄ OmniMentor ▄▀▄▀▄▀\n Powered by Sambaash</pre>\nContact <a href=\"tg://user?id=1064466049">@OmniMentor</a>'
-            bot.sendMessage(chat_id,result,parse_mode='HTML')
+            await bot.sendMessage(chat_id,result,parse_mode='HTML')
             self.reset            
             if (chat_id in [adminchatid, developerid]):
                 self.is_admin = True
                 txt = "Welcome to the ServiceBot"
                 self.menu_id = keys_dict[option_mainmenu]
-                bot_prompt(bot, chat_id, txt, self.mainmenu)
-                self.parentbot.user_list[chat_id] = [self.username, ""]
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(self.mainmenu))
+                bot_intance.user_list[chat_id] = [self.username, ""]
             else:
                 self.is_admin = False
                 txt = "Following user requesting for admin access :\n"
@@ -268,81 +287,110 @@ class MessageCounter(telepot.helper.ChatHandler):
                 txt += json.dumps(msg)
                 code2FA = ''.join(random.choice( "ABCDEFGHJKLMNPQRTUVWXY0123456789" ) for i in range(32))
                 code2FA = code2FA.upper()
-                self.parentbot.code2fa_list[chat_id] = code2FA
+                bot_intance.code2fa_list[chat_id] = code2FA
                 txt += "\n\nFor your approval with 2FA code : " + code2FA
-                bot.sendMessage(adminchatid, txt)
+                await self.bot.sendMessage(adminchatid, txt)
                 txt = "Please enter the 2FA code :"
-                bot_prompt(bot, chat_id, txt, [])
+                await self.bot.sendMessage(chat_id, txt)
                 self.menu_id = keys_dict[option_2fa]
         elif self.menu_id == keys_dict[option_mainmenu]:
             if resp == option_nlp :
                 txt = "This section maintain NLP corpus and trains model.\n"
                 txt += "You can test your NLP dialog from here."
-                txt = banner_msg("NLP", txt)
-                bot_prompt(bot, chat_id, txt, nlp_menu)
+                txt = banner_msg("NLP", txt)                
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(nlp_menu))
                 self.menu_id = keys_dict[option_nlp]
             elif resp == option_ml :                
                 txt = 'You are in ML options.'
-                bot_prompt(self.bot, self.chatid, txt, ml_menu)
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(ml_menu))
                 self.menu_id = keys_dict[option_ml]
             elif resp == option_syscfg :
-                txt = banner_msg("System Mode", "This section updates master data at the background")
-                bot_prompt(bot, chat_id, txt, system_menu)
+                txt = banner_msg("System Mode", "This section updates master data at the background")                
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(system_menu))
                 self.menu_id = keys_dict[option_syscfg]
             elif resp == option_usermgmt:                
-                txt = 'To search for student-ID or reset User by student-ID.'
-                bot_prompt(self.bot, self.chatid, txt, users_menu)
+                txt = 'To search for user or reset the user.'
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(users_menu))
                 self.menu_id = keys_dict[option_usermgmt]
-            elif resp == option_cmd :                    
-                txt = "You are now connected to Cmd mode.\nType cmd to list out the commands."
-                txt = banner_msg("Service Console", txt)
-                bot_prompt(bot, chat_id, txt, [[option_back]])
-                self.menu_id = keys_dict[option_cmd]
+            elif resp == option_client :
+                txt = "Current client is " + client_name 
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(client_menu))
+                self.menu_id = keys_dict[option_client]
             elif resp == option_back :
                 self.logoff()
+                txt = "sesson closed."
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([['/start']]))
                 
         elif self.menu_id == keys_dict[option_nlp]:
             retmsg = "The section handle all the natural language processing matters."
             if resp == nlp_dict :
-                html_table(bot, chat_id, "", "dictionary", "DICTIONARY TABLE", "dictionary.html")
+                f=html_tbl("", "dictionary", "DICTIONARY TABLE", "dictionary.html")
+                if f is None:
+                    await self.bot.sendMessage( chat_id, "Information not available" )
+                else:
+                    await self.bot.sendDocument(chat_id, document=f)
             elif resp == nlp_prompts :
-                html_table(bot, chat_id, "", "prompts", "RESPONSES TABLE", "prompts.html")
+                f=html_tbl("", "prompts", "RESPONSES TABLE", "prompts.html")
+                if f is None:
+                    await self.bot.sendMessage( chat_id, "Information not available" )
+                else:
+                    await self.bot.sendDocument(chat_id, document=f)
             elif resp == nlp_response :
-                html_table(bot, chat_id, "", "progress", "RESPONSE TEXT", "response.html")
+                f=html_tbl("", "progress", "RESPONSE TEXT", "response.html")
+                if f is None:
+                    await self.bot.sendMessage( chat_id, "Information not available" )
+                else:
+                    await self.bot.sendDocument(chat_id, document=f)
             elif resp == nlp_corpus  :
-                html_table(bot, chat_id, "", "ft_corpus", "FASTTEXT CORPUS", "ft_corpus.html")
+                f=html_tbl("", "ft_corpus", "FASTTEXT CORPUS", "ft_corpus.html")
+                if f is None:
+                    await self.bot.sendMessage( chat_id, "Information not available" )
+                else:
+                    await self.bot.sendDocument(chat_id, document=f)
             elif resp == nlp_stopwords :
-                html_table(bot, chat_id, "", "stopwords", "STOPWORDS TABLE", "stopwords.html")
+                f=html_tbl("", "stopwords", "STOPWORDS TABLE", "stopwords.html")
+                if f is None:
+                    await self.bot.sendMessage( chat_id, "Information not available" )
+                else:
+                    await self.bot.sendDocument(chat_id, document=f)
             elif resp == nlp_faq:
-                html_table(bot, chat_id, "", "faq", "FAQ TABLE", "faq.html")
+                f=html_tbl("", "faq", "FAQ TABLE", "faq.html")
+                if f is None:
+                    await self.bot.sendMessage( chat_id, "Information not available" )
+                else:
+                    await self.bot.sendDocument(chat_id, document=f)
             elif resp == nlp_train :
                 if omchat.train_model() :
                     retmsg = "NLP model using the corpus table has been trained with model file saved as ft_model.bin"
                 else:
                     retmsg = "NLP model using the corpus table was not trained properly"
             elif (resp == option_back) or (resp == "0"):
-                bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
+                txt = "You are back in the main menu"
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(self.mainmenu))
                 self.menu_id = keys_dict[option_mainmenu]
 
         elif self.menu_id == keys_dict[option_ml]:
             txt = "The section handle all the machine learning related processes."
-            self.sender.sendMessage(txt)
+            await self.sender.sendMessage(txt)
             if resp == ml_data :
-                html_table(bot, chat_id, client_name, "mcqas_info", "ML Model Data", "mcqas_info.html")
+                f=html_tbl(client_name, "mcqas_info", "ML Model Data", "mcqas_info.html")
+                if f is None:
+                    await self.bot.sendMessage( chat_id, "Information not available" )
+                else:
+                    await self.bot.sendDocument(chat_id, document=f)
             elif resp == ml_pipeline :
-                botname = (self.bot.getMe())['username']
-                func_req = "generate_mcq_as"
-                func_param = ""
-                job_request(botname,chat_id, client_name, func_req,func_param)
-                retmsg = 'Sending request edx_bot'
+                await self.bot.sendMessage(chat_id, 'please wait for a moment.')
+                vmedxlib.generate_mcq_as(client_name)
+                retmsg = 'Job completed.'                
             elif resp == ml_report :
                 retmsg = "Generating profiler report for quick data analysis."
+                await self.bot.sendMessage(chat_id, 'please wait for a moment.')
                 fn="mcqas_info.html"
                 if profiler_report(client_name, fn)==1:                    
-                    bot.sendDocument(chat_id=self.chatid, document=open(fn, 'rb'))
+                    await bot.sendDocument(chat_id=self.chatid, document=open(fn, 'rb'))
                 else:
                     result = "<a href=\"https://omnimentor.lithan.com/prod/mcqas_info.html\">Profiler Report</a>"
-                    bot.sendMessage(chat_id,result,parse_mode='HTML')
+                    await bot.sendMessage(chat_id,result,parse_mode='HTML')
             elif resp == ml_graph  :
                 retmsg = "Generating decision tree graph to explain the model."
                 fn = 'mcqas_info.jpg'
@@ -354,7 +402,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                     status = dt_model.tree_graph(fn)
                 if status==1:
                     f = open(fn, 'rb')
-                    bot.sendPhoto(self.chatid, f)
+                    await bot.sendPhoto(self.chatid, f)
             elif resp == ml_train :                
                 use_neural_network = False # or False
                 if use_neural_network:
@@ -362,91 +410,96 @@ class MessageCounter(telepot.helper.ChatHandler):
                 else:
                     retmsg = dt_model.train_model(client_name, "dt_model.bin")
             elif (resp == option_back) or (resp == "0"):
-                bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
+                txt = "You are back in the main menu"
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(self.mainmenu))
                 self.menu_id = keys_dict[option_mainmenu]
 
         elif self.menu_id == keys_dict[option_syscfg] :
             if resp == option_back :
-                bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
+                txt = "You are back in the main menu"
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(self.mainmenu))
                 self.menu_id = keys_dict[option_mainmenu]
             elif resp == sys_params:
-                html_table(bot, chat_id, client_name, "params", "System Parameters", "system_params.html")
+                f=html_tbl(client_name, "params", "System Parameters", "system_params.html")
+                if f is None:
+                    await self.bot.sendMessage( chat_id, "Information not available" )
+                else:
+                    await self.bot.sendDocument(chat_id, document=f)
             elif resp == sys_logs:
-                html_table(bot, chat_id, "", "syslog", "System Logs", "system_logs.html")
+                f=html_tbl("", "syslog", "System Logs", "system_logs.html")
+                if f is None:
+                    await self.bot.sendMessage( chat_id, "Information not available" )
+                else:
+                    await self.bot.sendDocument(chat_id, document=f)
             elif resp == sys_jobs :
-                html_table(bot, chat_id, client_name, "job_list", "System joblist", "joblist.html")
-            #elif resp == stage_master :                
-                #html_table(bot, chat_id, client_name, "stages_master", "Schedule Template", "stages_master.html")
-            elif resp == sys_clientcopy :
-                df = rds_df("select distinct client_name from user_master order by client_name;")
-                if df is None:
-                    retmsg = "Information not available"
+                f=html_tbl(client_name, "job_list", "System joblist", "joblist.html")
+                if f is None:
+                    await self.bot.sendMessage( chat_id, "Information not available" )
                 else:
-                    df.columns = ['client_name']
-                    client_list = [x for x in df.client_name if x not in ['Sambaash','Demo']] + [option_back]
-                    bot_prompt(bot, chat_id, "Client copy to Sambaash client from :", [client_list])
-                    self.menu_id = keys_dict[sys_clientcopy]
-            elif resp == sys_clientname :
-                df = rds_df("select distinct client_name from user_master order by client_name;")
-                if df is None:
-                    retmsg = "Information not available"
-                else:
-                    df.columns = ['client_name']
-                    client_list = [x for x in df.client_name] 
-                    bot_prompt(bot, chat_id, "Set the default client to :", [client_list])
-                    self.menu_id = keys_dict[sys_clientname]
+                    await self.bot.sendDocument(chat_id, document=f)
+            elif resp == sys_pyt :
+                txt = "You are now connected to python shell mode."
+                txt = banner_msg("Service Console", txt)
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([[option_back]]))
+                self.menu_id = keys_dict[sys_pyt]
+            elif resp == sys_cmd :
+                txt = "You are now connected to command shell mode."
+                txt = banner_msg("Service Console", txt)
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([[option_back]]))
+                self.menu_id = keys_dict[sys_cmd]
                                     
         elif self.menu_id == keys_dict[option_2fa]:
-            code2FA = self.parentbot.code2fa_list[chat_id]
+            code2FA = bot_intance.code2fa_list[chat_id]
             if code2FA == resp:
                 self.is_admin = True
                 txt = banner_msg("Welcome","You are now connected to Mentor mode.")
                 self.menu_id = keys_dict[option_mainmenu]
-                bot_prompt(bot, chat_id, txt, self.mainmenu)
-                self.parentbot.code2fa_list.pop(chat_id)
-                self.parentbot.user_list[chat_id] = [self.username, ""]
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(self.mainmenu))
+                bot_intance.code2fa_list.pop(chat_id)
+                bot_intance.user_list[chat_id] = [self.username, ""]
             else:
                 txt  = "Sorry the 2FA code is invalid, please try again."
                 self.is_admin = False
-                bot_prompt(bot, chat_id, txt, [['/start']])
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([['/start']]))
                 self.menu_id = 0
 
         elif self.menu_id ==  keys_dict[option_usermgmt]:
             if (resp == option_back) or (resp == "0"):
-                bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
+                txt = "You are back in the main menu"
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(self.mainmenu))
                 self.menu_id = keys_dict[option_mainmenu]
             if resp == option_searchbyname:
                 txt = "Search Student-ID by name"
-                bot_prompt(self.bot, self.chatid, txt, [[option_back]])
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([[option_back]]))
                 self.menu_id = keys_dict[option_searchbyname]                
             elif resp == option_searchbyemail:
                 txt = "Search Student-ID by email"                
-                bot_prompt(self.bot, self.chatid, txt, [[option_back]])
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([[option_back]]))
                 self.menu_id = keys_dict[option_searchbyemail]                
             elif resp == option_resetuser:
                 txt = "Please enter valid Student-ID :"
-                bot_prompt(self.bot, self.chatid, txt, [[option_back]])
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([[option_back]]))
                 self.menu_id = keys_dict[option_resetuser]                
             elif resp == option_admin_users:
                 query = f"select studentid,username,email from user_master where client_name = '{client_name}' and usertype=11 limit 50;"
                 result = "List of admin users (top 50)\n"
                 df = rds_df(query)
                 if df is None:
-                    self.sender.sendMessage("Sorry, no results found.")
+                    await self.sender.sendMessage(txt)
                     return
                 df.columns = ['studentid','username','email']
-                html_list(self.bot, chat_id, df, df.columns, [10,30,40], result, 25)
-                return                
+                html_title = result
+                html_msglist = html_report(df, df.columns, [10,30,40], 25)                
             elif resp == option_blocked_users:
                 query = f"select studentid,username,email from user_master where client_name = '{client_name}' and usertype=0 limit 50;"
                 result = "List of blocked users (top 50)\n"
                 df = rds_df(query)
                 if df is None:
-                    self.sender.sendMessage("Sorry, no results found.")
+                    await self.sender.sendMessage("Sorry, no results found.")
                     return
                 df.columns = ['studentid','username','email']
-                html_list(self.bot, chat_id, df, df.columns, [10,30,40], result, 25)
-                return
+                html_title = result
+                html_msglist = html_report(df, df.columns, [10,30,40], 25)                
             elif resp == option_binded_users :
                 query = f"UPDATE user_master SET binded=0 WHERE chat_id=0 and client_name = '{client_name}';"
                 rds_update(query)
@@ -454,26 +507,22 @@ class MessageCounter(telepot.helper.ChatHandler):
                 result = "List of binded users (top 50)\n"
                 df = rds_df(query)
                 if df is None:
-                    self.sender.sendMessage("Sorry, no results found.")
+                    await self.sender.sendMessage("Sorry, no results found.")
                     return
                 df.columns = ['studentid','username','email','chat_id']
-                html_list(self.bot, chat_id, df, df.columns, [10,30,40,20], result, 25)
-                return
+                html_title = result
+                html_msglist = html_report(df, df.columns, [10,30,40,20], 25)
             elif resp == option_active_users :
-                query = f"select studentid,username,email,chat_id from user_master where client_name = '{client_name}' and usertype>0 limit 50;"
-                result = "List of active users (top 50)\n"
-                df = rds_df(query)
-                if df is None:
-                    self.sender.sendMessage("Sorry, no results found.")
-                    return
-                df.columns = ['studentid','username','email','chat_id']
-                html_list(self.bot, chat_id, df, df.columns, [10,30,40,20], result, 25)
-                return
-
+                html_title = "List of acive users"
+                body = ""
+                gap = ' '*30
+                for u in bot_intance.user_list:
+                    body += (bot_intance.user_list[u][0] + gap)[:30] + (str(u) + gap)[:15] + '\n'                
+                html_msglist = [body]
         elif self.menu_id in [keys_dict[option_searchbyname],keys_dict[option_searchbyemail]] :
             if (resp == option_back) or (resp == "0"):
                 txt = "You are back to the user management menu."
-                bot_prompt(self.bot, self.chatid, txt, users_menu)
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(users_menu))
                 self.menu_id = keys_dict[option_usermgmt]
                 return
             idx = [keys_dict[option_searchbyname],keys_dict[option_searchbyemail]].index(self.menu_id)
@@ -486,24 +535,18 @@ class MessageCounter(telepot.helper.ChatHandler):
                 result = "Email search matching " + resp + "\n"
             df = rds_df(query)
             if df is None:
-                self.sender.sendMessage("Sorry, no results found.")
+                await self.sender.sendMessage("Sorry, no results found.")
                 return
             df.columns = ['studentid','username','email']
-            html_list(self.bot, chat_id, df, df.columns, [10,30,40], result, 20)
-            return
-            
+            html_title = result
+            html_msglist = html_report(df, df.columns, [10,30,40], 20)                        
         elif self.menu_id ==  keys_dict[option_resetuser]:            
             if (resp == option_back) or (resp == "0"):
                 txt = "You are back to the user management menu."
-                bot_prompt(self.bot, self.chatid, txt, users_menu)
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(users_menu))
                 self.menu_id = keys_dict[option_usermgmt]
                 return                            
             sid = 0
-            opt_blockuser = 'Block this user'
-            opt_setadmin = 'Set as Admin'
-            opt_setlearner = 'Set as Learner'
-            opt_resetemail = 'Change Email'
-            opt_unbind = 'Reset Binding'            
             if resp.isnumeric():
                 sid = int(resp)
                 if sid > 0:
@@ -534,8 +577,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                         if len(df)>0:
                             txt += "Courses:\n" + '\n'.join([x for x in df.courseid])
                     txt += "\nWhat would you like to do ?"
-                    useraction_menu = [[opt_blockuser, opt_setadmin , opt_setlearner],[opt_resetemail, opt_unbind, option_back]]
-                    bot_prompt(self.bot, self.chatid, txt, useraction_menu)
+                    await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(useraction_menu))
             elif resp == opt_blockuser:
                 query = f"update user_master set usertype = 0 where client_name = '{client_name}' and studentid = {self.student_id} ;"
                 rds_update(query)
@@ -549,23 +591,52 @@ class MessageCounter(telepot.helper.ChatHandler):
                 rds_update(query)
                 retmsg = f"User with Student-ID {self.student_id} has been set as learner."
             elif resp == opt_resetemail:
-                query = f"update user_master set email = '{resp}' where client_name = '{client_name}' and studentid = {self.student_id} ;"
-                rds_update(query)
-                retmsg = f"User email with Student-ID {self.student_id} has been set to {self.student_id}."
+                retmsg = "Please enter the new email address:"
+                self.menu_id = bot_intance.keys_dict[opt_resetemail]
             elif resp == opt_unbind:
                 query = f"update user_master set binded = 0, chat_id = 0 where client_name = '{client_name}' and studentid = {self.student_id} ;"
                 rds_update(query)
                 retmsg = f"User telegram account has been unbinded from Student-ID {self.student_id}."
 
+        elif self.menu_id == keys_dict[opt_resetemail]:
+                if '@' in resp:
+                    query = f"update user_master set email = '{resp}' where client_name = '{client_name}' and studentid = {self.student_id};"
+                    rds_update(query)
+                    retmsg = f"Email address for Student-ID {self.student_id} has been set to {resp}."
+                self.menu_id = keys_dict[option_resetuser]
+        
+        elif self.menu_id == keys_dict[option_client] :
+            if resp == option_back :
+                txt = "You are back in the main menu"
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(self.mainmenu))
+                self.menu_id = keys_dict[option_mainmenu]
+            elif resp == sys_clientcopy :
+                df = rds_df("select distinct client_name from user_master order by client_name;")
+                if df is None:
+                    retmsg = "Information not available"
+                else:
+                    df.columns = ['client_name']
+                    client_list = [x for x in df.client_name if x not in ['Sambaash']] + [option_back]
+                    txt = "Client copy to Sambaash client from :"
+                    await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([client_list]))
+                    self.menu_id = keys_dict[sys_clientcopy]
+            elif resp == sys_clientname :
+                df = rds_df("select distinct client_name from user_master order by client_name;")
+                if df is None:
+                    retmsg = "Information not available"
+                else:
+                    df.columns = ['client_name']
+                    client_list = [x for x in df.client_name] 
+                    txt = "Set the default client to :"
+                    await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([client_list]))
+                    self.menu_id = keys_dict[sys_clientname]
+
         elif self.menu_id == keys_dict[sys_clientcopy]:
-            #svcbot.client_name = client_name = resp            
-            #bot_prompt(bot, chat_id, f"Default client_name set to {resp}", system_menu)
-            if resp != option_back:                
-                self.sender.sendMessage(f"Copying from {resp} to Sambaash....")
+            if resp != option_back:
+                await self.sender.sendMessage(f"Copying from {resp} to Sambaash....")
                 table_list = ['course_module' , 'iu_stages', 'mcqas_info', 'mcq_data', 'mcq_score']
                 table_list += ['module_iu' , 'playbooks', 'stages', 'stages_master', 'userdata' , 'user_master']                
-                for tbl in table_list:
-                    #self.sender.sendMessage(f"Duplicating data for table {tbl}....")
+                for tbl in table_list:                    
                     #print(f"Duplicating data for table {tbl}....")
                     qry =  f"select * from {tbl} WHERE client_name = '{resp}';"
                     df = rds_df(qry)
@@ -575,35 +646,63 @@ class MessageCounter(telepot.helper.ChatHandler):
                         qry = f"DELETE FROM {tbl} WHERE client_name = 'Sambaash';"
                         rds_update(qry)
                         copydbtbl(df, tbl)  
-                self.sender.sendMessage("Client copy  has been completed.")
-            bot_prompt(bot, chat_id, "You are back in the main menu", system_menu)
-            self.menu_id = keys_dict[option_syscfg]
+                await self.sender.sendMessage("Client copy  has been completed.")
+            txt = "You are back in the client menu"
+            await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(client_menu))
+            self.menu_id = keys_dict[option_client]
             
-        elif self.menu_id == keys_dict[sys_clientname]:
-            svcbot.client_name = client_name = resp            
-            bot_prompt(bot, chat_id, f"Default client_name set to {resp}", system_menu)
-            self.menu_id = keys_dict[option_syscfg]
-            
-        elif self.menu_id == keys_dict[option_cmd]:
+        elif self.menu_id == keys_dict[sys_clientname]:            
+            bot_intance.client_name = client_name = resp            
+            txt = "Default client_name set to {resp}"
+            await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(client_menu))
+            self.menu_id = keys_dict[option_client]
+
+        elif self.menu_id == keys_dict[sys_pyt]:
             if resp == option_back :
-                bot_prompt(bot, chat_id, "You are back in the main menu", self.mainmenu)
-                self.menu_id = keys_dict[option_mainmenu]
+                txt = "You are back in the system menu"
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(system_menu))
+                self.menu_id = keys_dict[option_syscfg]
             else:
-                txt = shellcmd(resp)
+                try:
+                    txt = pycmd(resp)
+                except:
+                    txt = ""
                 txt_list = txt.split('\n')
                 cnt = int((len(txt_list)+19)/20)
+                html_msglist = []
                 for n in range(cnt):
                     m = n*20
                     result = '\n'.join(txt_list[m:][:20])
-                    result = '<pre>' + result + '</pre>'
-                    bot.sendMessage(chat_id, result, parse_mode='HTML')
+                    html_msglist.append(result)
+            
+        elif self.menu_id == keys_dict[sys_cmd]:
+            if resp == option_back :
+                txt = "You are back in the system menu"
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(system_menu))
+                self.menu_id = keys_dict[option_syscfg]
+            else:
+                try:
+                    txt = shellcmd(resp)
+                except:
+                    txt = ""
+                txt_list = txt.split('\n')
+                cnt = int((len(txt_list)+19)/20)
+                html_msglist = []
+                for n in range(cnt):
+                    m = n*20
+                    result = '\n'.join(txt_list[m:][:20])
+                    html_msglist.append(result)
+
+        if html_msglist != []:
+            title = "" if html_title=="" else ("<b>" + html_title + "</b>\n")
+            for msg in html_msglist:
+                txt = title + "<pre>" + msg +  "</pre>"
+                await self.bot.sendMessage(chat_id,txt,parse_mode='HTML')
 
         while len(retmsg) > 0:
             txt = retmsg[:100]
             retmsg = retmsg[100:]
-            #txt = retmsg[:4000]
-            #retmsg = retmsg[4000:]
-            self.sender.sendMessage(txt)
+            await self.sender.sendMessage(txt)
             retmsg=""
         return
 
@@ -624,111 +723,6 @@ def profiler_report(client_name, output_file):
     except:
         ok = 0
     return ok
-
-def checkjoblist(svcbot):
-    result = rds_param("select count(*) as cnt from job_list where status='open';")
-    cnt = int("0" + str(result))
-    if cnt == 0:
-        return
-    df = rds_df("select * from job_list where status='open' and client_name='System' order by date,time_start limit 1;")    
-    if df is None:
-        return
-    df.columns = get_columns("job_list")
-    jobitem = df.iloc[0].to_dict()
-    svcbot.job_items = jobitem
-    msg =  runbotjob(svcbot)
-    if msg == "":
-        msg = "job complete complete"
-    time_now = time.strftime('%H%M%S', time.localtime() )
-    time_end = str(time_now)
-    status = "completed"
-    job_id = jobitem['job_id']
-    updqry = f"update job_list set time_end = '{time_end}', status = '{status}', message = '{msg}' where job_id = '{job_id}';"
-    rds_update(updqry)
-    return
-
-def runbotjob(svcbot):
-    global edx_api_header, edx_api_url    
-    adminchatid = svcbot.adminchatid
-    jobitem = svcbot.job_items
-    job_id = jobitem['job_id']
-    client_name = jobitem['client_name']
-    chat_id = jobitem['chat_id']
-    bot_req = jobitem['bot_req']
-    func_req = jobitem['func_req']
-    func_param = jobitem['func_param']
-    func_svc_list = ["update_assignment" , "update_mcq" , "edx_import", "update_schedule"]
-    edx_time = edx_load_config(client_name)
-    txt = "job "
-    updqry = f"update job_list set status = 'running', message = '' where job_id = '{job_id}';"
-    rds_update(updqry)
-    jobitem['status'] = 'running'
-    #svcbot.bot.sendMessage(adminchatid,f"running job {job_id}")
-    #print(f"running job {job_id}")            
-    if func_req == "generate_mcq_as":
-        try:
-            vmedxlib.generate_mcq_as(func_param)
-            txt += " completed successfully."
-        except:
-            txt += " failed."               
-    elif func_req in ["edx_mass_import", "mass_update_assignment", "mass_update_mcq", "mass_update_schedule", "mass_update_usermaster"]:
-        try:
-            func_svc = "vmedxlib." + func_req + "(client_name)"
-            status = eval(func_svc)
-            txt += " completed successfully."
-        except:
-            txt += " failed."
-    elif func_req in func_svc_list :
-        course_id = func_param              
-        try:
-            func_svc = "vmedxlib." + func_req + "(course_id, client_name)"
-            status = eval(func_svc)
-            txt += " completed successfully."
-        except:
-            txt += " failed."
-    else:
-        try:
-            func_svc = "vmedxlib." + func_req + "(" + func_param + ")"
-            status = eval(func_svc)
-            if status:
-                txt += " completed successfully."
-            else:
-                txt += " failed."
-        except:
-            txt += " failed."
-    try:        
-        svcbot.bot.sendMessage(adminchatid,f"completed job {job_id}")
-    except:
-        print(f"completed job {job_id}")
-    jobitem['status'] = 'completed'
-    svcbot.job_items = {}
-    return txt
-
-def job_request(bot_req,chat_id,client_name,func_req,func_param):
-    if func_req == "":
-        return
-    gen_job_id = lambda : (''.join(random.choice( "ABCDEFGHJKLMNPQRTUVWXY0123456789" ) for i in range(12))).upper()    
-    date_now = time.strftime('%Y%m%d', time.localtime() )
-    time_now = time.strftime('%H%M%S', time.localtime() )
-    job_id = gen_job_id()
-    try:
-        query = 'insert into job_list(date,time_start,time_end,job_id,client_name,chat_id,'
-        query += 'bot_req, func_req, func-param, status, message)'
-        query += ' values(_d, "_t", "0", "_j", "_c", _x, "_b", "_f", "_p","open","");'
-        query = query.replace('_d',date_now)
-        query = query.replace('_t',str(time_now))
-        query = query.replace('_j',job_id)
-        query = query.replace('_c',client_name)
-        query = query.replace('_x',str(chat_id))
-        query = query.replace('_b',bot_req)
-        query = query.replace('_f',func_req)
-        query = query.replace('_p',func_param)
-        query = query.replace('-p','_p')
-        rds_update(query)
-        #print(query)
-    except:
-        print(f"Error for job {job_id} on function {func_req}")
-    return
 
 def edx_load_config(client_name):
     global edx_api_header, edx_api_url    
@@ -751,10 +745,42 @@ def edx_load_config(client_name):
     vmedxlib.edx_api_header = edx_api_header
     return edx_time
 
+def html_report(df, fld_list, gaps,  maxrow=20):
+    m = len(fld_list)
+    spacing = " "*100
+    cnt = 0
+    msglist = []
+    msg = ' '.join([(str(fld_list[x])+spacing)[:gaps[x]] for x in range(m)]) + '\n'
+    for index, row in df.iterrows():
+        msg += ' '.join([(str(row[x])+spacing)[:gaps[x]] for x in range(m)]) + '\n'
+        cnt += 1
+        if cnt == maxrow:
+            msglist.append(msg)
+            cnt = 0
+            msg = ' '.join([(str(fld_list[x])+spacing)[:gaps[x]] for x in range(m)]) + '\n'
+            result += msg
+    if cnt > 0:
+        msglist.append(msg)
+    return msglist
+
+def html_tbl(clt, tblname, titlename, fn):
+    if tblname=="":
+        return None
+    query = f"select * from {tblname}"
+    if clt != "":
+        query += f"  where client_name = '{clt}';"
+    df = rds_df(query)
+    if df is None:
+        f = None
+    else:
+        df.columns = get_columns(tblname)
+        write2html(df, title=titlename, filename=fn)
+        f = open(fn, 'rb')
+    return f
+
 def do_main():
-    global svcbot, edx_api_header, edx_api_url    
+    global svcbot, bot_intance, edx_api_header, edx_api_url    
     err = 0    
-    # load system config from RDS
     vmsvclib.rds_connstr = ""
     vmsvclib.rdscon = None
     df = rds_df("select * from params where client_name = 'System';")
@@ -771,24 +797,20 @@ def do_main():
     gmt = int(par_dict['GMT'])
     #max_duration = int(par_dict['max_duration'])
     max_duration = 300
-    
     edx_time = edx_load_config(client_name)
-    
     omchat.load_modelfile("ft_model.bin", client_name)
     dt_model.load_model("dt_model.bin")
     nn_model.model_loader("ffnn_model.hdf5")
-    svcbot = BotInstance(SvcBotToken, client_name, max_duration, adminchatid) 
-    print(svcbot)
-    #svcbot.bot.sendMessage(adminchatid, "Click /start to connect the ServiceBot")
+    bot_intance = BotInstance(SvcBotToken, client_name, max_duration, adminchatid) 
+    svcbot.sendMessage(adminchatid, "Click /start to connect the ServiceBot")
     #edx_cnt = 0
-    while svcbot.bot_running:  
-        time.sleep(3)
-    try:
-        os.kill(os.getpid(), 9)
-    except:
-        err = 1
+    #while svcbot.bot_running:  
+    #    time.sleep(3)
+    #try:
+    #    os.kill(os.getpid(), 9)
+    #except:
+    #    pass
     return
-
 
 #------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":

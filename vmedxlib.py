@@ -21,7 +21,7 @@ global edx_api_header, edx_api_url
 
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
 string2date = lambda x,y : datetime.datetime.strptime(x,y).date()
-str2date = lambda x : string2date(x,"%d/%m/%Y")            
+str2date = lambda x : string2date(x,"%d/%m/%Y")
 dmy_str = lambda v : piece(v,'-',2) + '/' + piece(v,'-',1) + '/' + piece(v,'-',0)
 ymd_str = lambda v : piece(v,'-',0) + '/' + piece(v,'-',1) + '/' + piece(v,'-',2)
 #debug = lambda x : vmsvclib.debug(x)
@@ -36,7 +36,7 @@ def edx_coursename(course_id):
     url = f"{edx_api_url}/course/fetch/name"
     response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)
     if response.status_code==200:
-        data = response.content.decode('utf-8')        
+        data = response.content.decode('utf-8')
         coursename = str(data)
     return coursename
 
@@ -75,9 +75,9 @@ def edx_mcqcnt(course_id):
     global edx_api_header, edx_api_url
     mcqcnt = 0
     url = f"{edx_api_url}/course/fetch/mcq/count"
-    response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)        
+    response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)
     if response.status_code==200:
-        data = response.content.decode('utf-8')        
+        data = response.content.decode('utf-8')
         mcqcnt = int("0" + str(data))
     return mcqcnt
 
@@ -88,26 +88,26 @@ def edx_ascnt(course_id):
     global edx_api_header, edx_api_url
     ascnt = 0
     url = f"{edx_api_url}/course/fetch/assignment/count"
-    response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)        
+    response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)
     if response.status_code==200:
         data = response.content.decode('utf-8')
-        ascnt = int("0" + str(data))    
+        ascnt = int("0" + str(data))
     return ascnt
 
 def edx_userdata(course_id):
-    # Status : Tested    
+    # Status : Tested
     # url = f"{edx_api_url}/course/fetch/users"
     # https://om.sambaash.com/edx/api/swagger-ui/index.html?configUrl=/edx/v3/api-docs/swagger-config#/Course/fetchAllUsers
     # https://om.sambaash.com/edx/v1/course/fetch/users
     global edx_api_header, edx_api_url
     df = pd.DataFrame.from_dict({'student_id':[],'course_id':[],'username':[],'email':[]})
     url = f"{edx_api_url}/course/fetch/users"
-    response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)        
+    response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)
     if response.status_code==200:
         data = response.content.decode('utf-8')
         if len(data) > 0:
             userinfo = json.loads(data)
-            rows_cnt = len(list(userinfo))            
+            rows_cnt = len(list(userinfo))
             user_list = []
             course_list = []
             username_list = []
@@ -115,7 +115,7 @@ def edx_userdata(course_id):
             if rows_cnt > 0:
                 for usr in userinfo:
                     if course_id in [x['course_id'] for x in usr['enrolments']]:
-                        user_list.append(usr['user_id']) 
+                        user_list.append(usr['user_id'])
                         course_list.append(course_id)
                         username_list.append(usr['username'])
                         email_list.append(usr['email'])
@@ -123,7 +123,7 @@ def edx_userdata(course_id):
             df = pd.DataFrame.from_dict(data)
     return df
 
-def student_course_list(student_id):    
+def student_course_list(student_id):
     # Status : Tested
     # https://om.sambaash.com/edx/api/swagger-ui/index.html?configUrl=/edx/v3/api-docs/swagger-config#/User/fetchUserByUserId
     # https://om.sambaash.com/edx/v1/user/fetch/1234
@@ -161,9 +161,9 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
     # Status : Tested
     # https://om.sambaash.com/edx/api/swagger-ui/index.html?configUrl=/edx/v3/api-docs/swagger-config#/User/fetchUserMCQScoresByCourseId
     # https://om.sambaash.com/edx/v1/user/fetch/mcq/scores/list
-    # https://om.sambaash.com/edx/v1/user/fetch/mcq/scores/list/{userId}    
-    global edx_api_header, edx_api_url    
-    
+    # https://om.sambaash.com/edx/v1/user/fetch/mcq/scores/list/{userId}
+    global edx_api_header, edx_api_url
+
     def getnumstr(qn_str):
         if ' ' in qn_str:
             qn_str = qn_str.split(' ')[0]
@@ -173,7 +173,7 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
         if (qn > 13) or (qn<1):
             qn = 1
         return qn
-    
+
     df_mcq = pd.DataFrame.from_dict( {'client_name':[],'course_id':[],'student_id':[], 'score':[], \
         'mcq':[],'qn':[],'attempts':[], 'avgscore': []} )
     if student_id==0:
@@ -200,12 +200,12 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
             attempts = state['attempts']
             statekey = list(state['correct_map'])[0]
             correctness = state['correct_map'][statekey]['correctness']
-            qnscore = 1.0 if correctness=='correct' else 0            
+            qnscore = 1.0 if correctness=='correct' else 0
             grade = 1.0 if pp==0 else float(sc/pp)
             course_id_list.append(rec['course_id'])
-            student_id_list.append(rec['student_id'])                
+            student_id_list.append(rec['student_id'])
             #iu_list.append(int(rec['IU']))
-            iu_list.append(iu)            
+            iu_list.append(iu)
             #qn_list.append(int(rec['options_display_name'].split('.')[0][1:]))
             qn_list.append(qn)
             grade_list.append(qnscore)
@@ -213,17 +213,17 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
             att_list.append(int(attempts))
             # actual average score
             avgscore_list.append(grade)
-        client_list = [client_name for x in iu_list]        
+        client_list = [client_name for x in iu_list]
         data = {'client_name':client_list, 'course_id': course_id_list, 'student_id':student_id_list, \
             'score':grade_list ,'mcq':iu_list , 'qn':qn_list , 'attempts': att_list,  'avgscore': avgscore_list}
-        df_mcq = pd.DataFrame.from_dict(data)     
+        df_mcq = pd.DataFrame.from_dict(data)
     return df_mcq
 
 def edx_assignment_score(course_id, student_id=0):
     # Status : Tested
     # https://om.sambaash.com/edx/api/swagger-ui/index.html?configUrl=/edx/v3/api-docs/swagger-config#/User/fetchUserAssignmentScoresByCourseId
     # https://om.sambaash.com/edx/v1/user/fetch/assignment/scores/list
-    global edx_api_header, edx_api_url    
+    global edx_api_header, edx_api_url
     if student_id==0:
         url = f"{edx_api_url}/user/fetch/assignment/scores/list"
     else:
@@ -233,8 +233,8 @@ def edx_assignment_score(course_id, student_id=0):
     df = pd.DataFrame.from_dict({'student_id':[], 'score':[], 'points_possible':[], 'IU': [], 'attempts': []})
     if response.status_code==200:
         data = response.content.decode('utf-8')
-        rec = eval(data)        
-        if rec != []:            
+        rec = eval(data)
+        if rec != []:
             student_id_list = [x['student_id'] for x in rec]
             grade_list = [x['score'] for x in rec]
             pp_list = [x['points_possible'] for x in rec]
@@ -242,7 +242,7 @@ def edx_assignment_score(course_id, student_id=0):
             att_list = [x['attempts'] for x in rec]
             data = {'student_id': student_id_list, 'score': grade_list, 'points_possible':pp_list, 'IU': iu_list ,'attempts': att_list}
             df = pd.DataFrame.from_dict(data)
-            df['is_num'] = df.apply(lambda x: 1 if x['IU'].isnumeric() else 0, axis=1)               
+            df['is_num'] = df.apply(lambda x: 1 if x['IU'].isnumeric() else 0, axis=1)
             df.drop(df[ df.is_num == 0 ].index, inplace=True)
             df.drop(columns=['is_num'], inplace=True)
     return df
@@ -260,50 +260,102 @@ def sms_attendance(course_id, student_id):
         data = response.content.decode('utf-8')
         if data != "":
             result  = eval(str(data))
-            #date_list = [string2date(x['timetable_date'].split(' ')[0],"%m/%d/%Y") for x in result]
-            date_list = [string2date(x['timetable_date'].split(' ')[0],"%m/%d/%Y") for x in result if x['attendance_type_desc']=='Attend']
+            date_list = [string2date(x['timetable_date'].split(' ')[0],"%m/%d/%Y") \
+                for x in result if x['attendance_type_desc']=='Attend']
+            #for x in result:                printdict(x)
     else:
         print(f"the api responsed with no data! code = {response.status_code}")
     return date_list
-    
+
 def sms_missingdates(client_name, course_id, student_id, cols):
     f2flag = lambda x,y : ('' if y in date_list else x) if x[:2] in ['FC', 'PM'] else ''
-    if (student_id==0) or (client_name=="") or (client_name=="Demo"):
+    f2f_pass = lambda x : '' if x=='' else ('' if bypass_map[x]==1 else x)
+    if (student_id==0) or (client_name==""):
         return []
     date_list = sms_attendance(course_id, student_id)
-    missed_fsf = []    
+    missed_fsf = []
     df = rds_df(f"select * from stages where courseid = '{course_id}' and client_name = '{client_name}';")
     if df is not None:
-        #df.columns = get_columns("stages")
         df.columns = cols
         stgid_list = [x for x in df.id]
         fsf_dates = [string2date(x,"%d/%m/%Y") for x in df.startdate]
         stage_list = [x for x in df.stage]
+        f2f_list = [x for x in df.f2f]
+        bypass_map = dict(zip(stage_list,f2f_list))
         arr_stgf2f = dict(zip(stage_list, fsf_dates))
-        missed_fsf = [f2flag(stage_list[n],fsf_dates[n]) for n in range(len(stgid_list))]
+        missing_fsf = [f2flag(stage_list[n],fsf_dates[n]) for n in range(len(stgid_list))]
+        missed_fsf = [ f2f_pass(x) for x in missing_fsf ]
     return missed_fsf
+
+def sms_att_rate(client_name, course_id, student_id):
+    if (student_id==0) or (client_name==""):
+        return []
+    if ('.db' in vmsvclib.rds_connstr):
+        query = f"select count(*) as cnt from stages where client_name = '{client_name}' and courseid='{course_id}' "
+        query += " and strftime(substr(startdate,7,4)||'-'||substr(startdate,4,2)||'-'||substr(startdate,1,2)) "
+        query += "<= strftime(date('now')) and (stage like 'FC%' OR stage like 'PM%');"
+    else:
+        query = f"select count(*) as cnt from stages where client_name = '{client_name}' and courseid='{course_id}' "
+        query += "and (stage like 'FC%' OR stage like 'PM%') and STR_TO_DATE(startdate,'%d/%m/%Y') <= CURDATE();"
+    cnt2 = rds_param(query)
+    date_list = sms_attendance(course_id, student_id)
+    cnt1 = len(date_list)
+    att_rate = 0 if cnt2 == 0 else (cnt1/cnt2)
+    return att_rate
+
+def sms_pmstage(client_name, course_id):
+    if (course_id==0) or (client_name==""):
+        return []
+    if ('.db' in vmsvclib.rds_connstr):
+        query = f"select count(*) as cnt from stages where client_name = '{client_name}' and courseid='{course_id}' "
+        query += " and strftime(substr(startdate,7,4)||'-'||substr(startdate,4,2)||'-'||substr(startdate,1,2)) "
+        query += "<= strftime(date('now')) and stage like 'PM%';"
+    else:
+        query = f"select count(*) as cnt from stages where client_name = '{client_name}' and courseid='{course_id}' "
+        query += "and stage like 'FC%' and STR_TO_DATE(startdate,'%d/%m/%Y') <= CURDATE();"
+    pmcounts = rds_param(query)
+    pmstage = 0 if pmcounts == 0 else 1
+    return pmstage
+
+def sms_lecturer(client_name, course_id, student_id):
+    global edx_api_header, edx_api_url
+    if student_id==0:
+        return []
+    url = f"{edx_api_url}/user/attendance/fetch/{student_id}"
+    response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)
+    lecturer = ""
+    if response.status_code==200:
+        data = response.content.decode('utf-8')
+        if data != "":
+            result  = eval(str(data))
+            if len(result) > 0:
+                lecturer = result[0]['account_name']
+    return lecturer
 
 def search_course_list(keyword):
     # Status : Tested
     # https://om.sambaash.com/edx/api/swagger-ui/index.html?configUrl=/edx/v3/api-docs/swagger-config#/Course/fetchCourseListByCourseIdLike
     # https://om.sambaash.com/edx/v1/course/search/course/list
-    global edx_api_header, edx_api_url        
+    # https://omnimentor.lithan.com/edx/v1/course/search/course/list
+    global edx_api_header, edx_api_url
     course_list = []
     url = f"{edx_api_url}/course/search/course/list"
     response = requests.post(url, data=keyword, headers=edx_api_header, verify=False)
     if response.status_code==200:
         data = response.content.decode('utf-8')
         if len(data) > 0:
-            course_list = eval(data)               
+            course_list = eval(data)
     return course_list
 
 def edx_course_started(client_name, course_id):
     query = "SELECT count(*) as cnt FROM stages WHERE id=1 and client_name ="
     query += f"'{client_name}' AND courseid='{course_id}' AND "
     if ('.db' in vmsvclib.rds_connstr):
-        query += f"(strftime(substr(stagedate,7,4)||'-'||substr(stagedate,4,2)||'-'||substr(stagedate,1,2)) > strftime(date('now')));"
+        #query += f"(strftime(substr(stagedate,7,4)||'-'||substr(stagedate,4,2)||'-'||substr(stagedate,1,2)) > strftime(date('now')));"
+        query += f"(strftime(substr(stagedate,7,4)||'-'||substr(stagedate,4,2)||'-'||substr(stagedate,1,2)) <= strftime(date('now')));"
     else:
-        query += "STR_TO_DATE(stagedate,'%d/%m/%Y') > CURDATE();"
+        #query += "STR_TO_DATE(stagedate,'%d/%m/%Y') > CURDATE();"
+        query += "STR_TO_DATE(stagedate,'%d/%m/%Y') <= CURDATE();"
     try:
         cnt = rds_param(query)
         cnt = int(cnt)
@@ -321,14 +373,29 @@ def edx_endofcourse(client_name, course_id):
     else:
         query += "STR_TO_DATE(stagedate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
     try:
-        eoc = rds_param(query)    
-        eoc=int(eoc)
+        result = rds_param(query)
+        eoc=int(result)
     except:
         eoc = 0
     return eoc
 
+def edx_eocgap(client_name, course_id, gap=7):
+    query = "select COUNT(*) as cnt from stages  where stage = 'EOC' and "
+    if ('.db' in vmsvclib.rds_connstr):
+        query += "(strftime(substr(stagedate,7,4)||'-'||substr(stagedate,4,2)||'-'||"
+        query += f"(substr(stagedate,1,2))) between date('now','-{gap} days') and date('now') "
+    else:
+        query += f"STR_TO_DATE(stagedate,'%d/%m/%Y') BETWEEN (CURDATE() - INTERVAL {gap} DAY) AND CURDATE() "
+    query += f" and client_name ='{client_name}' and courseid = '{course_id}';"
+    try:
+        results = rds_param(query)
+        eoc7=int(results)
+    except:
+        eoc7 = 0
+    return eoc7
+
 def update_schedule(course_id, client_name):
-    # Status : Tested    
+    # Status : Tested
     dstr = lambda x : piece(piece(x.strip(),':',1),'+',2)
     dtype = lambda x : ('%d%b%Y' if len(dstr(x))==9 else '%d%B%Y') if dstr(x)[0].isdigit() else '%B%Y'
     cohort_date = lambda x : string2date(dstr(x),dtype(x))
@@ -336,16 +403,16 @@ def update_schedule(course_id, client_name):
     stage_list = get_google_calendar(course_id, client_name)
     try:
         stage_list = update_stage_table(stage_list, course_id, client_name)
-        if stage_list == []:        
+        if stage_list == []:
             return
         dt = string2date(stage_list[0][3],"%d/%m/%Y")
-        stg=[x for x in stage_list if x[0]=='EOC']    
-        eoc_date = string2date(stg[0][4],"%d/%m/%Y")    
-        date_today = datetime.datetime.now().date()    
-        days = (date_today - eoc_date).days    
+        stg=[x for x in stage_list if x[0]=='EOC']
+        eoc_date = string2date(stg[0][4],"%d/%m/%Y")
+        date_today = datetime.datetime.now().date()
+        days = (date_today - eoc_date).days
     except:
         print(f"update_stage_table failed for {course_id}")
-        return    
+        return
     condqry = "client_name = '_c_' and courseid = '_x_';"
     condqry = condqry.replace('_c_', client_name)
     condqry = condqry.replace('_x_', course_id)
@@ -364,7 +431,7 @@ def update_schedule(course_id, client_name):
         mcq_str = [x for x in df.mcq]
     for n in range(len( days_list )):
         stg = stage_list[n]
-        dd = days_list[n] 
+        dd = days_list[n]
         stg_date = dt + datetime.timedelta( days = (dd-1) )
         stagedate = stg_date.strftime('%d/%m/%Y')
         qry = "update stages set days = _y_ where name = '_x_' and " + condqry
@@ -373,13 +440,10 @@ def update_schedule(course_id, client_name):
         rds_update(query)
     sub_str  = "SUBSTRING" if ':' in vmsvclib.rds_connstr else "SUBSTR"
     cohort_id = piece(piece(course_id,':',1),'+',1)
-    module_code = piece(cohort_id,'-',0)    
-    #query = "update stages a INNER JOIN stages_master b on b.client_name=a.client_name AND b.stage=a.stage "
-    #query += f"AND b.module_code = '{module_code}'"
-    #query += f"SET a.IU = b.IU WHERE a.client_name = '{client_name}' and a.courseid = '{course_id}';"
-    query = "update stages SET IU = IFNULL(( select IU from stages_master " 
+    module_code = piece(cohort_id,'-',0)
+    query = "update stages SET IU = IFNULL(( select IU from stages_master "
     query += f"WHERE client_name=stages.client_name and module_code='{module_code}' and stage=stages.stage),'0') "
-    query += f"WHERE courseid = '{course_id}' AND client_name = '{client_name}';"    
+    query += f"and courseid = '{course_id}' AND client_name = '{client_name}';"
     rds_update(query)
     if ('.db' in vmsvclib.rds_connstr):
         query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{course_id}' AND "
@@ -388,40 +452,35 @@ def update_schedule(course_id, client_name):
     else:
         query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{course_id}' AND "
         query += "STR_TO_DATE(startdate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
-    current_stage = rds_param(query) 
-    query = f"update userdata set stage = '{current_stage}' where " + condqry 
+    current_stage = rds_param(query)
+    query = f"update userdata set stage = '{current_stage}' where " + condqry
     rds_update(query)
-    query = f"update stages set stagedate = '' where (stagedate is null) and " 
-    query += condqry 
+    query = f"update stages set stagedate = '' where (stagedate is null) and "
+    query += condqry
     rds_update(query)
-    query = f"update stages set startdate = '' where (startdate is null) and " 
-    query += condqry 
+    query = f"update stages set startdate = '' where (startdate is null) and "
+    query += condqry
     rds_update(query)
-    #print(f"update_schedule completed on {course_id}")    
+    #print(f"update_schedule completed on {course_id}")
     return
 
 def update_assignment(course_id, client_name, student_id=0):
     # Status : Tested
     condqry = f"client_name = '{client_name}' and courseid = '{course_id}';"
-    # df with columns ['student_id', 'grade'], overall score/grade sorted by student_ids
-    # df = edx_grade(course_id)
     df = edx_grade(course_id, student_id)
-    if df is None:        
-        return False     
+    if df is None:
+        return False
     if len(df) == 0:
         return False
-    # Converts df into a dictionary format {student_id : grade}
     stud_grade_dict = dict(zip([x for x in df.student_id],[x for x in df.grade]))
-    # df with columns ['student_id', 'score', 'IU'], assignment scores sorted by IU by student_ids
-    #df = edx_assignment_score(course_id)    
-    df = edx_assignment_score(course_id, student_id)        
+    df = edx_assignment_score(course_id, student_id)
     if len(df) == 0:
         sid_list = []
         score_list = []
         iu_list = []
         attempts_list = []
         pp_list = []
-    else:        
+    else:
         if 'attempts' not in list(df.columns):
             df['attempts'] = 1
         # Create lists of student_id, scores and IUs in df
@@ -436,7 +495,7 @@ def update_assignment(course_id, client_name, student_id=0):
     iu_attempts = dict()
     for n in range(len(df)):
         sid = sid_list[n]
-        iu_num = iu_list[n]
+        iu_num = int(iu_list[n])
         pp_num = pp_list[n]
         score = score_list[n]
         attempts = attempts_list[n]
@@ -449,25 +508,28 @@ def update_assignment(course_id, client_name, student_id=0):
         iu_attempts[sid][iu_num] = attempts
     # Creates a list of student_ids
     for sid in list(stud_grade_dict):
-        if sid not in stud_list:            
+        if sid not in stud_list:
             iu_score[sid] = dict()
             iu_attempts[sid] = dict()
     stud_list = list(iu_score)
     # If student_id in stud_list is not found in stud_grade_dict, change the corresponding grade for missing student to 0
-    for sid in stud_list:        
+    for sid in stud_list:
         if sid not in list(stud_grade_dict):
             stud_grade_dict[sid] = 0
     # Isnt this same as the 3 lines above?
     # If student_id in stud list is not in stud_grade_dict, set student's grade to 0
-    for n in range(len(stud_list)):        
+    for n in range(len(stud_list)):
         sid = stud_list[n]
         if sid not in list(stud_grade_dict):
-            stud_grade_dict[sid] = 0        
+            stud_grade_dict[sid] = 0      
         updsqlavg = ''.join([ ", as_avg" + str(x) + " = " + str(iu_score[sid][x]) for x in list(iu_score[sid]) ])
         updsqlatt = ''.join([ ", as_attempts" + str(x) + " = " + str(iu_attempts[sid][x]) for x in list(iu_score[sid]) ])
         updsql = "update userdata set grade = " + str(stud_grade_dict[sid]) + updsqlavg + updsqlatt
-        updsql += " where studentid = " + str(sid) + " and courseid = '" + course_id + "';"        
-        rds_update(updsql)
+        updsql += " where studentid = " + str(sid) + " and courseid = '" + course_id + "';"
+        try:
+            rds_update(updsql)
+        except:
+            vmbotlib.syslog(client_name,f"SQL Error\n{updsql}")
     #print("update_assignment completed for course_id " + course_id)
     return True
 
@@ -485,10 +547,10 @@ def update_mcq(course_id, client_name, student_id=0):
     if mcqcnt==0:
         return 
     try:        
-        mcq_df = edx_mcqinfo(client_name, course_id, student_id)        
+        mcq_df = edx_mcqinfo(client_name, course_id, student_id)
         if len(mcq_df) > 0:            
             query = "delete from mcq_data where " + cond_qry
-            rds_update(query)        
+            rds_update(query)    
         df = mcq_df[['client_name', 'course_id', 'student_id', 'score', 'mcq', 'qn', 'attempts']]
         copydbtbl(df, "mcq_data")        
 
@@ -606,6 +668,7 @@ def edx_import(course_id, client_name):
             df.columns = get_columns("stages_master")
             query = "delete from stages where " + condqry
             rds_update(query)
+            #df.drop(columns=['course_code'], inplace=True)
             df.drop(columns=['module_code'], inplace=True)
             df['stagedate'] = ''
             df['courseid'] = course_id
@@ -636,8 +699,13 @@ def edx_import(course_id, client_name):
     df['stage'] = stage
     df['f2f'] = 0
     df['risk_level'] = 0
+    df['mcq_zero'] = '[]'
+    df['mcq_failed'] = '[]'
+    df['as_zero'] = '[]'
+    df['as_failed'] = '[]'
     df.rename(columns={'course_id':'courseid','student_id':'studentid'} , inplace=True)
-    df1 = df[['client_name', 'module_id', 'courseid', 'studentid', 'username', 'amt', 'grade', 'stage', 'f2f', 'risk_level']]
+    df1 = df[['client_name', 'module_id', 'courseid', 'studentid', 'username', 'amt', 'grade', 'stage', 'f2f', \
+              'risk_level', 'mcq_zero', 'mcq_failed', 'as_zero', 'as_failed']]
     copydbtbl(df1, "userdata")    
     
     mcqcnt = edx_mcqcnt(course_id)
@@ -971,14 +1039,6 @@ def update_stage_table(stage_list, course_id, client_name):
     fc_dict = {}
     iu_dict = {}
     f2f_dict = {}
-    #if stage_list==[]:
-    #    print("stage list is empty")
-    #for x in stage_list:
-    #    mcq_dict[ x[0] ] = ""
-    #    ast_dict[ x[0] ] = ""
-    #    fc_dict[ x[0] ] = "0"
-    #    iu_dict[ x[0] ] = "0"
-    #    f2f_dict[ x[0] ] = 0    
 
     query = "select * from stages where " + qry
     df = rds_df(query)
@@ -1045,7 +1105,7 @@ def update_stage_table(stage_list, course_id, client_name):
             ast_dict[ x[0] ] = "0"
             fc_dict[ x[0] ] = "0"
             iu_dict[ x[0] ] = "0"
-            f2f_dict[ x[0] ] = 0    
+            f2f_dict[ x[0] ] = 0
     for x in stage_list:
         x.append( mcq_dict[x[0]] )
         x.append( ast_dict[x[0]] )
@@ -1064,7 +1124,7 @@ def update_stage_table(stage_list, course_id, client_name):
         query += ",'" + str(stage_list[n][0]) + "','"  # stage
         query += str(stage_list[n][1]) + "','"         # stage_name
         query += str(stage_list[n][2]) + "',"          # stage_desc
-        query += str(stage_list[n][6]) + ","           # days 
+        query += str(stage_list[n][6]) + ","           # days
         query += str(stage_list[n][11]) + ",'"         # f2f
         query += str(stage_list[n][7]) + "','"         # mcq
         query += str(stage_list[n][8]) + "','"         # assignment
@@ -1098,31 +1158,36 @@ def update_stage_table(stage_list, course_id, client_name):
         query += f"<= strftime(date('now'))) ORDER BY id DESC LIMIT 1;"
     else:
         query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{course_id}' AND "
-        query += "STR_TO_DATE(stagedate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"    
-    stage = rds_param(query)                
+        query += "STR_TO_DATE(stagedate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
+    stage = rds_param(query)
     if stage != "":
         query=f"update userdata set stage='{stage}' WHERE client_name = '{client_name}' AND courseid='{course_id}' ;"
-        #try:            
-        rds_update(query)
-        #except:
-        #    print(query)
+        try:
+            rds_update(query)
+        except:
+            #print(query)
+            pass
     return stage_list
 
 def update_playbooklist(course_id, client_name, course_name, eoc):
     try:
-        query = f"delete from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
-        rds_update(query)        
+        #query = f"delete from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
+        #rds_update(query)
+        query = f"select count(*) as cnt from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
+        cnt = rds_param(query)
+        if cnt==1:
+            return
         cohort_id = piece(piece(course_id,':',1),'+',1)
         module_code = piece(cohort_id,'-',0)
-        query = "insert into playbooks(client_name,module_code,cohort_id,course_id,course_name,eoc) \
-            values('_c_', '_w_', '_x_', '_y_', '_z_',_e_);"
+        query = "insert into playbooks(client_name,module_code,cohort_id,course_id,course_name,mentor,eoc) \
+            values('_c_', '_w_', '_x_', '_y_', '_z_', '', _e_);"
         query = query.replace("_c_", client_name)
         query = query.replace("_w_", module_code)
         query = query.replace("_x_", cohort_id)
         query = query.replace("_y_", course_id)
         query = query.replace("_z_", course_name)
-        query = query.replace("_e_", str(eoc))        
-        rds_update(query)        
+        query = query.replace("_e_", str(eoc))
+        rds_update(query)
     except:
         print("Unable to update playbook list")
         pass
@@ -1143,8 +1208,11 @@ def edx_mass_update(func, clt):
 
     qry = f"delete from userdata where client_name='{client_name}' and module_id = '';"   
     rds_update(qry)
-    course_list = search_course_list(keyword)
-    qry = f"SELECT DISTINCT module_code FROM course_module WHERE client_name='{client_name}';"    
+    course_list = search_course_list(keyword)    
+    if course_list==[]:
+        print("there is nothing found, check the rest api.")
+        return
+    qry = f"SELECT DISTINCT module_code FROM course_module WHERE enabled=1 and client_name='{client_name}';"
     df = rds_df(qry)
     if df is None:
         mc_list = []
@@ -1155,9 +1223,10 @@ def edx_mass_update(func, clt):
     for course_id in course_list:        
         #if 'v1:lithan' in course_id.lower():        
         eoc = edx_endofcourse(client_name, course_id)
-        #print( course_id , eoc)
+        query = f"update playbooks set eoc = {eoc} where client_name = '{client_name}' and course_id = '{course_id}';"
+        rds_update(query)                
         if eoc == 0:
-            #print( "processing ", course_id )
+            print( "processing ", course_id )
             func(course_id, client_name)
     return
 
@@ -1191,21 +1260,6 @@ def mass_update_usermaster(client_name):
     copydbtbl(df,"user_master")    
     print(f"mass_update_usermaster completed for {client_name}")        
     return
-
-#def test_get_stage_list():
-#    api_url="https://realtime.sambaash.com/v1/calendar/fetch?cohortId=ERI-0220A"
-#    api_url = "https://realtime.sambaash.com/v1/calendar/fetch?cohortId=EIT-0219A/EIT-0119B"
-#    api_url="https://realtime.sambaash.com/v1/calendar/fetch?cohortId=EIT%20:%20ICO-0520A"             
-#    api_url="https://realtime.sambaash.com/v1/calendar/fetch?cohortId=EIT%20:%20FOS-0620A"
-#    data  = get_calendar_json(api_url)
-#    course_stagelist = get_stage_list(data)      
-#    for cohort_id in list(course_stagelist):
-#        print(cohort_id)
-#        stage_list = course_stagelist[cohort_id]        
-#        for x in stage_list:
-#            print(x)
-#        print("="*50,"\n")    
-#    return
 
 def test_google_calendar(course_id):
     client_name = "Sambaash"
@@ -1291,7 +1345,7 @@ def perform_unit_tests(client_name = 'Sambaash', course_id = "course-v1:Lithan+F
     print( f"edx_import {course_id},  {client_name}")
     #print("====== test case 14 generate_mcq_as ==========")
     #generate_mcq_as(client_name)
-    #print("generate_mcq_as completed")    
+    #print("generate_mcq_as completed")       
     #print("====== test case 15 mass_update_usermaster ==========")
     #mass_update_usermaster(client_name)
     #print("mass_update_usermaster completed")
@@ -1310,27 +1364,38 @@ if __name__ == "__main__":
     #edx_api_url = "https://om.sambaash.com/edx/v1"
     edx_api_url = "https://omnimentor.lithan.com/edx/v1"
     edx_api_header = {'Authorization': 'Basic ZWR4YXBpOlVzM3VhRUxJVXZENUU4azNXdG9E', 'Content-Type': 'text/plain'}
-    client_name = "Sambaash"    
+    #client_name = "Sambaash"    
     #client_name = "Lithan"    
-    #client_name = "Demo"
-    vmsvclib.rds_connstr = ""
-    vmsvclib.rdscon = None
-    course_id = "course-v1:Lithan+FOS-0720A+08Jul2020" # 6633 6614 6301 6603
-    sid = 6603
-    #update_mcq(course_id, client_name, sid)
-    #date_list = sms_attendance(course_id, sid)
-    #print(date_list)
+    #vmsvclib.rds_connstr = ""
+    vmsvclib.rds_connstr = bot_info['omdb']
+    vmsvclib.rdscon = None    
+    #course_id = "course-v1:Lithan+FOS-0720A+08Jul2020" # 6633 6614 6301 6603
+    #course_id = 'course-v1:Lithan+ICO-0520B+26Jun2020'# 1716 4559
+    #course_id = "course-v1:Lithan+ITC-0320B+15Jul2020" # 5297 6686
+    #course_id = 'course-v1:Lithan+SMI-0520bb+04Aug2020' # 01/01/2030 to 14/02/2030    
+    #sid = 1716 # Kiran    
+    #course_id = 'course-v1:Lithan+ICO-0620A+24Jul2020' # 5041
+    #sid = 5297 # Course ID : course-v1:Lithan+ITC-0320B+15Jul2020
+    #print(client_name, course_id, sid) 
+    #results = sms_lecturer(client_name, course_id, sid)    
+    #results = sms_attendance(course_id, sid)
     #cols = get_columns("stages")
-    #missing_dates = sms_missingdates(client_name, course_id, sid, cols)
-    #print(missing_dates)
-    #course_id = 'course-v1:Lithan+ICO-0520B+26Jun2020'# 1716
+    #results = sms_missingdates(client_name, course_id, sid, cols)
+    #results = edx_eocgap(client_name, course_id, 7)
+    #results = edx_course_started(client_name, course_id)
+    #results = sms_pmstage(client_name, course_id)
+    print(results)
+    #att_rate = sms_att_rate(client_name, course_id, sid)        
+    #print(f"Attendance rate = {att_rate}")
+    #update_mcq(course_id, client_name, sid)
+    #update_schedule(course_id, client_name)
     #
     #=====================================
     # edx_mass_import(client_name)
-    #mass_update_mcq(client_name)
-    #mass_update_schedule(client_name)
-    #mass_update_usermaster(client_name)
-    #perform_unit_tests(client_name, course_id, sid)
+    # mass_update_mcq(client_name)
+    # mass_update_schedule(client_name)
+    # mass_update_usermaster(client_name)
+    # perform_unit_tests(client_name, course_id, sid)
     #=====================================
     #
     #print("check user_master")

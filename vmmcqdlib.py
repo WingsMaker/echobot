@@ -57,12 +57,14 @@ class MCQ_Diff():
         df['MCQ No. Question No.'] = df.apply(lambda x : 'MCQ ' + str(x.mcq) + ' Question ' + str(x.qn), axis=1)    
         
         df.columns = ['Average Score %', 'MCQ', 'QN', 'Average Attempts', 'MCQ No. Question No.']
-        df['Average Score %'] = df['Average Score %'] * 100 
+        #df['Average Score %'] = df['Average Score %'] * 100 
         
         # Using groupby to display top 10 questions sorted by average attempts in descending order
         # Can change the number of questions displayed by varying bracketed .head() number
         # Can change rounding significant figures by varying bracketed .roud() number
         df = df.groupby(['MCQ No. Question No.']).mean().round(2).sort_values(by=['Average Attempts'], ascending=False).reset_index().head(10)
+        for c in ['MCQ', 'QN']:        
+            df[c] = df[c].apply(lambda x : int(x))
 
         # Generating a png image of the table
         #title_name = "MCQ Analysis Difficulty By MCQ Attempts"
@@ -88,6 +90,8 @@ class MCQ_Diff():
         # Can change the number of questions displayed by varying bracketed .head() number
         # Can change rounding significant figures by varying bracketed .roud() number        
         df = df.groupby(['MCQ No. Question No.']).mean().round(2).sort_values(by=['Average Score %'], ascending=True).reset_index().head(10)
+        for c in ['MCQ', 'QN']:        
+            df[c] = df[c].apply(lambda x : int(x))
         
         # Generating a png image of the table
         #title_name = "MCQ Analysis Difficulty By MCQ Scores"
@@ -100,15 +104,16 @@ class MCQ_Diff():
         if self.mcqdf is None:
             return None
         df = self.mcqdf.copy()
-        for c in ['score', 'mcq', 'qn', 'attempts']:
+        #for c in ['score', 'mcq', 'qn', 'attempts']:
+        for c in ['mcq', 'qn']:        
             df[c] = df[c].apply(lambda x : int(x))
-        df['score'] = df['score'].apply(lambda x : x*100)
+        #df['score'] = df['score'].apply(lambda x : x*100)
         
         # Renaming columns for presentation purposes
         df.columns = ['Average Score %', 'MCQ', 'Question', 'Average Attempts']  
        
         # Splicing out the selected MCQ for display
-        mcq_df = df[(df['MCQ'] == mcq) & (df['Question'] <= df[(df['MCQ'] == mcq)]['Question'].nunique())].groupby(['Question']).mean().round(2).reset_index().drop('MCQ', axis=1)    
+        mcq_df = df[(df['MCQ'] == mcq) & (df['Question'] <= df[(df['MCQ'] == mcq)]['Question'].nunique())].groupby(['Question']).mean().round(2).reset_index().drop('MCQ', axis=1)
         
         # Generating a png image of the table
         #title_name = f"MCQ Analysis Difficulty By MCQ Average for MCQ Test {mcq}"
@@ -129,21 +134,25 @@ if __name__ == '__main__':
     course_id = "course-v1:Lithan+FOS-1219A+04Dec2019"
     
     mcq_analysis.load_mcqdata(client_name, course_id)
-    options = [ 0, 1, 2 ]            
+    options = [ 0,1,2 ]
     if 0 in options:
-        photo = mcq_analysis.top10attempts()
-        plt.savefig('attempts.png', dpi=100)
+        df = mcq_analysis.top10attempts()
+        #plt.savefig('attempts.png', dpi=100)
+        print(df)
         print("top10attempts  completed")
 
     if 1 in options:
-        photo = mcq_analysis.top10score()
-        plt.savefig('score.png', dpi=100)
+        df = mcq_analysis.top10score()
+        #plt.savefig('score.png', dpi=100)
+        print(df)
         print("top10score  completed")
 
     if 2 in options:
-        photo = mcq_analysis.mcq_summary(10)
-        if photo is not None:
-            plt.savefig('summary.png', dpi=100)
-            print("mcq_summary  completed")
+        df = mcq_analysis.mcq_summary(10)
+        print(df.columns)
+        #if photo is not None:
+            #plt.savefig('summary.png', dpi=100)
+        print(df)    
+        print("mcq_summary  completed")
 
 #print(f"End of unit test on MCQ Diff")

@@ -84,7 +84,7 @@ import smtplib
 global edxcon, rdscon, rds_connstr
 
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
-#matplotlib.use('Agg')             
+#matplotlib.use('Agg')          
 
 def banner_msg(banner_title, banner_msg):
     txt = "❚█══ " + banner_title + " ══█❚"
@@ -360,24 +360,27 @@ def printdict(obj):
     print(*obj.items(), sep = '\n')
     return
     
-def pycmd(resp, parentbot):
-    vars = parentbot.vars
+def pycmd(resp):
+    #def pycmd(resp, parentbot):
+    #vars = parentbot.vars
     result = ""
-    if 'print' in resp:
-        resp = resp.replace('print','str')
-    if '"' in resp:
-        resp = resp.replace('"',"'")
-    try:
-        if '=' in resp:
-            var_name = resp.split('=')[0].strip()
-            var_expr = resp.split('=')[1].strip()
-            vars[var_name] = eval(var_expr)
-            result = "vars['" + var_name + "'] := " + str(vars[var_name])
-        else:
-            result = eval(eval('f"@"'.replace('@',resp.replace('{',"{vars['").replace('}',"']}"))))
+    #if 'print' in resp:
+    #    resp = resp.replace('print','str')
+    #if '"' in resp:
+    #    resp = resp.replace('"',"'")
+    try:        
+    #    if '=' in resp:
+    #        var_name = resp.split('=')[0].strip()
+    #        var_expr = resp.split('=')[1].strip()
+    #        vars[var_name] = eval(var_expr)
+    #        result = "vars['" + var_name + "'] := " + str(vars[var_name])
+    #    else:
+    #    result = eval(eval('f"@"'.replace('@',resp.replace('{',"{vars['").replace('}',"']}"))))
+        pycode = compile(resp, 'test', 'eval')
+        result = str(eval(pycode))
     except:
         result = ""
-    parentbot.vars = vars
+    #parentbot.vars = vars
     return result
 
 def querydf(sqldb, query):
