@@ -261,7 +261,8 @@ def sms_attendance(course_id, student_id):
         if data != "":
             result  = eval(str(data))
             date_list = [string2date(x['timetable_date'].split(' ')[0],"%m/%d/%Y") \
-                for x in result if x['attendance_type_desc']=='Attend']
+                 for x in result if x['attendance_type_desc']=='Attend'] 
+                    # and 'learning' in x['class_type_code'].lower()
             #for x in result:                printdict(x)
     else:
         print(f"the api responsed with no data! code = {response.status_code}")
@@ -382,10 +383,24 @@ def edx_endofcourse(client_name, course_id):
 def edx_eocgap(client_name, course_id, gap=7):
     query = "select COUNT(*) as cnt from stages  where stage = 'EOC' and "
     if ('.db' in vmsvclib.rds_connstr):
-        query += "(strftime(substr(stagedate,7,4)||'-'||substr(stagedate,4,2)||'-'||"
-        query += f"(substr(stagedate,1,2))) between date('now','-{gap} days') and date('now') "
+        query += "strftime(substr(stagedate,7,4)||'-'||substr(stagedate,4,2)||'-'||(substr(stagedate,1,2))) "
+        query += f" between date('now','-{gap} days') and date('now') "
     else:
         query += f"STR_TO_DATE(stagedate,'%d/%m/%Y') BETWEEN (CURDATE() - INTERVAL {gap} DAY) AND CURDATE() "
+    query += f" and client_name ='{client_name}' and courseid = '{course_id}';"
+    try:
+        results = rds_param(query)
+        eocgap=int(results)
+    except:
+        eocgap = 0
+    return eocgap
+
+def edx_eocend(client_name, course_id, gap=7):
+    query = "select COUNT(*) as cnt from stages  where stage = 'EOC' and "
+    if ('.db' in vmsvclib.rds_connstr):
+        query += f"date(strftime(substr(stagedate,7,4)||'-'||substr(stagedate,4,2)||'-'||(substr(stagedate,1,2))),'+{gap} days') = date('now') "
+    else:
+        query += f"CURDATE() - STR_TO_DATE(stagedate,'%d/%m/%Y') = {gap} "
     query += f" and client_name ='{client_name}' and courseid = '{course_id}';"
     try:
         results = rds_param(query)
@@ -438,7 +453,7 @@ def update_schedule(course_id, client_name):
         qry = qry.replace('_x_', stg)
         query = qry.replace('_y_', str(dd))
         rds_update(query)
-    sub_str  = "SUBSTRING" if ':' in vmsvclib.rds_connstr else "SUBSTR"
+    #sub_str  = "SUBSTRING" if ':' in vmsvclib.rds_connstr else "SUBSTR"
     cohort_id = piece(piece(course_id,':',1),'+',1)
     module_code = piece(cohort_id,'-',0)
     query = "update stages SET IU = IFNULL(( select IU from stages_master "
@@ -733,7 +748,7 @@ def edx_import(course_id, client_name):
     update_schedule(course_id, client_name)
     return 
 
-def count_avg_cols(client_name, course_id, maxmcqtest = 13, colname = "mcq_avg"):    
+def count_avg_cols(client_name, course_id, maxmcqtest = 13, colname = "mcq_avg"):
     condqry = " from userdata where courseid = '" + course_id + "' and client_name = '" + client_name + "';"
     query =  'select ' + ','.join([ colname + str(x) for x in range( 1, maxmcqtest + 1 )]) + condqry
     df = rds_df(query)
@@ -1365,17 +1380,20 @@ if __name__ == "__main__":
     edx_api_url = "https://omnimentor.lithan.com/edx/v1"
     edx_api_header = {'Authorization': 'Basic ZWR4YXBpOlVzM3VhRUxJVXZENUU4azNXdG9E', 'Content-Type': 'text/plain'}
     #client_name = "Sambaash"    
-    #client_name = "Lithan"    
+    client_name = "Lithan"    
     #vmsvclib.rds_connstr = ""
     vmsvclib.rds_connstr = bot_info['omdb']
     vmsvclib.rdscon = None    
     #course_id = "course-v1:Lithan+FOS-0720A+08Jul2020" # 6633 6614 6301 6603
     #course_id = 'course-v1:Lithan+ICO-0520B+26Jun2020'# 1716 4559
     #course_id = "course-v1:Lithan+ITC-0320B+15Jul2020" # 5297 6686
-    #course_id = 'course-v1:Lithan+SMI-0520bb+04Aug2020' # 01/01/2030 to 14/02/2030    
-    #sid = 1716 # Kiran    
+    #course_id = 'course-v1:Lithan+SMI-0520bb+04Aug2020' # 01/01/2030 to 14/02/2030     
+    sid = 1716 # Kiran    
+    df = student_course_list(sid)
+    print(df)
     #course_id = 'course-v1:Lithan+ICO-0620A+24Jul2020' # 5041
     #sid = 5297 # Course ID : course-v1:Lithan+ITC-0320B+15Jul2020
+    #courseid = 'course-v1:Lithan+SMI-0420A+03Jul2020'
     #print(client_name, course_id, sid) 
     #results = sms_lecturer(client_name, course_id, sid)    
     #results = sms_attendance(course_id, sid)
@@ -1384,7 +1402,8 @@ if __name__ == "__main__":
     #results = edx_eocgap(client_name, course_id, 7)
     #results = edx_course_started(client_name, course_id)
     #results = sms_pmstage(client_name, course_id)
-    print(results)
+    #results = edx_eocend(client_name, course_id, 7)
+    #print(results)
     #att_rate = sms_att_rate(client_name, course_id, sid)        
     #print(f"Attendance rate = {att_rate}")
     #update_mcq(course_id, client_name, sid)
