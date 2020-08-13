@@ -476,6 +476,9 @@ def update_schedule(course_id, client_name):
     query = f"update stages set startdate = '' where (startdate is null) and "
     query += condqry
     rds_update(query)
+    query = "UPDATE userdata SET mcq_zero = '[]',mcq_failed = '[]',as_zero = '[]',as_failed = '[]' "
+    query += " WHERE mcq_zero IS NULL AND client_name='{client_name}' and courseid='{course_id}';"
+    rds_update(query)
     #print(f"update_schedule completed on {course_id}")
     return
 
@@ -1385,12 +1388,12 @@ if __name__ == "__main__":
     vmsvclib.rds_connstr = bot_info['omdb']
     vmsvclib.rdscon = None    
     #course_id = "course-v1:Lithan+FOS-0720A+08Jul2020" # 6633 6614 6301 6603
-    #course_id = 'course-v1:Lithan+ICO-0520B+26Jun2020'# 1716 4559
+    course_id = 'course-v1:Lithan+ICO-0520B+26Jun2020'# 1716 4559
     #course_id = "course-v1:Lithan+ITC-0320B+15Jul2020" # 5297 6686
     #course_id = 'course-v1:Lithan+SMI-0520bb+04Aug2020' # 01/01/2030 to 14/02/2030     
-    sid = 1716 # Kiran    
-    df = student_course_list(sid)
-    print(df)
+    course_id = 'course-v1:Lithan+CPI-0320A+27Jul2020'
+    sid =  4941 
+    #df = student_course_list(sid)    
     #course_id = 'course-v1:Lithan+ICO-0620A+24Jul2020' # 5041
     #sid = 5297 # Course ID : course-v1:Lithan+ITC-0320B+15Jul2020
     #courseid = 'course-v1:Lithan+SMI-0420A+03Jul2020'

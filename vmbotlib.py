@@ -97,24 +97,17 @@ opt_setlearner = 'Set as Learner'
 opt_resetemail = 'Change Email'
 opt_unbind = 'Reset Binding'
 useraction_menu = [[opt_blockuser, opt_setadmin , opt_setlearner],[opt_resetemail, opt_unbind, option_back]]
-fc_student = "Student Update"
 fc_userimport = "User Import"
 fc_edxupdate = "LMS Import"
 fc_schedule = "Schedule Update"
 fc_intv = "Intervention Msg"
 fc_notf = "Reminder Msg"
-fc_search = "Course Search"
-#faculty_menu = [[fc_student, fc_search, fc_intv, fc_notf],[fc_schedule, fc_userimport, fc_edxupdate, option_back]]
+# this is for UAT
 faculty_menu = [[fc_schedule, fc_userimport, fc_edxupdate], [fc_intv, fc_notf, option_back]]
-fc_updstage = "Stage Update"
-fc_resetstage = "Stage Reset"
-fc_recupd = "Record Update"
-fc_studentsub = "Student Submenu"
+# this is for production
+#faculty_menu = [[fc_schedule, fc_userimport, fc_edxupdate, option_back]]
 opt_stage = "Edit Stage Cohorts"
-opt_recupd = "Record Update Cohorts"
 opt_updstage = "Stage Update Cohorts"
-opt_resetstage = "Reset Stage Cohorts"
-faculty_submenu = [[fc_updstage, fc_resetstage, fc_recupd, option_back]]
 pb_config = "Configurator Playbook 📗"
 pb_userdata = "Persona Playbook 📙"
 pb_riskuser = "Learners at risk"
@@ -235,12 +228,10 @@ def load_edxdata(client_name):
     updated_courses = []
     vars = dict()
     txt =  ""
-    #email_filter = rds_param(f"SELECT `value` from params WHERE `key` = 'email_filter' and client_name = '{client_name}';")
-    #efilter = email_filter.split(',')
     efilter = vmbot.efilter
     for course_id in course_list:
         eoc = vmedxlib.edx_endofcourse(client_name, course_id)
-        eoc_gap = edx_eocgap(client_name, course_id, 7)        
+        eoc_gap = edx_eocgap(client_name, course_id, 7)
         if (eoc == 0) or (eoc_gap==1):
             vmedxlib.update_mcq(course_id, client_name)
             vmedxlib.update_assignment(course_id, client_name)
@@ -279,8 +270,10 @@ def auto_notify(client_name, resp_dict, pass_rate, adm_chatid):
     mdf = rds_df(f"SELECT * FROM user_master where client_name='{client_name}';")
     if mdf is None:
         return
-    mdf.columns = get_columns("user_master")
-    stagedf.columns = get_columns("stages")
+    s_cols = vmbot.stages_cols
+    u_cols = vmbot.userdata_cols
+    mdf.columns = vmbot.usermaster_cols
+    stagedf.columns = s_cols
     course_list = [x for x in stagedf.courseid]
     stg_list = [x for x in stagedf.stage]
     stgname_list = [x for x in stagedf.name]
@@ -293,14 +286,10 @@ def auto_notify(client_name, resp_dict, pass_rate, adm_chatid):
     if count == 0:
         return
     syslog(client_name,"auto_notify started")
-    #email_filter = rds_param(f"SELECT `value` from params WHERE `key` = 'email_filter' and client_name = '{client_name}';")
-    #efilter = email_filter.split(',')
     efilter = vmbot.efilter
     notif0 = resp_dict['notif0']
     notif1 = resp_dict['notif1']
     notif2 = resp_dict['notif2']
-    s_cols = get_columns("stages")
-    u_cols = get_columns("userdata")
     for n in range(count):
         course_id = course_list[n]
         stagecode = stg_list[n]
@@ -439,16 +428,13 @@ def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
     mdf = rds_df(f"SELECT * FROM user_master where client_name='{client_name}';")
     if mdf is None:
         return
-    mdf.columns = get_columns("user_master")
-
+    mdf.columns = vmbot.usermaster_cols
     syslog(client_name,"auto_intervent started")
     vars = dict()
     txt =  ""
-    #email_filter = rds_param(f"SELECT `value` from params WHERE `key` = 'email_filter' and client_name = '{client_name}';")
-    #efilter = email_filter.split(',')  
     efilter = vmbot.efilter
-    s_cols = get_columns("stages")
-    u_cols = get_columns("userdata")
+    s_cols = vmbot.stages_cols
+    u_cols = vmbot.userdata_cols
     risk_level = 0
     notif3 = resp_dict['notif3']
     notif4 = resp_dict['notif4']
@@ -472,7 +458,7 @@ def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
         #qry = f"select pillar from course_module where client_name = '{client_name}' and module_code = '{module_code}';"
         #pillar_code = rds_param(qry)
         qry = f"select enquiry_email from course_module where client_name = '{client_name}' and module_code = '{module_code}';"
-        enquiry_email = rds_param(qry)        
+        enquiry_email = rds_param(qry)
         if (soc == 1) and ((eoc == 0) or (eoc_gap == 1)):
             if debug_mode:
                 print(f"processing {course_id}")
@@ -511,12 +497,13 @@ def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
                 tid = df2.chat_id.values[0]
                 binded = df2.binded.values[0]
                 tid = 0 if binded==0 else tid
- 
+
                 (tt, vars) = verify_student(client_name, df1, sid, course_id, sdf)
                 (txt1, txt2, vars) = load_progress(df1, sid, vars, client_name, resp_dict, pass_rate, sdf)
                 if txt1 in ["_soc_","_eoc_"]:
-                    print(txt1, course_id, sid, uname)
-                    continue 
+                    if debug_mode:
+                        print(txt1, course_id, sid, uname)
+                    continue
                 stagecode = vars['stagecode']
                 f2f_stage = vars['f2f_stage']
                 f2f_error = 0 if f2f_stage=="" else 1
@@ -535,7 +522,7 @@ def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
                 df = sdf[ sdf.stage == stagecode ].copy()
                 m = len(df)
                 if m == 0:
-                    print(f"no matching record in stages table for {stagecode}")
+                    print(f"no matching record in stages table for {stagecode} {course_id} {sid}")
                     continue
                 else:
                     stageid = df.id.values[0]
@@ -554,7 +541,7 @@ def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
                 eoc7 = 0
                 if eoc_gap == 1:
                     try:
-                        eoc7 = vmedxlib.edx_eocend(client_name, course_id, 7)                    
+                        eoc7 = vmedxlib.edx_eocend(client_name, course_id, 7)
                     except:
                         pass
                     if eoc7==1:
@@ -564,7 +551,7 @@ def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
                         #txt = notif11
                         txt = notif12
                     else:
-                        txt = notif10                        
+                        txt = notif10
                 else:
                     txt = notif3
                     if (len(mcq_zero) + len(as_zero) == 0) and (f2f_error==0):
@@ -629,11 +616,6 @@ def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
                 if '{lf}' in txt:
                     txt = txt.replace('{lf}', "\n")
                 if eoc7==1:
-                    # new changes : collect them all and send in one shot
-                    #fout = open("mail.txt", "wt")
-                    #fout.write(txt)
-                    #fout.close()
-                    #txt = shellcmd('/bin/sh txt2mail')  # to be replaced with rest api
                     eoc7_maildict[enquiry_email] += txt + "\n"
                     eoc7_userdict[enquiry_email] += ',' + uname
                 else:
@@ -673,11 +655,7 @@ def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
         for enquiry_email in list(eoc7_maildict):
             # ulist = list of username(s) ??
             ulist = eoc7_userdict[enquiry_email]
-            if len(ulist)>1:
-                ulist = ulist[1:]
-                txt = f"From: ombot@lithan.com\nTo: {enquiry_email}\nSubject: Learners {ulist} reached EOC grace period\n\n"
-            else:
-                txt = f"From: ombot@lithan.com\nTo: {enquiry_email}\nSubject: Learners reached EOC grace period\n\n"
+            txt = f"From: ombot@lithan.com\nTo: {enquiry_email}\nSubject : List of learners who reached EOC grace period.\n\n"
             txt += eoc7_maildict[enquiry_email]
             txt += "\nRegards,\nOmniMentorBot"
             if use_mailapi:
@@ -690,7 +668,7 @@ def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
     del mdf
     syslog(client_name,"auto_intervent completed")
     return
- 
+
 def loadconfig():
     global ft_model, dt_model, nn_model, mcq_analysis, vmbot
     ok = True
@@ -700,7 +678,7 @@ def loadconfig():
         ffnn = "ffnn_model.hdf5"
         with open("vmbot.json") as json_file:
             bot_info = json.load(json_file)
- 
+
         client_name = bot_info['client_name']
         ft_model = vmnlplib.NLP_Parser()
         ft_model.load_modelfile(ft, client_name)
@@ -756,7 +734,6 @@ class BotInstance():
         # /admin
         self.define_keys( mentor_menu, self.keys_dict[ option_faculty ])
         self.define_keys( faculty_menu, self.keys_dict[ option_fct ])
-        #self.define_keys( faculty_submenu , self.keys_dict[ fc_student ])
         self.define_keys( playbook_menu, self.keys_dict[ option_pb ])
         self.define_keys( course_menu, self.keys_dict[ pb_userdata ])
         self.define_keys( analysis_menu, self.keys_dict[ option_analysis ])
@@ -765,12 +742,8 @@ class BotInstance():
         self.define_keys( useraction_menu, self.keys_dict[ option_resetuser ])
         self.keys_dict[ option_chatlist ] = (self.keys_dict[ option_chat ]*10) + 1
         self.keys_dict[ option_chatempty ] = (self.keys_dict[ option_chat ]*10) + 2
-        #self.keys_dict[ fc_studentsub ] = (self.keys_dict[ fc_student ]*10) + 1
         self.keys_dict[ opt_pbusr ] = (self.keys_dict[ pb_userdata ]*10) + 1
         self.keys_dict[ opt_stage ] = (self.keys_dict[ ps_stage ]*10) + 1
-        #self.keys_dict[ opt_recupd ] = (self.keys_dict[ fc_recupd ]*10) + 1
-        #self.keys_dict[ opt_updstage ] = (self.keys_dict[ fc_updstage ]*10) + 1
-        #self.keys_dict[ opt_resetstage ] = (self.keys_dict[ fc_resetstage ]*10) + 1
         self.keys_dict[ opt_analysis ] = (self.keys_dict[ option_analysis ]*10) + 1
         self.keys_dict[ opt_mcqd ] = (self.keys_dict[ an_mcqd ]*10) + 1
         self.keys_dict[ opt_mcqavg ] = (self.keys_dict[ an_mcqavg ]*10) + 1
@@ -814,6 +787,9 @@ class BotInstance():
         self.efilter = email_filter.split(',')
         self.edx_time = int(par_dict['edx_import']) if 'edx_import' in par_key else 0
         self.automsg = int(par_dict['automsg']) if 'automsg' in par_key else 0
+        self.stages_cols = get_columns("stages")
+        self.userdata_cols = get_columns("userdata")
+        self.usermaster_cols = get_columns("user_master")
         hdr = par_dict['edx_api_header']
         self.edx_api_header = eval(hdr)
         self.edx_api_url = par_dict['edx_api_url']
@@ -884,7 +860,8 @@ class MessageCounter(telepot.helper.ChatHandler):
         self.chatid = 0
         self.chatname = ""
         self.student_id = 0
-        self.username = ""
+        self.email = ''
+        self.username = ''
         self.userdata = ''
         self.courseid = ''
         self.coursename = ''
@@ -953,7 +930,7 @@ class MessageCounter(telepot.helper.ChatHandler):
         avg_list = dict()
         for avgopt in ['mcq_avg','as_avg']:
             avg_list[avgopt] = [ df[ avgopt + str(x) ].mean() for x in range(1,14)]
-            
+
         df = pd.DataFrame({
             'Test/IU' : [ '#' + str(n) for n in range(1,14) ],
             'mcq test' : [x * 100 for x in avg_list['mcq_avg']],
@@ -1000,7 +977,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             if self.new_session:
                 txt += '\nsession already logged out.'
             else:
-                txt += '\nStudent id : ' + str(self.student_id) 
+                txt += '\nStudent id : ' + str(self.student_id)
                 txt += '\nCourse ID : ' + self.courseid
                 txt += '\nCourse Name : ' + self.coursename
                 cc = [x for x in self.list_courseids if self.courseid != x]
@@ -1011,8 +988,9 @@ class MessageCounter(telepot.helper.ChatHandler):
                 txt += '\nLearning Stage : ' + self.stage_name
                 txt += '\nOutstanding Amount : ' + str(self.records['amt']) + "\n"
                 txt += '\nMentor email : ' + self.mentor_email
-                txt += '\nLA email : ' + self.asst_email 
+                txt += '\nLA email : ' + self.asst_email
         txt += f"\nYour username is {self.username}"
+        txt += f"\nYour email is {self.email}"
         txt += f"\nYour telegram chat_id is {self.chatid}"
         txt += f"\nYour telegram chat name is {self.chatname}"
         txt += f"\nSystem client name is {self.client_name}"
@@ -1028,7 +1006,7 @@ class MessageCounter(telepot.helper.ChatHandler):
         return int(mentorchatid)
 
     def livechat(self, sid=0, telegram_id=0):
-        global vmbot 
+        global vmbot
         list_learners = []
         if len(vmbot.user_list)==0:
             txt = "There is no online learners at the moment"
@@ -1036,7 +1014,7 @@ class MessageCounter(telepot.helper.ChatHandler):
         elif sid>0:
             tlist = [x for x in list(vmbot.user_list) if vmbot.user_list[x][1] == sid]
             if tlist == []:
-                txt = f"student #{sid} is not online at the moment" 
+                txt = f"student #{sid} is not online at the moment"
                 self.sender.sendMessage(txt)
             else:
                 if self.chatid in vmbot.user_list:
@@ -1063,8 +1041,8 @@ class MessageCounter(telepot.helper.ChatHandler):
                     if (vmbot.user_list[r][0] == self.courseid) and (vmbot.user_list[r][1] != self.student_id) ]
             if len(list_learners) > 0:
                 txt = 'Chat with online learners 🗣'
-                list_learners = list_learners + [ [option_back] ] 
-                bot_prompt(self.bot, self.chatid, txt, list_learners)  
+                list_learners = list_learners + [ [option_back] ]
+                bot_prompt(self.bot, self.chatid, txt, list_learners)
                 self.menu_id = vmbot.keys_dict[option_chatlist]
             else:
                 txt = "There is no online learners at the moment"
@@ -1072,7 +1050,7 @@ class MessageCounter(telepot.helper.ChatHandler):
         return
 
     def endchat(self):
-        global vmbot 
+        global vmbot
         chat_id = self.chatid
         chat_found = False
         if chat_id in vmbot.chat_list:
@@ -1108,8 +1086,8 @@ class MessageCounter(telepot.helper.ChatHandler):
             if accuracy >= match_score:
                 txt = result
                 syslog( "NLP" , txt )
-        
-        if txt == '':            
+
+        if txt == '':
             ( result, accuracy ) = ft_model.find_matching( resp )
             if accuracy > 0:
                 if accuracy < match_score:
@@ -1155,7 +1133,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                     v = eval(w)
                     tt = tt.replace( p, str(v) )
                 txt = tt.replace('~~~','\n')
-                
+
         if txt == '':
             txt = "I'm sorry, I do not understand you but could you be more specific about your question related to "
             txt += "'" + resp + "' ?"
@@ -1182,31 +1160,28 @@ class MessageCounter(telepot.helper.ChatHandler):
                 vmedxlib.update_mcq(self.courseid, client_name, self.student_id)
                 vmedxlib.update_assignment(self.courseid, client_name, self.student_id)
         except:
-            pass            
-        #qry = "select * from userdata where client_name = '_c_' and courseid = '_x_';"
-        #qry = qry.replace('_c_', client_name)
-        #qry = qry.replace('_x_', self.courseid)
+            pass
         qry = "SELECT u.* FROM userdata u INNER JOIN user_master m ON u.client_name=m.client_name "
         qry += f" AND u.studentid=m.studentid WHERE u.client_name='{client_name}' AND u.courseid = '{self.courseid}' "
         qry += ''.join([ " and lower(m.email) not like '%" + x + "'"  for x in vmbot.efilter])
-        df = rds_df( qry )        
-        if df is None:            
+        df = rds_df( qry )
+        if df is None:
             self.userdata = None
             vmedxlib.edx_import(self.courseid, self.client_name)
             df = rds_df( qry )
         if df is not None:
-            df.columns = get_columns("userdata")
-            self.userdata = df        
+            df.columns = vmbot.userdata_cols
+            self.userdata = df
         qry = "select * from stages where client_name = '_c_' and courseid = '_x_';"
         qry = qry.replace('_c_', self.client_name)
         qry = qry.replace('_x_', self.courseid)
         df = rds_df( qry)
         if df is None:
             self.stagetable = None
-        else:            
-            df.columns = get_columns("stages")
+        else:
+            df.columns = vmbot.stages_cols
             self.stagetable = df
-        return 
+        return
 
     def load_courseinfo(self, resp):
         if len(self.list_courseids)==0:
@@ -1227,18 +1202,18 @@ class MessageCounter(telepot.helper.ChatHandler):
         self.student_id = 0
         txt = ''
         if self.new_session == False :
-            return 
+            return
         if self.userdata is None:
             return
         (txt, self.records ) = verify_student(self.client_name, self.userdata, sid, self.courseid, None)
         self.mentor_email = self.records['mentor_email']
-        self.asst_email = self.records['asst_email']        
+        self.asst_email = self.records['asst_email']
         if sid > 0:
             binded = rds_param(f"select binded FROM user_master where client_name='{self.client_name}' and studentid={sid};")
             if binded==0:
                 query = f"update user_master set chat_id={chat_id} where client_name='{self.client_name}' and studentid={sid};"
                 rds_update(query)
-        err = 0        
+        err = 0
         if (self.records=={}) :
             txt = "Hi, there is incomplete information at the moment, the session is not ready yet.\n\n"
             txt += "Please select the course from below list."
@@ -1252,7 +1227,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             self.new_session = False
             vmbot.user_list[chat_id]=[self.courseid, self.student_id, self.username, chat_id, ""]
             self.records = load_vars(self.userdata, sid)
-            vars = display_progress(self.userdata, sid, self.records, self.client_name, vmbot.resp_dict, vmbot.pass_rate)
+            vars = display_progress(self.userdata, self.stagetable, sid, self.records, self.client_name, vmbot.resp_dict, vmbot.pass_rate)
             for v in list(vars):
                 self.records[v] = vars[v]
             txt  = vars['notification']
@@ -1263,7 +1238,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                 txt = "Welcome back."
             bot_prompt(self.bot, self.chatid, txt, self.menu_home)
             self.menu_id = self.parentbot.keys_dict[lrn_student]
-        return 
+        return
 
     def getdoc(self, bot, msg):
         fname = msg['document']['file_name']
@@ -1275,7 +1250,7 @@ class MessageCounter(telepot.helper.ChatHandler):
     def track_attempts(self):
         global vmbot
         vars = load_vars(self.userdata, self.student_id)
-        (t0, t1, vars) = load_progress(self.userdata, self.student_id, vars, self.client_name, vmbot.resp_dict, vmbot.pass_rate, None)
+        (t0, t1, vars) = load_progress(self.userdata, self.student_id, vars, self.client_name, vmbot.resp_dict, vmbot.pass_rate, self.stagetable)
         if vars['mcq_att_balance'] == "":
             txt = "There is no outstand MCQs for futher attempts."
         else:
@@ -1290,7 +1265,7 @@ class MessageCounter(telepot.helper.ChatHandler):
         #if nn_model.model_name == "":
         #    print("please load the model first")
         #    return []
-        txt = ""        
+        txt = ""
         df = self.userdata
         if self.userdata is None:
             print("there is no data")
@@ -1322,7 +1297,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                 continue
             mavg = 0 if mcnt == 0 else sum(mscores) / mcnt
             aavg = 0 if acnt == 0 else sum(ascores) / acnt
-            # current not working                
+            # current not working
             use_neural_network = False   # True or False
             if use_neural_network:
                 #mavgatt = sum([gx(n) for n in range(1,14)]) / 13
@@ -1334,14 +1309,14 @@ class MessageCounter(telepot.helper.ChatHandler):
                 #    continue
                 pass
             else:
-                grad_pred = dt_model.predict(mavg , aavg, mcnt) 
+                grad_pred = dt_model.predict(mavg , aavg, mcnt)
 
             tbl.append( [vv , uu , "{:.2%}".format(grad_pred[0])] )
             progress_list = [ fz(n) for n in range(1,14) if gz(n) > 0]
             progress_list.append(['Avg', "{:.2%}".format(mavg) , " ",  "{:.2%}".format(aavg) , " "])
 
             df =  pd.DataFrame( progress_list )
-            df.columns = ['Test #', 'MCQ', '#Attempts', 'Assignment', '# Attempts']      
+            df.columns = ['Test #', 'MCQ', '#Attempts', 'Assignment', '# Attempts']
             progress_df[sid] = df
 
             progress_tt[sid] = f"\nTest Results for Student #{vv} {uu}"
@@ -1354,7 +1329,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             return []
         df1.columns = ['Student ID#','Name', 'Prediction']
         tt = "AI Grading for " + self.courseid
-        df1= df1.sort_values(by ='Prediction') 
+        df1= df1.sort_values(by ='Prediction')
         html_list(self.bot, self.chatid, df1, df1.columns, [10, 15, 10], tt, 20)
         return new_sidlist
 
@@ -1368,7 +1343,7 @@ class MessageCounter(telepot.helper.ChatHandler):
         if client_name == "":
             return (course_id_list, course_name_list, logon_list)
         if stud==0:
-            sub_str  = self.parentbot.sub_str        
+            sub_str  = self.parentbot.sub_str
             qry = f"SELECT DISTINCT a.course_id, a.course_name FROM playbooks a "
             qry += f"INNER JOIN course_module c ON a.client_name=c.client_name and a.module_code=c.module_code "
             #qry += f"INNER JOIN course_module c ON a.client_name=c.client_name and a.module_code=c.module_code and a.course_code=c.course_code "
@@ -1387,25 +1362,6 @@ class MessageCounter(telepot.helper.ChatHandler):
         #    userinfo = edxapi_getuser(headers, url)
         #if userinfo == {} :
         (course_id_list, course_name_list, logon_list) = rds_loadcourse(client_name, stud)
-        zz = """
-        else:
-            self.username = userinfo['username']
-            course_id_list = [ x['course_id'] for x in userinfo['enrolments'] ]
-            course_name_list = [ x['course_name'] for x in userinfo['enrolments'] ]                
-            qry = f"SELECT DISTINCT module_code FROM course_module WHERE enabled=1 and client_name='{self.client_name}';"    
-            df = rds_df(qry)
-            if df is not None:
-                df.columns = ['module_code']
-                mc_list = [x for x in df.module_code]
-                m = len(course_id_list)
-                for n in range(m):
-                    k = m - 1 - n
-                    course_id = course_id_list[k]
-                    module_code = piece(piece(piece(course_id,':',1),'+',1),'-',0)
-                    if module_code not in mc_list:
-                        del course_id_list[k]
-                        del course_name_list[k]
-        #"""
         return (course_id_list, course_name_list, logon_list)
 
     def on_chat_message(self, msg):
@@ -1415,7 +1371,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             bot = self.bot
             self.chatid = chat_id
             keys_dict = vmbot.keys_dict
-            adminchatid = vmbot.adminchatid            
+            adminchatid = vmbot.adminchatid         
         except:
             return
 
@@ -1448,18 +1404,7 @@ class MessageCounter(telepot.helper.ChatHandler):
             retmsg += "\nmenu key : " + vmbot.get_menukey(self.menu_id) 
 
         elif resp=='/z':
-            #load_edxdata(vmbot.client_name)
-            #self.logoff()
-            #print(self.userdata)   # 13 rows 
-            #maxmcqtest=13
-            #colname = "as_avg"
-            #sid_list = [x for x in self.userdata.studentid]
-            #df = self.userdata[[ colname + str(x) for x in range( 1, maxmcqtest + 1 ) ]]    
-            #df[colname] = df.apply(lambda x: x.mean(), axis=1)
-            #avg_list = [x for x in df[colname]]
-            #results = [ self.userdata[ colname + str(x) ].mean() for x in range( 1, maxmcqtest + 1 ) ]
             pass
-            
                 
         elif resp=='/end':
             self.endchat()
@@ -1496,13 +1441,14 @@ class MessageCounter(telepot.helper.ChatHandler):
                     courseid = ""
                     binded = 0
                 else:
-                    df.columns = get_columns("user_master")
+                    df.columns = vmbot.usermaster_cols
                     sid = int(df.studentid.values[0])
                     self.student_id = sid
                     self.username = df.username.values[0]
                     usertype = df.usertype.values[0]
                     courseid = df.courseid.values[0]
-                    binded =  df.binded.values[0]                    
+                    binded =  df.binded.values[0]
+                    self.email = df.email.values[0]
                 if (binded==1) and (sid > 0) and (courseid != ""):
                     if usertype == 1:
                         (self.list_courseids, self.list_coursename,self.course_selection) = self.find_course(sid)
@@ -1602,10 +1548,20 @@ class MessageCounter(telepot.helper.ChatHandler):
                     self.sender.sendMessage("Sorry your account is not found, please contact the admin.")
                     self.logoff()
                     return
-                usertype = rds_param(f"SELECT usertype FROM user_master WHERE studentid={resp} and client_name ='{self.client_name}';")
-                query = "select username from user_master where studentid =" + resp + \
-                    " and client_name = '" + self.client_name + "';"
-                self.username = rds_param(query)
+                query = "select * from user_master where studentid = " + resp + " and client_name = '" + self.client_name + "';"
+                df = rds_df(query)
+                if df is None:
+                    self.sender.sendMessage("Sorry your account is not found, please contact the admin.")
+                    self.logoff()
+                    return
+                df.columns = vmbot.usermaster_cols
+                self.email = df.email.values[0]
+                usertype = df.usertype.values[0]
+                self.username = df.username.values[0]
+                #usertype = rds_param(f"SELECT usertype FROM user_master WHERE studentid={resp} and client_name ='{self.client_name}';")
+                #query = "select username from user_master where studentid =" + resp + \
+                #    " and client_name = '" + self.client_name + "';"
+                #self.username = rds_param(query)                
                 if usertype == 11:
                     self.is_admin = True
                     self.menu_id = 1
@@ -1721,14 +1677,14 @@ class MessageCounter(telepot.helper.ChatHandler):
                 query = f"select * from userdata where client_name = '{cname}' and studentid={sid} and courseid='{courseid}';"
                 df = rds_df(query)
                 if df is not None:
-                    df.columns = get_columns("userdata")
+                    df.columns = vmbot.userdata_cols
                     self.userdata = df
                 self.stage_name = stg
                 self.student_id = sid
                 self.courseid = courseid
                 self.load_tables()
                 (txt, self.records ) = verify_student(self.client_name, self.userdata, sid, self.courseid, None)
-                vars = display_progress(self.userdata, sid, self.records, self.client_name, vmbot.resp_dict, vmbot.pass_rate)                
+                vars = display_progress(self.userdata, self.stagetable, sid, self.records, self.client_name, vmbot.resp_dict, vmbot.pass_rate)                
                 retmsg  = vars['notification']
                 retmsg += grad_pred_text(vars, self.client_name)
                 self.menu_id = keys_dict[lrn_student]
@@ -1801,7 +1757,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                 if df is None:
                     ulist = []
                 else:
-                    df.columns = get_columns("user_master")
+                    df.columns = vmbot.usermaster_cols
                     ulist = [x for x in df.studentid if x != self.student_id]
                 if ulist == []:
                     updqry = f"update user_master set binded=1, chat_id={str(chat_id)}, courseid='{cid}' where client_name = '{self.client_name}' and studentid={sid};"
@@ -1828,18 +1784,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                 userdata_courseids = [ x for x in df.courseid ]
                 course_list = [ x for x in self.list_courseids if x in userdata_courseids ]
             btn_course_list = build_menu( course_list , 1)
-            if resp == fc_student:
-                self.menu_id = keys_dict[fc_student]
-                txt = "This determine the learning stage of a learner\n"
-                #txt += "test data to be used:\n\n"
-                bot_prompt(self.bot, self.chatid, txt, btn_course_list)
-            elif resp == fc_search :
-                txt = "Search course-id by keywords:\n"
-                txt += "Example :  FOS\n"
-                txt += "Enter 0 to exit"
-                bot_prompt(self.bot, self.chatid, txt, [])
-                self.menu_id = keys_dict[fc_search]
-            elif resp == fc_userimport :                
+            if resp == fc_userimport :                
                 self.sender.sendMessage("System has scheduled a job to update user master.")                
                 job_request("ServiceBot",adminchatid, self.client_name,"mass_update_usermaster","")
             elif resp == fc_edxupdate :
@@ -1860,193 +1805,6 @@ class MessageCounter(telepot.helper.ChatHandler):
                 txt = 'Please select the following mode:'
                 bot_prompt(self.bot, self.chatid, txt, self.menu_home)
                 self.menu_id = 1
-
-        #elif self.menu_id == keys_dict[fc_student]:
-        #    if (resp == option_back) or (resp == "0"):
-        #        txt = "You are back to the faculty menu."
-        #        bot_prompt(self.bot, self.chatid, txt, faculty_menu)
-        #        self.menu_id = keys_dict[option_fct]
-        #        return
-        #    if resp in self.list_courseids:
-        #        self.courseid = resp
-        #        n = self.list_courseids.index(resp)
-        #        self.coursename = self.list_coursename[n]
-        #        self.load_tables()
-        #        cohort_id = piece(piece(resp,':',1),'+',1)
-        #        condqry = " where client_name = '" + self.client_name + "' and courseid = '" + resp + "';"
-        #        fld_list = "studentid,username,amt,grade,stage".split(",")
-        #        df = self.userdata[fld_list]
-        #        title_name = "List of learners from " + cohort_id   
-        #        html_list(self.bot, chat_id, df, fld_list, [10,20,8,5,10], title_name, 20)
-        #        n = len(df)                
-        #        txt = f"total number of learners : {n}"
-        #        bot_prompt(self.bot, self.chatid, txt, faculty_submenu)
-        #        self.menu_id = keys_dict[fc_studentsub]
-        #    else:
-        #        if self.list_courseids != []:
-        #            txt = "select the course id below:"
-        #            btn_list = build_menu([x for x in self.list_courseids if resptxt in x.lower()],1)
-        #            bot_prompt(self.bot, self.chatid, txt,btn_list)
-        #            return
-        #        else:
-        #            txt = "You are back to the faculty menu."
-        #            bot_prompt(self.bot, self.chatid, txt, faculty_menu)
-        #            self.menu_id = keys_dict[option_fct]
-
-        #elif self.menu_id == keys_dict[fc_studentsub]:
-        #    if resp == fc_updstage:                
-        #        txt = "Enter a list of student id for the update\n"
-        #        txt += "Example :  123,456\n"
-        #        txt += "You can enter * for entire class.\n"
-        #        txt += "Enter 0 to exit"
-        #        bot_prompt(self.bot, self.chatid, txt, [])
-        #        self.menu_id = keys_dict[fc_updstage]
-        #    elif resp == fc_resetstage :
-        #        txt = "Enter a list of student id for the update\n"
-        #        txt += "Example :  123,456\n"
-        #        txt += "You can enter * for entire class.\n"
-        #        txt += "Enter 0 to exit"
-        #        bot_prompt(self.bot, self.chatid, txt, [])
-        #        self.menu_id = keys_dict[fc_resetstage]
-        #    elif resp == fc_recupd  :
-        #        txt = "Enter student id for update:\n"
-        #        txt += "(Enter 0 to exit)"
-        #        bot_prompt(self.bot, self.chatid, txt, [])
-        #        self.menu_id = keys_dict[fc_recupd]
-        #    elif (resp == option_back) or (resp == "0"):
-        #        txt = 'Please select the following mode:'
-        #        bot_prompt(self.bot, self.chatid, txt, faculty_menu)
-        #        self.menu_id = keys_dict[option_fct]
-
-        #elif self.menu_id == keys_dict[fc_updstage] :
-        #    if resp == "0":
-        #        txt = "there is nothing to update"            
-        #    else:
-        #        df = self.userdata
-        #        students_list = [x for x in df.studentid]
-        #        if resp == "*":
-        #            selection = students_list
-        #        else:
-        #            try:
-        #                selection = [ int(x.strip()) for x in resp.split(',') if len(x.strip()) >0 ]
-        #            except:
-        #                selection = []
-        #        if selection==[]:
-        #            txt = "There is nothing to update."
-        #        else:
-        #            cnt = 0
-        #            for sid in [x for x in students_list if x in selection]:
-        #                #self.update_stage(sid)
-        #                cnt += 1
-        #            if cnt == 0:
-        #                txt = "There is nothing to update."
-        #            else:
-        #                txt = "the stages for the following has been updated:\n" + self.courseid 
-        #    bot_prompt(self.bot, self.chatid, txt, faculty_submenu)
-        #    self.menu_id = keys_dict[fc_studentsub]
-
-        #elif self.menu_id == keys_dict[fc_resetstage]:
-        #    if resp == '0':
-        #        txt = "there is nothing to update"
-        #        bot_prompt(self.bot, self.chatid, txt, faculty_submenu)
-        #        self.menu_id = keys_dict[fc_studentsub]
-        #        self.tablerows = []
-        #    elif resp == '*':
-        #        df = self.userdata
-        #        self.tablerows = [x for x in df.studentid]
-        #    else:
-        #        if "," in resp:
-        #            try:
-        #                self.tablerows = [ int(x) for x in resp.split(',')]
-        #            except:
-        #                self.tablerows = []
-        #        else:
-        #            self.tablerows = [ int(resp) ]
-        #    if self.tablerows == []:
-        #        txt = "there is nothing to update"
-        #        bot_prompt(self.bot, self.chatid, txt, faculty_submenu)
-        #        self.menu_id = keys_dict[fc_studentsub]
-        #    else:                
-        #        query = f"select name from stages where client_name = '{self.client_name}' and courseid = '{self.courseid}';"
-        #        df = rds_df(query)
-        #        if df is None:
-        #            retmsg = "The learning stage table information is incomplete"
-        #        else:
-        #            df.columns = ['name']
-        #            stage_list = list( df['name'] )
-        #            txt = "Please select the stage:\nType exit to get out from the list"            
-        #            btn_list = build_menu(stage_list, 4, 'exit', [])
-        #            bot_prompt(self.bot, self.chatid, txt, btn_list)
-        #            self.menu_id = keys_dict[opt_resetstage]
-
-        #elif self.menu_id == keys_dict[opt_resetstage] :
-        #    if resp == 'exit':
-        #        txt = "There is nothing to update"
-        #    else:
-        #        result = "stage:'_x_'"
-        #        result = result.replace('_x_', resp)
-        #        try:
-        #            if len(self.tablerows) > 0:
-        #                for sid in self.tablerows:
-        #                    txt = edit_fields(self.client_name, self.courseid, "userdata", "studentid", sid, result, self.tablerows)
-        #                    self.tablerows = []
-        #            else:
-        #                txt = 'nothing to update'
-        #        except:
-        #            txt = "Unable to update the new stage : " + resp
-        #    bot_prompt(self.bot, self.chatid, txt, faculty_submenu)
-        #    self.menu_id = keys_dict[fc_studentsub]
-
-        #elif self.menu_id == keys_dict[fc_recupd] :
-        #    if resp == '0':
-        #        txt = "there is nothing to update"
-        #        bot_prompt(self.bot, self.chatid, txt, faculty_submenu)
-        #        self.menu_id = keys_dict[fc_studentsub]
-        #    elif resp.isnumeric():
-        #        stage_id = int(resp)
-        #        txt = ""
-        #        for fld in ["amt","mcq_avg","as_avg"]:
-        #            txt += edit_records(self.client_name, self.courseid, 'userdata', 'studentid', stage_id, fld)
-        #        if txt == "" :
-        #            txt = "there is nothing to update"
-        #            bot_prompt(self.bot, self.chatid, txt, faculty_submenu)
-        #            self.menu_id = keys_dict[fc_studentsub]
-        #        else:
-        #            bot_prompt(self.bot, self.chatid, txt, [])
-        #            self.menu_id = keys_dict[opt_recupd]
-        #    else:
-        #        txt = "there is nothing to update"
-        #        bot_prompt(self.bot, self.chatid, txt, faculty_submenu)
-        #        self.menu_id = keys_dict[fc_studentsub]
-
-        #elif self.menu_id == keys_dict[opt_recupd] :
-        #    if ':' in resp :
-        #        txt = edit_fields(self.client_name, self.courseid, "userdata", "studentid", self.student_id, resp)
-        #    else:
-        #        txt = "there is nothing to update"
-        #    bot_prompt(self.bot, self.chatid, txt, faculty_submenu)
-        #    self.menu_id = keys_dict[fc_studentsub]
-
-        #elif self.menu_id == keys_dict[fc_search]:
-        #    if resp == "0":
-        #        txt = "there is nothing to search"
-        #        bot_prompt(self.bot, self.chatid, txt, faculty_menu)
-        #        self.menu_id = keys_dict[option_fct]
-        #    else:
-        #        result = '%%'.join([w for w in resp.split(' ')  if w != ''])
-        #        result = result.upper()
-        #        course_list = []
-        #        course_list = vmedxlib.search_course_list(result)
-        #        df = pd.DataFrame(course_list, columns=['course_id'])
-        #        if df is None:
-        #            n = 0
-        #        else:                    
-        #            title_name = "Searched course-id results"
-        #            html_list(self.bot, chat_id, df, df.columns, [60], title_name, 15)                
-        #            n = len(df)
-        #        txt = f"Total number of courses found = {n}"
-        #        bot_prompt(self.bot, self.chatid, txt, faculty_menu)
-        #        self.menu_id = keys_dict[option_fct]
 
         elif self.menu_id == keys_dict[option_pb]:
             if resp==pb_config:
@@ -2104,10 +1862,6 @@ class MessageCounter(telepot.helper.ChatHandler):
 
         elif self.menu_id == keys_dict[opt_pbusr]:
             if resp == ps_userdata :
-                #query = "SELECT a.studentid, a.username, b.email, a.amt, a.stage FROM userdata a "
-                #query += "INNER JOIN user_master b ON a.client_name=b.client_name "
-                #query += f"AND a.studentid=b.studentid WHERE a.client_name = '{self.client_name}' "
-                #query += f"AND a.courseid='{self.courseid}' ORDER BY a.studentid;"                                
                 query = "SELECT u.studentid, m.username, m.email, u.amt, u.stage FROM userdata u INNER JOIN user_master m ON u.client_name=m.client_name "
                 query += f" AND u.studentid=m.studentid WHERE u.client_name='{self.client_name}' AND u.courseid = '{self.courseid}' "
                 query += ''.join([ " and lower(m.email) not like '%" + x + "'"  for x in vmbot.efilter])
@@ -2117,9 +1871,9 @@ class MessageCounter(telepot.helper.ChatHandler):
                 else:
                     df.columns = ['studentid','username','email','amt','stage']
                     title_name = "List of learners from " + self.courseid
-                    html_list(self.bot, chat_id, df,df.columns, [10,20,28,8,8], title_name, 30)
+                    html_list(self.bot, chat_id, df,df.columns, [9,20,28,8,9], title_name, 30)
                     n = len(df)
-                    retmsg = f"Total number of active courses = {n}"
+                    retmsg = f"Total number of active learners = {n}"
             elif resp == ps_schedule :
                 if self.stagetable is None:
                     retmsg = "The schedule information is not available"
@@ -2151,7 +1905,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                     if n==0:
                         retmsg = "no one missed the mcq test so far"
                     else:
-                        df['mcq_zero'] = df.apply(lambda x: x['mcq_zero'].replace(' ',''), axis=1)
+                        df['mcq_zero'] = df.apply(lambda x: str(x['mcq_zero']).replace(' ',''), axis=1)
                         html_list(self.bot, chat_id, df, cols, [10, 15, 10, 40], title_name,8)
                         retmsg = f"Total number of learners = {n}"
             elif resp == ps_mcqfailed:
@@ -2166,7 +1920,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                     if n==0:
                         retmsg = "no one failed the mcq test so far"
                     else:
-                        df['mcq_failed'] = df.apply(lambda x: x['mcq_failed'].replace(' ',''), axis=1)
+                        df['mcq_failed'] = df.apply(lambda x: str(x['mcq_failed']).replace(' ',''), axis=1)
                         html_list(self.bot, chat_id, df, cols,  [10, 15, 10, 40], title_name,8)
                         retmsg = f"Total number of learners = {n}"
             elif resp == ps_aszero:
@@ -2181,7 +1935,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                     if n==0:
                         retmsg = "no one missed the assignment test so far"
                     else:
-                        df['as_zero'] = df.apply(lambda x: x['as_zero'].replace(' ',''), axis=1)
+                        df['as_zero'] = df.apply(lambda x: str(x['as_zero']).replace(' ',''), axis=1)
                         html_list(self.bot, chat_id, df, cols,  [10, 15, 10, 40], title_name,8)
                         retmsg = f"Total number of learners = {n}"
             elif resp == ps_asfailed:
@@ -2196,7 +1950,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                     if n==0:
                         retmsg = "no one failed the assignment test so far"
                     else:
-                        df['as_failed'] = df.apply(lambda x: x['as_failed'].replace(' ',''), axis=1)
+                        df['as_failed'] = df.apply(lambda x: str(x['as_failed']).replace(' ',''), axis=1)
                         html_list(self.bot, chat_id, df, cols, [10, 15, 10, 40], title_name,8)
                         retmsg = f"Total number of learners = {n}"
             elif (resp == option_back) or (resp == "0"):
@@ -2425,7 +2179,7 @@ class MessageCounter(telepot.helper.ChatHandler):
                 if sid == 0:
                     retmsg = "Unable to find the matchnig record. Please try again."
                 else:
-                    df.columns = get_columns("user_master")
+                    df.columns = vmbot.usermaster_cols
                     rec = df.iloc[0]
                     sid = rec['studentid']
                     self.student_id = sid
@@ -2580,6 +2334,7 @@ def syslog(msgtype, message):
     return
    
 def verify_student(cname, userdata, student_id, courseid, stagedf):
+    global vmbot
     vars = dict()
     amt = 0    
     sid = int(student_id)
@@ -2587,8 +2342,8 @@ def verify_student(cname, userdata, student_id, courseid, stagedf):
         query = f"select * from userdata where client_name = '{cname}' and studentid={sid} and courseid='{courseid}';"    
         df = rds_df(query)
         if df is not None:
-            df.columns = get_columns("userdata")
-            userdata = df         
+            df.columns = vmbot.userdata_cols
+            userdata = df
     if userdata is None:
         return (msg, vars)
         
@@ -2606,7 +2361,7 @@ def verify_student(cname, userdata, student_id, courseid, stagedf):
         if stage_table is None:        
             msg = f'Unable to load stage table for course-id {courseid}' 
             return (msg, vars)
-        stage_table.columns = get_columns("stages")
+        stage_table.columns = vmbot.stages_cols
     else:
         stage_table = stagedf.copy()
         
@@ -2658,11 +2413,19 @@ def evaluate_progress(vars,iu_list,passingrate,var_prefix,var_title):
         m = 4 if var_prefix=="mcq" else 1
         attempts_balance = "".join([ ("\n" + var_title + ' #'+str(x) + " has " + str(m-vars[att_prefix + str(x)])+" attempts left"  ) for x in iu_vars \
             if vars[avg_prefix + str(x)] < passingrate ])        
+        kiv_codes = """
         if (var_prefix=="mcq") and len(score_failed)>0:        
             sid = int(vars["studentid"])
             client_name = vars['client_name']
             course_id = vars['courseid']
-            df = rds_df(f"SELECT mcq, qn, (4 - attempts) as att from mcq_data WHERE client_name='{client_name}' and course_id='{course_id}' and student_id={sid};")
+            qry = f"SELECT mcq, qn, (4 - attempts) as att from mcq_data WHERE client_name='{client_name}' and course_id='{course_id}' and student_id={sid};"
+            try:
+                df = rds_df(qry)
+            except:
+                print("run-time error, memory exhausted")
+                print(qry)
+                print(sid, course_id)
+                
             if df is not None:
                 df.columns = ['mcq', 'qn', 'att']
                 df1 = pd.pivot_table(df, values='att', index=['mcq'],columns='qn')
@@ -2675,6 +2438,8 @@ def evaluate_progress(vars,iu_list,passingrate,var_prefix,var_title):
                         list1 = str([ int(x) for x in list(row)])
                         tt += f"\n#{index} : {list1}"
                 tt += "\n"
+                print(sid, course_id, '\n', tt)
+        #"""    
     return (tt, score_avg, score_zero, score_pass, score_failed, iu_score , iu_attempts, iu_cnt, attempts_balance)
 
 def get_stageinfo(vars, pass_rate, amt, stagecode, mcqvars, asvars):
@@ -2722,44 +2487,30 @@ def get_stageinfo(vars, pass_rate, amt, stagecode, mcqvars, asvars):
         as_avg, as_zero, as_pass, as_failed, as_att, acnt, abal, mcqas_comp, risk_level, tt)
 
 def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stagedf):
-    if (df is None) or (vars == {}):
+    if (df is None) or (vars == {}) or (stagedf is None):
         return ("", "", vars)
     rec = df[df.studentid==student_id].iloc[0]
     courseid = rec['courseid']    
     sid = student_id
-    if ('.db' in vmsvclib.rds_connstr):
-        query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{courseid}' AND "
-        query += f"strftime(substr(startdate,7,4)||'-'||substr(startdate,4,2)||'-'||substr(startdate,1,2)) "
-        query += f"<= strftime(date('now')) ORDER BY id DESC LIMIT 1;"
-    else:
-        query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{courseid}' "
-        query += "AND STR_TO_DATE(startdate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
-    stagebyschedule = rds_param(query)
-    if stagedf is None:
-        query = f"SELECT * FROM stages WHERE client_name = '{client_name}' AND courseid='{courseid}';"
-        df = rds_df(query)
-        if df is None:
-            return ("", "", vars)
-        df.columns = get_columns("stages")
-    else:
-        df = stagedf.copy()
-    cols = df.columns
-    stg_list = [x for x in df.stage]    
+    dtnow = datetime.datetime.now().date().strftime('%Y%m%d')
+    list1=[datetime.datetime.strptime(dt,"%d/%m/%Y").strftime('%Y%m%d') for dt in stagedf.startdate]
+    list2=[x for x in list1 if x < dtnow ]
+    if list2==[]:
+        return ("", "", vars)
+    stagebyschedule = stagedf.iloc[ (len(list2) - 1) ]['name']
+    stg_list = [x for x in stagedf.stage]    
     stglen = len(stg_list)
     if stglen==0:
         return ("", "", vars)
-
+    df = stagedf.copy()
     try:
         begin_date_list = ['' if x is None else x[:10] for x in df.startdate]
     except:
         return ("", "", vars)
-    first_date = string2date(begin_date_list[0],"%d/%m/%Y")
-    last_date = string2date(begin_date_list[-1],"%d/%m/%Y")    
-    date_today = datetime.datetime.now().date()
+    
     #if (date_today > last_date):        
     #    return ("_eoc_", "", vars)
-    
-    if (first_date > date_today):        
+    if list1[0] > dtnow:
         return ("_soc_", "", vars)
         
     due_date_list = [x for x in df.stagedate]
@@ -2772,7 +2523,11 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     aslist_max = max(asvars_list)    
     amt = vars['amt']    
 
-    missing_dates = vmedxlib.sms_missingdates(client_name, courseid, sid, cols)
+    try:
+        missing_dates = vmedxlib.sms_missingdates(client_name, courseid, sid, cols)
+    except:
+        missing_dates = ['' for n in range(stglen)]
+        
     pm_stage = vmedxlib.sms_pmstage(client_name, courseid)
     att_rate = vmedxlib.sms_att_rate(client_name, courseid,sid)
     missing_stages = []
@@ -2792,6 +2547,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     assignment_pending = []
     mfail = []
     afail = []
+    n1 = 0
     for n in range(stglen):
         stagecode = stg_list[n]        
         stagename = stage_names_list[n]
@@ -2802,7 +2558,9 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
         stg_date = due_date_list[n]
         duedate = due_date_list[n]
         stagedesc = stage_desc_list[n]
-        stagedesc = stagedesc.replace('?','')
+        if '(' in stagedesc:
+            stagedesc = stagedesc.split('(')[0]
+        #stagedesc = stagedesc.replace('?','').replace('⭐️','').replace('(','').replace(')','').replace('Asynchronous','')
         mcqvars = mcqvars_list[n]
         asvars = asvars_list[n]
         if ('SA' in stagecode) or (stagecode=='EOC'):
@@ -2811,11 +2569,14 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
         (pass_stage,has_score,avg_score,mcqas_list,max_attempts,list_attempts,mcq_avg,mcq_zero,mcq_pass,mcq_failed,mcq_attempts,mcnt,\
         mcq_att_balance,as_avg,as_zero,as_pass,as_failed,as_attempts,acnt,as_att_balance,mcqas_complete,risk_level,tt) \
             = get_stageinfo(vars, pass_rate, amt, stagecode, mcqvars, asvars)
-        if stglen==(n+1):
-            stagename = stagebyschedule = statusbyprogress = stage_names_list[n]
-            statusbyprogress = f"{stagename} ({stagedesc})"            
+        #print(n, stagecode,stagename, stagebyschedule, statusbyprogress, mcqvars,pass_stage,asvars)
+        #if stglen==(n+1):
+            #stagename = stagebyschedule = statusbyprogress = stage_names_list[n]
+            #stagename = statusbyprogress = stage_names_list[n]
+            #statusbyprogress = f"{stagename} ({stagedesc})"
+            #break
         if (stagebyprogress == "") and (pass_stage == 0):
-            stagebyprogress = stage_names_list[n]
+            stagebyprogress = stagename
             statusbyprogress = f"{stagename} ({stagedesc})"
             overall_passed = 0            
             mcq_pending = mcq_zero
@@ -2833,6 +2594,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
             stage_days = stage_daysnum_list[n]
             vars['stage'] = stagebyschedule
             txt = tt + "\n\n"
+            n1 = n
             if stagebyprogress != "":                
                 mcq_pending = mcq_zero
                 assignment_pending = as_zero
@@ -2840,6 +2602,11 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
                 afail = as_failed
                 stage_date = stg_date
                 break    
+        if n1 > 0 and n == n1:
+            if (stagebyprogress == ""):
+                stagebyprogress = stagename
+                statusbyprogress = f"{stagename} ({stagedesc})"                
+            break
 
     f2f_stage = ','.join(missing_stages)
     pass_stage = overall_passed
@@ -2857,11 +2624,16 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     stage_desc = stagedesc
     stagebyprogress = stage if stagebyprogress=='' else stagebyprogress
     vars['stage'] =  stagebyprogress
+
+    if stagecode=="":
+        if stagebyprogress in stage_names_list:
+            n = stage_names_list.index(stagebyprogress)
+            stagecode = stg_list[n]
+            stage_desc = stage_desc_list[n]
     
     mcqlist = list(set(mcq_failed + mcq_zero))
     aslist = list(set(as_failed + as_zero))
     txt_hdr = resp_dict['stg0']
-    #if ("eoc" in stagebyschedule.lower()) and (pass_stage == 1):
     if ("eoc" in stagebyschedule.lower()) and (pass_stage == 1) and (att_rate >=0.75):
         txt = ""
         txt_hdr = "_eoc_"
@@ -2883,7 +2655,6 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     if (pm_stage==1) and (att_rate < 0.75):
         risk_level = 3
         
-    #query = f"update userdata set stage = '{stagebyprogress}' WHERE client_name = '{client_name}' AND courseid='{courseid}' AND studentid={sid};"
     query = f"update userdata set risk_level = {risk_level}, stage = '{stagebyprogress}', mcq_zero = '{mcq_zero}' "
     query += f" ,mcq_failed = '{mcq_failed}', as_zero = '{as_zero}', as_failed = '{as_failed}' "
     query += f" where client_name='{client_name}' and courseid='{courseid}' and studentid={student_id};"
@@ -2891,16 +2662,17 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
         rds_update(query)
     except:
         pass
+        
     for vv in ['stage', 'stagecode', 'mcqdate', 'asdate', 'eldate', 'fcdate', 'avg_score', 'mcqas_complete', 'mcq_pass', 'mcq_failed', 'missed_stage', "aslist", \
             'has_score', 'pass_stage', 'max_attempts', 'mcqas_list', 'mcq_zero', 'mcq_avg', 'as_pass', 'as_failed', 'risk_level', 'stg_list', 'mcqlist', 'pm_stage', 'att_rate', \
             'mcnt', 'acnt', 'as_avg', 'as_zero', 'f2f_stage', 'stagebyprogress', 'mcq_attempts',  'mcq_att_balance', 'as_att_balance', 'as_attempts', 'duedate'] :
         vars[vv] = eval(vv)
     return (txt_hdr, txt, vars)
 
-def display_progress(df, sid, vars, client_name, resp_dict, pass_rate=0.7):
+def display_progress(df, sdf, sid, vars, client_name, resp_dict, pass_rate=0.7):
     if len(list(vars)) == 0:
         return "Your information is incomplete, please do not proceed and inform you faculty admin."
-    (txt1, txt2, vars) = load_progress(df, sid, vars, client_name, resp_dict, pass_rate, None)
+    (txt1, txt2, vars) = load_progress(df, sid, vars, client_name, resp_dict, pass_rate, sdf)
     txt = txt1 + txt2
     
     vars['course_alive'] = 1
@@ -2958,24 +2730,6 @@ def display_progress(df, sid, vars, client_name, resp_dict, pass_rate=0.7):
         resp10 = resp_dict['resp10']
         txt += resp10 + "\n\n"
     
-    zz ="""
-    if len(mcq_zero) > 0 and vars['avg_score'] == 0 :
-        resp2 = resp_dict['resp2']
-        txt += resp2 + "\n\n"        
-    if len(vars['mcqas_list'])>0 and vars['avg_score'] < pass_rate and vars['max_attempts'] < 4 :
-        resp3 = resp_dict['resp3']
-        txt += resp3 + "\n\n"        
-    if len(vars['mcqas_list'])>0 and vars['avg_score'] > 0 and vars['avg_score'] < pass_rate \
-        and vars['max_attempts'] >= 4 :
-        resp4 = resp_dict['resp4']
-        txt += resp4 + "\n\n"
-    if len(mcq_zero) > 0 :
-        resp5 = resp_dict['resp5']
-        txt += resp5.replace("{mcqlist}", str(mcq_zero)) + "\n\n"
-    if len(as_zero) > 0 :
-        resp6 = resp_dict['resp6']
-        txt += resp6.replace("{aslist}" , str(as_zero)) + "\n\n"
-    #"""    
     if f2f_error == 1:
         if pm_stage==0:
             resp11 = resp_dict['resp11']            
@@ -2988,18 +2742,6 @@ def display_progress(df, sid, vars, client_name, resp_dict, pass_rate=0.7):
                 resp12 = resp_dict['resp12']
                 txt += resp12 + '\n\n'
 
-    zz ="""
-    if f2f_error == 1:
-        resp7 = resp_dict['resp7']
-        txt += resp7 + "\n\n"
-    elif (f2f_error == 0) and (pass_stage==1):
-        if (stagecode=="EOC") :
-            resp9 = resp_dict['resp9']
-            txt += resp9 + "\n\n"
-        else:            
-            resp8 = resp_dict['resp8']
-            txt += resp8 + "\n\n"
-    #"""
     if '{lf}' in txt:
         txt = txt.replace('{lf}' , '\n')
     if '{f2f_stage}' in txt:
@@ -3117,15 +2859,17 @@ def rds_loadcourse(client_name, stud):
     qry0 += "course_module m ON m.client_name=pb.client_name AND m.module_code=pb.module_code "
     #qry = qry0 + f"WHERE pb.eoc=0 and m.enabled=1 and ud.studentid={str(stud)} and ud.client_name='{client_name}';"
     qry = qry0 + f"WHERE m.enabled=1 and ud.studentid={str(stud)} and ud.client_name='{client_name}';"
-    df = rds_df(qry)    
+    df = rds_df(qry)
+    course_id_list = []
+    course_name_list = []
+    logon_selection = []
     if df is not None:
         df.columns = ['courseid','course_name','eoc', 'risk_level']
         course_id_list = [x for x in df.courseid]
         course_name_list = [x for x in df.course_name]
         eoc_list = [x for x in df.eoc]
         risklvl_list = [x for x in df.risk_level]
-        m = len(course_id_list)
-        logon_selection = []
+        m = len(course_id_list)        
         for n in range(m):
             cid = course_id_list[n]            
             rlvl = risklvl_list[n]
@@ -3168,13 +2912,14 @@ def analyze_cohort(course_id, userdata, bot, chat_id):
     below_30 = lambda x : True if x <= 0.3 else False
     above_2 = lambda x : True if x >= 2 else False
     
-    def report_lines(udict, rdict, rpt_summary, title, lambda_fn):
-        rlist = [r for r in rdict if lambda_fn(rdict[r]) ]
+    def report_lines(udict, rdict, rpt_summary, title, lambda_fn, fmt = '{:.2%}'):
+        rlist = [ r for r in rdict if lambda_fn(rdict[r]) ]
         if rlist!=[]:
             n = len(rlist)
             rpt_summary.append(title + f" ({n} learners)")
             for r in rlist:
-                rpt_summary.append( (str(r) + ' '*8)[:8] + (udict[r] + ' '*30)[:30] + '{:.2%}'.format(rdict[r]) )
+                lines = (str(r) + ' '*8)[:8] + (udict[r] + ' '*30)[:30] + fmt.format(rdict[r])
+                rpt_summary.append( lines )
             rpt_summary.append("")
         return rpt_summary
 
@@ -3206,7 +2951,7 @@ def analyze_cohort(course_id, userdata, bot, chat_id):
         summary_mcq = report_lines(udict, rdict, summary_mcq, "70% and above", above_70)
         summary_mcq = report_lines(udict, rdict, summary_mcq, "Between 30% and 70%", between_3070)
         summary_mcq = report_lines(udict, rdict, summary_mcq, "Below 30%", below_30)
-        summary_mcq = report_lines(udict, xdict, summary_mcq, "2 or more attempts", above_2)
+        summary_mcq = report_lines(udict, xdict, summary_mcq, "2 or more attempts", above_2, '{:.2}')
 
     avgsum_list = [ userdata[ "as_avg" + str(x) ].mean() for x in range( 1, 14 ) ]
     rr = [ 1 if r>0 else 0 for r in avgsum_list ]
@@ -3236,11 +2981,11 @@ def analyze_cohort(course_id, userdata, bot, chat_id):
     df =  pd.DataFrame( summary_mcq )
     df.columns = ['Grouping']
     tt = "MCQ Grouping for " + course_id
-    html_list(bot, chat_id, df, df.columns, [120], tt, 45)
+    html_list(bot, chat_id, df, df.columns, [120], tt, 25)
     df =  pd.DataFrame( summary_as )
     df.columns = ['Grouping']
     tt = "Assignment Grouping for " + course_id
-    html_list(bot, chat_id, df, df.columns, [120], tt, 45)
+    html_list(bot, chat_id, df, df.columns, [120], tt, 25)
     return
 
 def checkjoblist(vmbot):
@@ -3305,13 +3050,11 @@ def runbotjob(vmbot):
         elif func_req == "edx_mass_import":
             vmedxlib.edx_mass_import(client_name)
         txt += " completed successfully."
-        #except:
-        #    txt += " failed."
     elif func_req in func_svc_list :
         course_id = func_param           
         #try:     
         #    func_svc = "vmedxlib." + func_req + "(course_id, client_name)"
-        #    status = eval(func_svc)        
+        #    status = eval(func_svc)       
         if func_req == "update_assignment":
             vmedxlib.update_assignment(course_id, client_name)
         elif func_req == "update_mcq":
