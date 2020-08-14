@@ -30,9 +30,8 @@ summary = """
 ║ encrypt_email      to encrypt email address field on a database record      ║▒▒
 ║ get_attachment     download the telegram attachement file locally           ║▒▒
 ║ get_columns        product the dataframe header into python list            ║▒▒
-║ html_list          process tabulated data into formatted telegram message   ║▒▒
-║ html_msg           transform text into formatted telegram message and send  ║▒▒
-║ html_table         process tabulated data into formatted html document      ║▒▒
+║ html_report        process tabulated data into formatted telegram message   ║▒▒
+║ html_tbl           process tabulated data into formatted html document      ║▒▒
 ║ printdict          print the item details of the given dictionary object    ║▒▒
 ║ pycmd              execute python codes via eval()                          ║▒▒
 ║ querydf            output sql query on SQLite database into dataframe       ║▒▒
@@ -307,54 +306,38 @@ def get_columns(tablename):
     del df
     return cols
 
-def html_list(bot, chat_id, df, fld_list, gaps, title, maxrow=20):
+def html_report(df, fld_list, gaps,  maxrow=20):
     m = len(fld_list)
     spacing = " "*100
     cnt = 0
-    result = "<b>" + title + "</b>\n<pre>"
-    result += ' '.join([(str(fld_list[x])+spacing)[:gaps[x]] for x in range(m)]) + '\n'
+    msglist = []
+    msg = ' '.join([(str(fld_list[x])+spacing)[:gaps[x]] for x in range(m)]) + '\n'
     for index, row in df.iterrows():
-        result += ' '.join([(str(row[x])+spacing)[:gaps[x]] for x in range(m)]) + '\n'
+        msg += ' '.join([(str(row[x])+spacing)[:gaps[x]] for x in range(m)]) + '\n'
         cnt += 1
         if cnt == maxrow:
-            result += "</pre>"
-            bot.sendMessage(chat_id,result,parse_mode='HTML')
+            msglist.append(msg)
             cnt = 0
-            result = "<pre>"
-            result += ' '.join([(str(fld_list[x])+spacing)[:gaps[x]] for x in range(m)]) + '\n'
+            msg = ' '.join([(str(fld_list[x])+spacing)[:gaps[x]] for x in range(m)]) + '\n'
+            #result += msg
     if cnt > 0:
-        result += "</pre>"  
-        bot.sendMessage(chat_id,result,parse_mode='HTML')
-    return
+        msglist.append(msg)
+    return msglist
 
-def html_msg(bot, chat_id, title = "", body=""):
-    if (title == "") and (body==""):
-        return
-    if title == "":
-        result = "<pre>" + body +  "</pre>"
-    elif body == "":
-        result = "<b>" + title + "</b>"
-    else:
-        result = "<b>" + title + "</b>\n<pre>" + body +  "</pre>"
-    bot.sendMessage(chat_id,result,parse_mode='HTML')
-    return
-
-def html_table(bot, chat_id, client_name, tblname, titlename, fn):
-    msg = "Information not available"
+def html_tbl(clt, tblname, titlename, fn):
     if tblname=="":
-        bot.sendMessage(chat_id, msg)
-        return
+        return None
     query = f"select * from {tblname}"
-    if client_name != "":
-        query += f"  where client_name = '{client_name}';"
+    if clt != "":
+        query += f"  where client_name = '{clt}';"
     df = rds_df(query)
     if df is None:
-        bot.sendMessage(chat_id, msg)
+        f = None
     else:
         df.columns = get_columns(tblname)
         write2html(df, title=titlename, filename=fn)
-        bot.sendDocument(chat_id, document=open(fn, 'rb'))
-    return
+        f = open(fn, 'rb')
+    return f
 
 def printdict(obj):
     print(*obj.items(), sep = '\n')

@@ -5,6 +5,17 @@ import pyodbc
 import pyodbc 
 global azcon, azcursor
 
+def html_msg(bot, chat_id, title = "", body=""):
+    if (title == "") and (body==""):
+        return
+    if title == "":
+        result = "<pre>" + body +  "</pre>"
+    elif body == "":
+        result = "<b>" + title + "</b>"
+    else:
+        result = "<b>" + title + "</b>\n<pre>" + body +  "</pre>"
+    bot.sendMessage(chat_id,result,parse_mode='HTML')
+    return
 
 def connect_azuredb():
     # https://docs.microsoft.com/en-us/sql/connect/python/pyodbc/step-3-proof-of-concept-connecting-to-sql-using-pyodbc?view=sql-server-ver15

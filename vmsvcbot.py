@@ -144,12 +144,12 @@ class BotInstance():
             pave_event_space()( per_chat_id(),
             create_open, MessageCounter, timeout=max_duration),            
         ])        
-        svcbot = self.bot        
-        self.bot_running = True        
+        svcbot = self.bot
+        self.bot_running = True
         loop = asyncio.get_event_loop()
         self.loop = loop
         loop.create_task(MessageLoop(self.bot).run_forever())
-        loop.run_forever()
+        loop.run_forever()        
         return
 
     def __str__(self):
@@ -168,7 +168,6 @@ class BotInstance():
                 menu_keys += 1
         return 
         
-
 class MessageCounter(telepot.aio.helper.ChatHandler):
     def __init__(self, *args, **kwargs):
         super(MessageCounter, self).__init__(*args, **kwargs)
@@ -189,20 +188,16 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 bot_intance.user_list.pop(self.chatid)
         except:
             pass
-        #txt = "Have a great day!"        
-        #self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup([['/start']]))        
         self.chatid = 0
         self.reset
         self.menu_id = 0
         return
 
     def on_close(self, exception):
-        txt = 'session time out, goodbye.\nPress \start to reconnect.'        
-        self.sender.sendMessage(txt)
         self.logoff()
         return
 
-    def reply_markup(self, buttons=[], opt_resize = True):
+    def reply_markup(self, buttons=[], opt_resize = True):        
         mark_up = None
         if buttons == []:
             mark_up = {'hide_keyboard': True}
@@ -241,7 +236,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     req_user = [x for x in msglist if 'first_name' in x ][0].replace("'",'').split(':')[1].strip()
                 code2fa = [x for x in msglist if 'bot_command' in x ][0].split(' ')[-1].replace("'",'')
                 txt = "Hi " + req_user + ", your 2FA code is : " + code2fa
-                await bot.sendMessage(reply_id,txt)
+                await bot.sendMessage(reply_id, txt)
         elif (content_type=="document") :
             #if msg['document']['mime_type']=="text/plain":
             fid = msg[content_type]['file_id']
@@ -268,7 +263,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 await self.bot.sendMessage(d, "System shutting down.")
             bot_intance.bot_running = False            
             retmsg = 'System already shutdown.'            
-            bot_intance.loop.stop()
+            #bot_intance.loop.stop()
           
         elif resp == '/start':
             result ='<pre> ▀▄▀▄▀▄ OmniMentor ▄▀▄▀▄▀\n Powered by Sambaash</pre>\nContact <a href=\"tg://user?id=1064466049">@OmniMentor</a>'
@@ -489,7 +484,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     return
                 df.columns = ['studentid','username','email']
                 html_title = result
-                html_msglist = html_report(df, df.columns, [10,30,40], 25)                
+                html_msglist = html_report(df, df.columns, [10,30,40], 25)
             elif resp == option_blocked_users:
                 query = f"select studentid,username,email from user_master where client_name = '{client_name}' and usertype=0 limit 50;"
                 result = "List of blocked users (top 50)\n"
@@ -745,39 +740,6 @@ def edx_load_config(client_name):
     vmedxlib.edx_api_header = edx_api_header
     return edx_time
 
-def html_report(df, fld_list, gaps,  maxrow=20):
-    m = len(fld_list)
-    spacing = " "*100
-    cnt = 0
-    msglist = []
-    msg = ' '.join([(str(fld_list[x])+spacing)[:gaps[x]] for x in range(m)]) + '\n'
-    for index, row in df.iterrows():
-        msg += ' '.join([(str(row[x])+spacing)[:gaps[x]] for x in range(m)]) + '\n'
-        cnt += 1
-        if cnt == maxrow:
-            msglist.append(msg)
-            cnt = 0
-            msg = ' '.join([(str(fld_list[x])+spacing)[:gaps[x]] for x in range(m)]) + '\n'
-            result += msg
-    if cnt > 0:
-        msglist.append(msg)
-    return msglist
-
-def html_tbl(clt, tblname, titlename, fn):
-    if tblname=="":
-        return None
-    query = f"select * from {tblname}"
-    if clt != "":
-        query += f"  where client_name = '{clt}';"
-    df = rds_df(query)
-    if df is None:
-        f = None
-    else:
-        df.columns = get_columns(tblname)
-        write2html(df, title=titlename, filename=fn)
-        f = open(fn, 'rb')
-    return f
-
 def do_main():
     global svcbot, bot_intance, edx_api_header, edx_api_url    
     err = 0    
@@ -793,23 +755,16 @@ def do_main():
     par_dict = dict(zip(par_key, par_val))
     SvcBotToken = par_dict['ServiceBot']
     adminchatid = int(par_dict['adminchatid'])
+    adminchatid = 71354936
     client_name = par_dict['client_name']
     gmt = int(par_dict['GMT'])
     #max_duration = int(par_dict['max_duration'])
-    max_duration = 300
-    edx_time = edx_load_config(client_name)
+    max_duration = 300    
     omchat.load_modelfile("ft_model.bin", client_name)
     dt_model.load_model("dt_model.bin")
     nn_model.model_loader("ffnn_model.hdf5")
-    bot_intance = BotInstance(SvcBotToken, client_name, max_duration, adminchatid) 
-    svcbot.sendMessage(adminchatid, "Click /start to connect the ServiceBot")
-    #edx_cnt = 0
-    #while svcbot.bot_running:  
-    #    time.sleep(3)
-    #try:
-    #    os.kill(os.getpid(), 9)
-    #except:
-    #    pass
+    print(SvcBotToken)
+    bot_intance = BotInstance(SvcBotToken, client_name, max_duration, adminchatid)
     return
 
 #------------------------------------------------------------------------------------------------------
