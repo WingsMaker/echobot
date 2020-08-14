@@ -193,7 +193,11 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
         for rec in [ x for x in list(data) if 'attempts' in x['state']]  :
             sc = rec['score']
             pp = rec['points_possible']
-            qn = getnumstr(rec['options_display_name'])
+            if 'options_display_name' in list(rec):
+                qn = getnumstr(rec['options_display_name'])
+            if 'option_display_name' in list(rec):
+                qn = getnumstr(rec['option_display_name'])
+            #qn = getnumstr(rec['options_display_name'])
             #iu = getnumstr(rec['chapter_title'])
             iu = int(rec['IU'])
             state = eval(rec['state'].replace('null','""').replace('false','0').replace('true','1'))
@@ -233,7 +237,7 @@ def edx_assignment_score(course_id, student_id=0):
     df = pd.DataFrame.from_dict({'student_id':[], 'score':[], 'points_possible':[], 'IU': [], 'attempts': []})
     if response.status_code==200:
         data = response.content.decode('utf-8')
-        rec = eval(data)
+        rec = eval(data) if len(data)>0 else []
         if rec != []:
             student_id_list = [x['student_id'] for x in rec]
             grade_list = [x['score'] for x in rec]
@@ -553,7 +557,6 @@ def update_assignment(course_id, client_name, student_id=0):
 
 def update_mcq(course_id, client_name, student_id=0):
     # Status : Tested
-    
     cohort_id = piece(piece(course_id,':',1),'+',1)
     if student_id==0:
         condqry = f"client_name = '{client_name}' and courseid = '{course_id}'"
@@ -565,6 +568,7 @@ def update_mcq(course_id, client_name, student_id=0):
     if mcqcnt==0:
         return 
     try:        
+        # else:
         mcq_df = edx_mcqinfo(client_name, course_id, student_id)
         if len(mcq_df) > 0:            
             query = "delete from mcq_data where " + cond_qry
@@ -656,7 +660,7 @@ def update_mcq(course_id, client_name, student_id=0):
             rds_update(updqry)
     except:
         pass
-    #print("update_mcq completed for course_id " + course_id)
+    print("update_mcq completed for course_id " + course_id)
     return
 
 def edx_import(course_id, client_name):
@@ -1020,24 +1024,26 @@ def get_google_calendar(course_id, client_name):
     cohort_id = piece(piece(course_id,':',1),'+',1)
     module_code = cohort_id.split('-')[0]
     course_code = rds_param(f"select course_code from module_iu where module_code = '{module_code}' and client_name='{client_name}' limit 1;")
+    print(module_code,course_code)
     # direct_cohort_url = f"https://realtime.sambaash.com/v1/calendar/fetch?cohortId={cohort_id}"
     # multi_cohorts_url = "https://realtime.sambaash.com/v1/calendar/fetch?cohortId=EIT-0219A/EIT-0119B"
     # single_cohort_url = "https://realtime.sambaash.com/v1/calendar/fetch?cohortId=EIT%20:%20ICO-0520A"
     try:
         api_url = f"https://realtime.sambaash.com/v1/calendar/fetch?cohortId={course_code}%20:%20{cohort_id}"    
-        #print(api_url)
-        data  = get_calendar_json(api_url)
+        print(api_url)
+        data  = get_calendar_json(api_url)        
     except:        
         data = {}
     if data == {}:
         try:
             cohort = cohort_id.replace("FOS","EIT")
             api_url = f"https://realtime.sambaash.com/v1/calendar/fetch?cohortId={cohort}"
+            print(api_url)
             data  = get_calendar_json(api_url)
         except:            
             data = {}        
     if data == {}:
-        #print("there is no data from google calendar")        
+        print("there is no data from google calendar")        
         return []
     
     sorted_stage_list =  get_stage_list(data)
@@ -1282,7 +1288,7 @@ def mass_update_usermaster(client_name):
 def test_google_calendar(course_id):
     client_name = "Sambaash"
     #course_id = "course-v1:Lithan+FOS-1219A+04Dec2019"
-    #course_id = 'course-v1:Lithan+FOS-0620A+17Jun2020'
+    #course_id = 'course-v1:Lithan+FOS-0620A+17Jun2020'    
     stage_list = get_google_calendar(course_id, client_name)
     for x in stage_list:
         print(x)
@@ -1382,17 +1388,23 @@ if __name__ == "__main__":
     #edx_api_url = "https://om.sambaash.com/edx/v1"
     edx_api_url = "https://omnimentor.lithan.com/edx/v1"
     edx_api_header = {'Authorization': 'Basic ZWR4YXBpOlVzM3VhRUxJVXZENUU4azNXdG9E', 'Content-Type': 'text/plain'}
-    #client_name = "Sambaash"    
-    client_name = "Lithan"    
+    client_name = "Sambaash"    
+    #client_name = "Lithan"    
     #vmsvclib.rds_connstr = ""
     vmsvclib.rds_connstr = bot_info['omdb']
     vmsvclib.rdscon = None    
+    
     #course_id = "course-v1:Lithan+FOS-0720A+08Jul2020" # 6633 6614 6301 6603
-    course_id = 'course-v1:Lithan+ICO-0520B+26Jun2020'# 1716 4559
+    #course_id = 'course-v1:Lithan+ICO-0520B+26Jun2020'# 1716 4559
     #course_id = "course-v1:Lithan+ITC-0320B+15Jul2020" # 5297 6686
     #course_id = 'course-v1:Lithan+SMI-0520bb+04Aug2020' # 01/01/2030 to 14/02/2030     
-    course_id = 'course-v1:Lithan+CPI-0320A+27Jul2020'
-    sid =  4941 
+    #course_id = 'course-v1:Lithan+CPI-0320A+27Jul2020'    
+    #course_id = 'course-v1:Lithan+FOS-0820A+12Aug2020'    
+    #course_id = 'course-v1:Lithan+SMI-0520B+05AUG20' #6076
+    #course_id = 'course-v1:Lithan+SMI-0520bb+04Aug2020'  
+    sid =  6076     
+    #test_google_calendar(course_id)
+    #update_mcq(course_id, client_name, sid)
     #df = student_course_list(sid)    
     #course_id = 'course-v1:Lithan+ICO-0620A+24Jul2020' # 5041
     #sid = 5297 # Course ID : course-v1:Lithan+ITC-0320B+15Jul2020
@@ -1415,6 +1427,7 @@ if __name__ == "__main__":
     #=====================================
     # edx_mass_import(client_name)
     # mass_update_mcq(client_name)
+    # mass_update_assignment(client_name)
     # mass_update_schedule(client_name)
     # mass_update_usermaster(client_name)
     # perform_unit_tests(client_name, course_id, sid)
