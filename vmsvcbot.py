@@ -24,7 +24,7 @@ import os, sys, time
 import random, wget
 import subprocess
 import pandas as pd
-from pandas_profiling import ProfileReport
+#from pandas_profiling import ProfileReport
 import json
 import datetime
 import re
@@ -383,14 +383,14 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 vmedxlib.generate_mcq_as(client_name)
                 retmsg = 'Job completed.'                
             elif resp == ml_report :
-                retmsg = "Generating profiler report for quick data analysis."
-                await self.bot.sendMessage(chat_id, 'please wait for a moment.')
-                fn="mcqas_info.html"
-                if profiler_report(client_name, fn)==1:                    
-                    await bot.sendDocument(chat_id=self.chatid, document=open(fn, 'rb'))
-                else:
-                    result = "<a href=\"https://omnimentor.lithan.com/prod/mcqas_info.html\">Profiler Report</a>"
-                    await bot.sendMessage(chat_id,result,parse_mode='HTML')
+                #retmsg = "Generating profiler report for quick data analysis."
+                #await self.bot.sendMessage(chat_id, 'please wait for a moment.')
+                #fn="mcqas_info.html"
+                #if profiler_report(client_name, fn)==1:                    
+                #await bot.sendDocument(chat_id=self.chatid, document=open(fn, 'rb'))
+                #else:
+                result = "<a href=\"https://omnimentor.lithan.com/om/mcqas_info.html\">Profiler Report</a>"
+                await bot.sendMessage(chat_id,result,parse_mode='HTML')
             elif resp == ml_graph  :
                 retmsg = "Generating decision tree graph to explain the model."
                 fn = 'mcqas_info.jpg'
@@ -706,23 +706,23 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             retmsg=""
         return
 
-def profiler_report(client_name, output_file):
-    try:
-        ok = 1
-        cols = ['grade', 'mcq_avgscore', 'mcq_cnt', 'as_avgscore'] 
-        mcqinfo = rds_df( f"SELECT grade,mcq_avgscore,mcq_cnt,as_avgscore FROM mcqas_info WHERE client_name='{client_name}';")
-        if mcqinfo is None:        
-            ok = 0
-            return
-        else:
-            mcqinfo.columns = cols
-        features = ['mcq_avgscore', 'mcq_cnt', 'as_avgscore']        
-        df = mcqinfo[cols]
-        pf = ProfileReport(df)
-        pf.to_file(output_file)
-    except:
-        ok = 0
-    return ok
+#def profiler_report(client_name, output_file):
+#    try:
+#        ok = 1
+#        cols = ['grade', 'mcq_avgscore', 'mcq_cnt', 'as_avgscore'] 
+#        mcqinfo = rds_df( f"SELECT grade,mcq_avgscore,mcq_cnt,as_avgscore FROM mcqas_info WHERE client_name='{client_name}';")
+#        if mcqinfo is None:        
+#            ok = 0
+#            return
+#        else:
+#            mcqinfo.columns = cols
+#        features = ['mcq_avgscore', 'mcq_cnt', 'as_avgscore']        
+#        df = mcqinfo[cols]
+#        pf = ProfileReport(df)
+#        pf.to_file(output_file)
+#    except:
+#        ok = 0
+#    return ok
 
 def edx_load_config(client_name):
     global edx_api_header, edx_api_url    

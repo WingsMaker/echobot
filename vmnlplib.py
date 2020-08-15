@@ -318,7 +318,7 @@ if __name__ == "__main__":
     client_name = bot_info['client_name']
     vmsvclib.rds_connstr = ""
     vmsvclib.rdscon = None 
-    opts = [ 0 , 7 ]
+    opts = [ 0,1,2,3,4,5 ]
     if 0 in opts :
         print("Loading model from pickle")
         ft_model.load_modelfile("ft_model.bin", client_name)
@@ -327,8 +327,10 @@ if __name__ == "__main__":
     if 1 in opts :
         resp = "how is my mcq schedule date ?"
         print(resp)
-        txt = ft_model.ft_model(resp)
-        print("results : ==>\n", txt)
+        (result, score) = ft_model.get_response(resp)
+        #print(score, result)
+        #txt = ft_model.ft_model(resp)
+        print("results : ==>\n", result)
     if 2 in opts :
         resp = "how is my mcq schedule date ?"
         print(resp)
@@ -345,14 +347,10 @@ if __name__ == "__main__":
     if 5 in opts :
         resp = "What should I do ?"
         result = ft_model.match_resp( resp )
-        print(302, result)
+        print(result)
     if 6 in opts :
         if ft_model.corpus_df is None:
             print("Loading corpus from database")
             ft_model.load_corpus("nlp-conf.db")
         ft_model.train_model()
-    if 7 in opts :
-        resp = "how is my mcq schedule date ?"
-        (result, score) = ft_model.get_response(resp)
-        print(score, result)
     print("End of unit test")

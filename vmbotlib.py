@@ -18,7 +18,6 @@ warnings.filterwarnings("ignore")
 
 import pandas as pd
 import pandas.io.formats.style
-from pandas_profiling import ProfileReport
 
 import os, re, sys, time, datetime, string, random
 import subprocess
@@ -49,7 +48,7 @@ global rdscon, rds_connstr, edx_api_header, edx_api_url
 
 # following will be replaced by generic config without hardcoded.
 debug_mode = False
-use_mailapi = False
+use_mailapi = False  # only available when using aws host
 btn_hellobot = "Hello OmniMentor 👩‍🎓 👨‍🎓🤖"
 option_back = "◀️"
 option_import = "Import 📦"
@@ -146,7 +145,6 @@ iu_reading = lambda z: ','.join([ str(x+1) for x in range(max(z))])
 
 def do_main():
     global vmbot, bot_intance, dt_model, nn_model
-    err = 0
     vmsvclib.rds_connstr = ""
     vmsvclib.rdscon = None
     if not loadconfig():
@@ -163,13 +161,7 @@ def do_main():
     loop.create_task(MessageLoop(bot_intance.bot).run_forever())
     loop.create_task(job_scheduler())
     loop.run_forever()
-    #try:
-    #    os.kill(os.getpid(), 9)
-    #except:
-    #    err = 1
-    #    txt='Thank you for using OmniMentor bot. Goodbye!'
-    #    print(txt)
-    return (err==0)
+    return 
 
 async def job_scheduler():
     global bot_intance,vmbot
@@ -453,8 +445,8 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
     resp8 = resp_dict['resp8']
     eoc7_maildict = dict()
     eoc7_userdict = dict()
+    eoc7_mailcnt = 0
     for course_id in course_list:
-        print(course_id)
         eoc = vmedxlib.edx_endofcourse(client_name, course_id) # ended=1 else 0
         soc = vmedxlib.edx_course_started(client_name, course_id)  # started=1 else 0
         eoc_gap = vmedxlib.edx_eocgap(client_name, course_id, 7)
@@ -623,6 +615,7 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
                 if eoc7==1:
                     eoc7_maildict[enquiry_email] += txt + "\n"
                     eoc7_userdict[enquiry_email] += ',' + uname
+                    eoc7_mailcnt += 1
                 else:
                     if tid <= 0:
                         err_list.append(sid)
@@ -655,21 +648,21 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
                     pass
             syslog(client_name,msg)
         await asyncio.sleep(1)
-        # mess email to pillar owner
-        ulist = ''
-        for enquiry_email in list(eoc7_maildict):
-            # ulist = list of username(s) ??
-            ulist = eoc7_userdict[enquiry_email]
-            txt = f"From: ombot@lithan.com\nTo: {enquiry_email}\nSubject : List of learners who reached EOC grace period.\n\n"
-            txt += eoc7_maildict[enquiry_email]
-            txt += "\nRegards,\nOmniMentorBot"
-            if use_mailapi:
-                fout = open("mail.txt", "wt")
-                fout.write(txt)
-                fout.close()
-                txt = shellcmd('/bin/sh txt2mail')  # to be replaced with rest apis
-            else:
-                await bot_intance.bot.sendMessage(adm_chatid, txt) # temporary use telegram
+    # mess email to pillar owner
+    ulist = ''
+    for enquiry_email in list(eoc7_maildict):
+        # ulist = list of username(s) ??
+        ulist = eoc7_userdict[enquiry_email]
+        txt = f"From: ombot@lithan.com\nTo: {enquiry_email}\nSubject : List of learners who reached EOC grace period.\n\n"
+        txt += eoc7_maildict[enquiry_email]
+        txt += "\nRegards,\nOmniMentorBot"
+        #if use_mailapi:
+        #    fout = open("mail.txt", "wt")
+        #    fout.write(txt)
+        #    fout.close()
+        #    txt = shellcmd('/bin/sh txt2mail')  # to be replaced with rest apis
+        #else:
+        await bot_intance.bot.sendMessage(adm_chatid, txt) # temporary use telegram
     del mdf
     syslog(client_name,"auto_intervent completed")
     await bot_intance.bot.sendMessage(adm_chatid, "auto_intervent completed")
@@ -701,7 +694,7 @@ def loadconfig():
         mcq_analysis = vmmcqdlib.MCQ_Diff()
     except:
         ok = False
-    return ok
+    return ok    
 
 def load_respdict():
     mydict = dict()
@@ -756,7 +749,6 @@ class BotInstance():
         self.keys_dict[ opt_mcqd ] = (self.keys_dict[ an_mcqd ]*10) + 1
         self.keys_dict[ opt_mcqavg ] = (self.keys_dict[ an_mcqavg ]*10) + 1
         self.keys_dict[ opt_aig ] = (self.keys_dict[ ml_grading ]*10) + 1
-
         # printdict(self.keys_dict)
         # printdict(self.cmd_dict)
         with open("vmbot.json") as json_file:
@@ -1149,15 +1141,16 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             txt += "'" + resp + "' ?"
 
         recommendation = ft_model.recommend_list(resp)
-        if len(recommendation) > 0:
-            if txt != '':
-                self.sender.sendMessage(txt)
-                rec_menu = build_menu(recommendation,1,option_back,[])
-                #bot_prompt(self.bot, self.chatid, "You might want to ask :", rec_menu)
-                self.bot.sendMessage(self.chatid, "You might want to ask :", reply_markup=self.reply_markup(rec_menu))
-                txt = ""
-                self.menu_id = bot_intance.keys_dict[option_faq]
-        return txt
+        #if len(recommendation) > 0:
+        #    if txt != '':
+        #        await self.sender.sendMessage(txt)
+        #        rec_menu = build_menu(recommendation,1,option_back,[])
+        #        #bot_prompt(self.bot, self.chatid, "You might want to ask :", rec_menu)
+        #        await self.bot.sendMessage(self.chatid, "You might want to ask :", reply_markup=self.reply_markup(rec_menu))
+        #        txt = ""
+        #        self.menu_id = bot_intance.keys_dict[option_faq]
+        #return txt
+        return (txt, recommendation)
 
     def load_tables(self):
         global vmbot,bot_intance
@@ -1426,9 +1419,10 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             syslog(str(self.chatid), f"response = {resp}")
             
         if resp=='/?':
-            retmsg = self.session_info()
+            retmsg = self.session_info()            
             retmsg += "\nmenu id = " + str(self.menu_id) 
-            retmsg += "\nmenu key : " + bot_intance.get_menukey(self.menu_id) 
+            k = bot_intance.get_menukey(self.menu_id) 
+            retmsg += "\nmenu key : " + str(k)
 
         #elif resp=='/z':
             #pass
@@ -1818,7 +1812,8 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 sid = self.student_id
                 #self.check_student(self.student_id, chat_id)                
                 (txt, menu_item) = self.check_student(self.student_id, chat_id)
-                await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))                
+                if len(txt)>0:
+                    await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))                
                 txt = "You are now with this cohort : " + self.courseid
                 #bot_prompt(self.bot, self.chatid, txt, self.menu_home)
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(self.menu_home))
@@ -1881,11 +1876,11 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 job_request("ServiceBot",adminchatid, self.client_name,"mass_update_schedule","")               
             elif resp == fc_intv :
                 await self.sender.sendMessage("Processing intervention check now.")
-                auto_intervent(bot_intance.client_name, bot_intance.resp_dict, bot_intance.pass_rate, self.chatid)
+                await auto_intervent(bot_intance.client_name, bot_intance.resp_dict, bot_intance.pass_rate, self.chatid)
                 await self.sender.sendMessage("Auto intervention check completed")
             elif resp == fc_notf :     
                 await self.sender.sendMessage("Processing reminder check now.")
-                auto_notify(bot_intance.client_name, bot_intance.resp_dict, bot_intance.pass_rate, self.chatid)
+                await auto_notify(bot_intance.client_name, bot_intance.resp_dict, bot_intance.pass_rate, self.chatid)
                 await self.sender.sendMessage("Auto reminder check completed")
             elif (resp == option_back) or (resp == "0"):
                 txt = 'Please select the following mode:'
@@ -2389,13 +2384,16 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                             (status, info) = self.livechat( sid, tid )
                             if status == 1:
                                 tid = bot_intance.chat_list[self.chatid]
-                                user_from = bot_intance.user_list[self.chatid][2]
+                                if self.chatid in bot_intance.user_list:
+                                    user_from = bot_intance.user_list[self.chatid][2]
+                                else:
+                                    user_from = self.username
                                 txt = '❚█══ Live Chat ══█❚\nHi ' + info + ', you are in the live chat with : <a href=\"tg://user?id=' + str(self.chatid) + '">' + user_from + '</a>'
                                 await self.bot.sendMessage(tid, txt, parse_mode='HTML')
                                 txt = '❚█══ Live Chat ══█❚\nHi, you are in the live chat with : <a href=\"tg://user?id=' + str(tid) + '">' + info + '</a>'
                                 await self.bot.sendMessage(self.chatid, txt, parse_mode='HTML')
                                 txt = "(type bye when you want to end the conversation)"
-                                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([['bye']]))
+                                await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup([[option_back]]))
                                 self.menu_id = keys_dict[option_chat]
                             else:
                                 await self.sender.sendMessage(info)
@@ -2472,11 +2470,18 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
 
         elif self.menu_id > 0:
             syslog( str(self.student_id) , "Q:" + resp )
-            txt = self.runfaq(resp)
+            (txt,recommendation) = self.runfaq(resp)            
             if (txt != ""):
                 #bot_prompt(self.bot, self.chatid, txt, self.menu_home)
-                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(self.menu_home))
+                await self.sender.sendMessage(txt)
+                #await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(self.menu_home))
                 self.menu_id = keys_dict[lrn_student]
+            if len(recommendation) > 0:
+                rec_menu = build_menu(recommendation,1,option_back,[])
+                await self.bot.sendMessage(self.chatid, "You might want to ask :", reply_markup=self.reply_markup(rec_menu))
+                txt = ""
+                self.menu_id = bot_intance.keys_dict[option_faq]
+            # zz
 
         for title in list(html_msg_dict):
             for msg in html_msg_dict[title] :
@@ -3031,19 +3036,6 @@ def rds_loadcourse(client_name, stud):
                 if (eoc_gap == 1) and (rlvl > 0):
                     logon_selection.append(cid)                    
     return (course_id_list, course_name_list, logon_selection)
-
-def profiler_report(client_name, output_file):
-    try:
-        ok = 1
-        mcqinfo = rds_df( f"SELECT * FROM mcqas_info WHERE client_name='{client_name}';")
-        mcqinfo.columns = get_columns("mcqas_info")
-        features = ['mcq_avgscore', 'mcq_cnt', 'as_avgscore']
-        df = mcqinfo[['grade'] + features ]
-        pf = ProfileReport(df)
-        pf.to_file(output_file)
-    except:
-        ok = 0
-    return ok
 
 def analyze_cohort(course_id, userdata, bot, chat_id):
     global vmbot, dt_model

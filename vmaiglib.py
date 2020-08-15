@@ -13,7 +13,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore")
 
 import pandas as pd
-from pandas_profiling import ProfileReport
+#from pandas_profiling import ProfileReport
 import numpy as np
 import pydotplus
 import pickle
@@ -113,18 +113,18 @@ class MLGrader():
             pass
         return report
 
-    def profiler_report(self, client_name, output_file):
-        try:
-            ok = 1
-            mcqinfo = rds_df( f"SELECT * FROM mcqas_info WHERE client_name='{client_name}';")
-            features = ['mcq_avgscore', 'mcq_cnt', 'as_avgscore']
-            df = mcqinfo[['grade'] + features ]
-            pf = ProfileReport(df)
-            pf.to_file(output_file)
-        except:
-            ok = 0
-            pass
-        return ok
+    #def profiler_report(self, client_name, output_file):
+    #    try:
+    #        ok = 1
+    #        mcqinfo = rds_df( f"SELECT * FROM mcqas_info WHERE client_name='{client_name}';")
+    #        features = ['mcq_avgscore', 'mcq_cnt', 'as_avgscore']
+    #        df = mcqinfo[['grade'] + features ]
+    #        pf = ProfileReport(df)
+    #        pf.to_file(output_file)
+    #    except:
+    #        ok = 0
+    #        pass
+    #    return ok
 
     def tree_graph(self, output_file):
         ok = 0
@@ -166,7 +166,7 @@ if __name__ == '__main__':
             print(grad_pred)
 
     if 3 in opts :       
-        dt_model.profiler_report(client_name, "mcqas_info.html")
+        #dt_model.profiler_report(client_name, "mcqas_info.html")
         print( repr(dt_model) )
 
     if 4 in opts :

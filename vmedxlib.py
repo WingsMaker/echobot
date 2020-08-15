@@ -660,7 +660,7 @@ def update_mcq(course_id, client_name, student_id=0):
             rds_update(updqry)
     except:
         pass
-    print("update_mcq completed for course_id " + course_id)
+    #print("update_mcq completed for course_id " + course_id)
     return
 
 def edx_import(course_id, client_name):
@@ -1024,13 +1024,11 @@ def get_google_calendar(course_id, client_name):
     cohort_id = piece(piece(course_id,':',1),'+',1)
     module_code = cohort_id.split('-')[0]
     course_code = rds_param(f"select course_code from module_iu where module_code = '{module_code}' and client_name='{client_name}' limit 1;")
-    print(module_code,course_code)
     # direct_cohort_url = f"https://realtime.sambaash.com/v1/calendar/fetch?cohortId={cohort_id}"
     # multi_cohorts_url = "https://realtime.sambaash.com/v1/calendar/fetch?cohortId=EIT-0219A/EIT-0119B"
     # single_cohort_url = "https://realtime.sambaash.com/v1/calendar/fetch?cohortId=EIT%20:%20ICO-0520A"
     try:
         api_url = f"https://realtime.sambaash.com/v1/calendar/fetch?cohortId={course_code}%20:%20{cohort_id}"    
-        print(api_url)
         data  = get_calendar_json(api_url)        
     except:        
         data = {}
@@ -1038,12 +1036,11 @@ def get_google_calendar(course_id, client_name):
         try:
             cohort = cohort_id.replace("FOS","EIT")
             api_url = f"https://realtime.sambaash.com/v1/calendar/fetch?cohortId={cohort}"
-            print(api_url)
             data  = get_calendar_json(api_url)
         except:            
             data = {}        
     if data == {}:
-        print("there is no data from google calendar")        
+        #print("there is no data from google calendar")        
         return []
     
     sorted_stage_list =  get_stage_list(data)

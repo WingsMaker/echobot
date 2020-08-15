@@ -37,7 +37,7 @@ import matplotlib
 if __name__ == "__main__":
     matplotlib.use('Agg')
     version = sys.version_info    
-    if version.major == 3 and version.minor >= 7:
+    if version.major == 3 and version.minor >= 6:
         vmbotlib.do_main()
     else:
         print("Unable to use this version of python\n", version)
