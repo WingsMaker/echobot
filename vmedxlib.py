@@ -1397,7 +1397,7 @@ if __name__ == "__main__":
     #course_id = 'course-v1:Lithan+SMI-0520bb+04Aug2020' # 01/01/2030 to 14/02/2030     
     #course_id = 'course-v1:Lithan+CPI-0320A+27Jul2020'    
     #course_id = 'course-v1:Lithan+FOS-0820A+12Aug2020'    
-    #course_id = 'course-v1:Lithan+SMI-0520B+05AUG20' #6076
+    course_id = 'course-v1:Lithan+SMI-0520B+05AUG20' #6076
     #course_id = 'course-v1:Lithan+SMI-0520bb+04Aug2020'  
     sid =  6076     
     #test_google_calendar(course_id)

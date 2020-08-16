@@ -268,8 +268,13 @@ class NLP_Parser():
         matched_label = self.model.predict(inp_txt, k=1)[0][0]
         mask = (self.corpus_df.label == matched_label)
         if matched_label=='__label__conversational':
-            first_word = [x for x in user_input.split(' ') if x not in self.stopwords][0]
-            mask = (self.corpus_df.prompt.str.contains(first_word))
+            #first_word = [x for x in user_input.split(' ') if x not in self.stopwords][0]
+            wlist = [x for x in user_input.split(' ') if x not in self.stopwords]
+            if wlist==[]:
+                return []
+            else:
+                first_word = wlist[0]
+                mask = (self.corpus_df.prompt.str.contains(first_word))
         df = self.corpus_df[mask]
         questions = [ x for x in df.prompt if x[-1]=='?' ]
 

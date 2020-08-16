@@ -1261,22 +1261,23 @@ class MessageCounter(telepot.helper.ChatHandler):
         global nn_model, dt_model
         if dt_model.model_name == "" :
             print("please load the model first")
-            return []
+            return ( [] , None )
         #if nn_model.model_name == "":
         #    print("please load the model first")
         #    return []
         txt = ""
         df = self.userdata
-        if df is None:
-            print("there is no data")        
-            return []
+        if self.userdata is None:
+            print("there is no data")
         list_sid = [str(x) for x in df.studentid]
+        if len(list_sid)==0:
+            return ( [] , None )
         client_name = list(df['client_name'])[0]
         courseid = list(df['courseid'])[0]
         progress_df = dict()
         progress_tt = dict()
         tbl = []
-        new_sidlist = []
+        new_sidlist = []        
         for vv in list_sid:
             sid = int(vv)
             vars = load_vars(self.userdata, sid)
@@ -1292,25 +1293,27 @@ class MessageCounter(telepot.helper.ChatHandler):
             ascores = [fy(n) for n in range(1,14) if gy(n) > 0]
             mcnt = len(mscores)
             acnt = len(ascores)
-            if mcnt+acnt==0:
-                continue
-            mavg = 0 if mcnt == 0 else sum(mscores) / mcnt
-            aavg = 0 if acnt == 0 else sum(ascores) / acnt
-            # current not working
-            use_neural_network = False   # True or False
-            if use_neural_network:
-                #mavgatt = sum([gx(n) for n in range(1,14)]) / 13
-                #mmaxatt = max([gx(n) for n in range(1,14)])
-                #as_avgatt = sum([gy(n) for n in range(1,14)]) / 13
-                #as_maxatt = max([gy(n) for n in range(1,14)])
-                #grad_pred = nn_model.pred(client_name,mavg,mavgatt,mmaxatt,aavg,as_avgatt,as_maxatt,acnt)
-                #if grad_pred is None:
-                #    continue
-                pass
-            else:
+            grades = 0
+            mavg = 0
+            aavg = 0
+            if (mcnt+acnt)>0:
+                mavg = 0 if mcnt == 0 else sum(mscores) / mcnt
+                aavg = 0 if acnt == 0 else sum(ascores) / acnt
+                # current not working
+                #use_neural_network = False   # True or False
+                #if use_neural_network:
+                #    #mavgatt = sum([gx(n) for n in range(1,14)]) / 13
+                #    #mmaxatt = max([gx(n) for n in range(1,14)])
+                #    #as_avgatt = sum([gy(n) for n in range(1,14)]) / 13
+                #    #as_maxatt = max([gy(n) for n in range(1,14)])
+                #    #grad_pred = nn_model.pred(client_name,mavg,mavgatt,mmaxatt,aavg,as_avgatt,as_maxatt,acnt)
+                #    #if grad_pred is None:
+                #    #    continue
+                #    pass
+                #else:
                 grad_pred = dt_model.predict(mavg , aavg, mcnt)
-
-            tbl.append( [vv , uu , "{:.2%}".format(grad_pred[0])] )
+                grades = grad_pred[0]
+            
             progress_list = [ fz(n) for n in range(1,14) if gz(n) > 0]
             progress_list.append(['Avg', "{:.2%}".format(mavg) , " ",  "{:.2%}".format(aavg) , " "])
 
@@ -1320,17 +1323,17 @@ class MessageCounter(telepot.helper.ChatHandler):
 
             progress_tt[sid] = f"\nTest Results for Student #{vv} {uu}"
             new_sidlist.append(str(sid))
+            tbl.append( [vv , uu , "{:.2%}".format(grades)])                
         self.records['progress_df'] = progress_df
         self.records['progress_tt'] = progress_tt
         df1 =  pd.DataFrame( tbl )
         if len(df1) == 0:
             self.sender.sendMessage("There is no data for this course id")
-            return []
+            return ( [] , None )
         df1.columns = ['Student ID#','Name', 'Prediction']
-        tt = "AI Grading for " + self.courseid
+        #tt = "AI Grading for " + self.courseid
         df1= df1.sort_values(by ='Prediction')
-        html_list(self.bot, self.chatid, df1, df1.columns, [10, 15, 10], tt, 20)
-        return new_sidlist
+        return (new_sidlist , df1)
 
     def find_course(self, stud):
         client_name =  self.client_name
@@ -1661,8 +1664,9 @@ class MessageCounter(telepot.helper.ChatHandler):
                 self.logoff()
             elif resp == option_mycourse:
                 date_today = datetime.datetime.now().date()
-                yrnow = str(date_today.strftime('%Y'))
-                course_list = [x for x in self.list_courseids if x[-4:]==yrnow]
+                #yrnow = str(date_today.strftime('%Y'))
+                #course_list = [x for x in self.list_courseids if x[-4:]==yrnow]
+                course_list = [x for x in self.list_courseids ][:20]
                 btn_course_list = build_menu(course_list, 1)
                 txt = "Please select the course id from below:"
                 bot_prompt(self.bot, self.chatid, txt, btn_course_list)
@@ -1996,15 +2000,21 @@ class MessageCounter(telepot.helper.ChatHandler):
                 bot_prompt(self.bot, self.chatid, txt, self.menu_home)
                 self.menu_id = 1
             elif resp == ml_grading:
-                sid_list = self.grad_prediction()
+                (sid_list , df)= self.grad_prediction()
+                df.columns = ['Student ID#','Name', 'Prediction']
+                n = len(sid_list)
+                title = "AI Grading for " + self.courseid
+                html_list(self.bot, chat_id, df, df.columns, [10, 15, 10], title, 20)
                 btn_list = build_menu( sid_list, 6, option_back, [])
                 self.records['progress_sid'] = sid_list
                 n = len(sid_list)
                 txt = f"total {n} learners in the list.\nSelect the student id to see the progress :"
                 bot_prompt(self.bot, self.chatid, txt, btn_list)
                 self.menu_id = keys_dict[opt_aig]
+                retmsg = f"Total number of learners = {n}"                
             elif resp == an_mcq:
-                analyze_cohort(self.courseid, self.userdata, self.bot, self.chatid)
+                n = analyze_cohort(self.courseid, self.userdata, self.bot, self.chatid)
+                retmsg = f"Total number of learners = {n}"
             elif resp == an_mcqd:
                 txt = "MCQ Difficulty Analysis by:"
                 bot_prompt(self.bot, self.chatid, txt, mcqdiff_menu)
@@ -2937,7 +2947,7 @@ def analyze_cohort(course_id, userdata, bot, chat_id):
     sid_list = [x for x in userdata.studentid]
     uname_list = [x for x in userdata.username]
     udict = dict(zip(sid_list,uname_list))
-
+    cnt = len(sid_list)
     avgsum_list = [ userdata[ "mcq_avg" + str(x) ].mean() for x in range( 1, 14 ) ]    
     rr = [ 1 if r>0 else 0 for r in avgsum_list ]
     rsum = sum(rr)
@@ -2983,7 +2993,7 @@ def analyze_cohort(course_id, userdata, bot, chat_id):
     df.columns = ['MCQ Test #', 'Average Score' , 'Assignment Test #', 'Average Score']
     if len(df)==0:
         bot.sendMessage(chat_id, "There is no information available at the moment.")
-        return
+        return 0
     tt = "Assignment & MCQ Score Summary for\n" + course_id
     html_list(bot, chat_id, df, df.columns, [15,15,15,15], tt, 15)
     df =  pd.DataFrame( summary_mcq )
@@ -2994,7 +3004,7 @@ def analyze_cohort(course_id, userdata, bot, chat_id):
     df.columns = ['Grouping']
     tt = "Assignment Grouping for " + course_id
     html_list(bot, chat_id, df, df.columns, [120], tt, 25)
-    return
+    return cnt
 
 def checkjoblist(vmbot):
     client_name = vmbot.client_name

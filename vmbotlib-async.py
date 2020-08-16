@@ -175,8 +175,9 @@ async def job_scheduler():
     gmt = bot_intance.gmt  # azure version : gmt = 8
     while True :
     #        zz = """
-        checkjoblist()
         timenow = time_hhmm(gmt)
+        if (timenow % 60)==0:
+            checkjoblist()
         if (timenow==automsg) and (automsg>0):
             print("running auto_notify")
             await auto_notify(client_name, resp_dict, pass_rate, adminchatid)
@@ -315,6 +316,7 @@ async def auto_notify(client_name, resp_dict, pass_rate, adm_chatid):
         sent_list = []
         for sid in ulist:
             uname = udict[sid]
+            print(sid, uname)
             df1 = udf[ udf.studentid == sid ].copy()
             (tt, vars) = verify_student(client_name, df1, sid, course_id, sdf)
             df2 = mdf[ mdf.studentid == sid ].copy()
@@ -447,6 +449,7 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
     eoc7_userdict = dict()
     eoc7_mailcnt = 0
     for course_id in course_list:
+        #print(course_id)
         eoc = vmedxlib.edx_endofcourse(client_name, course_id) # ended=1 else 0
         soc = vmedxlib.edx_course_started(client_name, course_id)  # started=1 else 0
         eoc_gap = vmedxlib.edx_eocgap(client_name, course_id, 7)
@@ -477,6 +480,7 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
             if debug_mode:
                 ulist = [ 1716 ]
                 #eoc_gap = 1
+
             for sid in ulist:
                 uname = udict[sid]                
                 if debug_mode:
@@ -612,7 +616,9 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
                         txt = txt.replace('{enquiry_email}' , enquiry_email)
                 if '{lf}' in txt:
                     txt = txt.replace('{lf}', "\n")
+
                 if eoc7==1:
+                    await bot_intance.bot.sendMessage(adm_chatid, f"eoc {sid} {tid}")
                     eoc7_maildict[enquiry_email] += txt + "\n"
                     eoc7_userdict[enquiry_email] += ',' + uname
                     eoc7_mailcnt += 1
@@ -620,11 +626,11 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
                     if tid <= 0:
                         err_list.append(sid)
                     else:
-                        try:
-                            bot_intance.bot.sendMessage(int(tid), txt)
-                            sent_list.append(sid)
-                        except:
-                            err_list.append(sid)
+                        #try:
+                        await bot_intance.bot.sendMessage(tid, txt)  
+                        sent_list.append(sid)
+                        #except:
+                            #err_list.append(sid)
                 # save f2f_error and f2f_stage into userdata table ?
                 query = f"update userdata set risk_level = {risk_level}, mcq_zero = '{mcq_zero}' "
                 query += f" ,mcq_failed = '{mcq_failed}', as_zero = '{as_zero}', as_failed = '{as_failed}' "
@@ -1285,7 +1291,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         progress_df = dict()
         progress_tt = dict()
         tbl = []
-        new_sidlist = []
+        new_sidlist = []        
         for vv in list_sid:
             sid = int(vv)
             vars = load_vars(self.userdata, sid)
@@ -1301,24 +1307,27 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             ascores = [fy(n) for n in range(1,14) if gy(n) > 0]
             mcnt = len(mscores)
             acnt = len(ascores)
-            if mcnt+acnt==0:
-                continue
-            mavg = 0 if mcnt == 0 else sum(mscores) / mcnt
-            aavg = 0 if acnt == 0 else sum(ascores) / acnt
-            # current not working
-            #use_neural_network = False   # True or False
-            #if use_neural_network:
-            #    #mavgatt = sum([gx(n) for n in range(1,14)]) / 13
-            #    #mmaxatt = max([gx(n) for n in range(1,14)])
-            #    #as_avgatt = sum([gy(n) for n in range(1,14)]) / 13
-            #    #as_maxatt = max([gy(n) for n in range(1,14)])
-            #    #grad_pred = nn_model.pred(client_name,mavg,mavgatt,mmaxatt,aavg,as_avgatt,as_maxatt,acnt)
-            #    #if grad_pred is None:
-            #    #    continue
-            #    pass
-            #else:
-            grad_pred = dt_model.predict(mavg , aavg, mcnt)
-            tbl.append( [vv , uu , "{:.2%}".format(grad_pred[0])] )
+            grades = 0
+            mavg = 0
+            aavg = 0
+            if (mcnt+acnt)>0:
+                mavg = 0 if mcnt == 0 else sum(mscores) / mcnt
+                aavg = 0 if acnt == 0 else sum(ascores) / acnt
+                # current not working
+                #use_neural_network = False   # True or False
+                #if use_neural_network:
+                #    #mavgatt = sum([gx(n) for n in range(1,14)]) / 13
+                #    #mmaxatt = max([gx(n) for n in range(1,14)])
+                #    #as_avgatt = sum([gy(n) for n in range(1,14)]) / 13
+                #    #as_maxatt = max([gy(n) for n in range(1,14)])
+                #    #grad_pred = nn_model.pred(client_name,mavg,mavgatt,mmaxatt,aavg,as_avgatt,as_maxatt,acnt)
+                #    #if grad_pred is None:
+                #    #    continue
+                #    pass
+                #else:
+                grad_pred = dt_model.predict(mavg , aavg, mcnt)
+                grades = grad_pred[0]
+            
             progress_list = [ fz(n) for n in range(1,14) if gz(n) > 0]
             progress_list.append(['Avg', "{:.2%}".format(mavg) , " ",  "{:.2%}".format(aavg) , " "])
 
@@ -1328,6 +1337,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
 
             progress_tt[sid] = f"\nTest Results for Student #{vv} {uu}"
             new_sidlist.append(str(sid))
+            tbl.append( [vv , uu , "{:.2%}".format(grades)])                
         self.records['progress_df'] = progress_df
         self.records['progress_tt'] = progress_tt
         df1 =  pd.DataFrame( tbl )
@@ -1335,9 +1345,9 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             self.sender.sendMessage("There is no data for this course id")
             return ( [] , None )
         df1.columns = ['Student ID#','Name', 'Prediction']
-        tt = "AI Grading for " + self.courseid
+        #tt = "AI Grading for " + self.courseid
         df1= df1.sort_values(by ='Prediction')
-        return ( new_sidlist , df1 )        
+        return (new_sidlist , df1)
 
     def find_course(self, stud):
         client_name =  self.client_name
@@ -1489,6 +1499,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                         self.courseid = courseid
                         self.load_tables()
                         await bot.sendMessage(chat_id, msg)
+                        await self.sender.sendMessage("Please wait for a while.")
                         (txt, menu_item) = self.check_student(self.student_id, self.chatid)
                         await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
                         return
@@ -1654,6 +1665,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                         return
                     else:
                         #self.check_student(self.student_id, chat_id)
+                        await self.sender.sendMessage("Please wait for a while.")
                         (txt, menu_item) = self.check_student(self.student_id, chat_id)
                         await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))                        
                 elif slen < 20:
@@ -1695,12 +1707,13 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                         sid = self.student_id
                         ch_id = self.chatid   
                         #self.load_tables()  
-                        #self.update_stage(sid)                        
-                        (txt, menu_item) = self.check_student(sid, ch_id)                        
+                        #self.update_stage(sid)
+                        await self.sender.sendMessage("Please wait for a while.")
+                        (txt, menu_item) = self.check_student(sid, ch_id)
                         await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
 
         elif self.menu_id == keys_dict[lrn_start] :
-            userdata = self.userdata
+            userdata = self.userdata            
             if self.new_session and '@' in resp :
                 resptxt = email_lookup(self.userdata, resptxt)
                 resp = resp if resptxt=="" else resptxt
@@ -1712,7 +1725,8 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     await self.logoff()
                 else:
                     #self.check_student(sid, chat_id)
-                    (txt, menu_item) = self.check_student(sid, chat_id)                        
+                    await self.sender.sendMessage("Please wait for a while.")
+                    (txt, menu_item) = self.check_student(sid, chat_id)
                     await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))                    
                     self.menu_id = keys_dict[lrn_student]
             else:
@@ -1724,14 +1738,14 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 await self.logoff()
             elif resp == option_mycourse:
                 date_today = datetime.datetime.now().date()
-                yrnow = str(date_today.strftime('%Y'))
-                course_list = [x for x in self.list_courseids if x[-4:]==yrnow]
+                #yrnow = str(date_today.strftime('%Y'))
+                #course_list = [x for x in self.list_courseids if x[-4:]==yrnow]                
+                course_list = [x for x in self.list_courseids ][:20]
                 btn_course_list = build_menu(course_list, 1)
                 txt = "Please select the course id from below:"
                 #bot_prompt(self.bot, self.chatid, txt, btn_course_list)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(btn_course_list))
                 self.menu_id = keys_dict[option_mycourse]
-
             elif resp == option_updateprogress:
                 sid = self.student_id
                 courseid = self.courseid
@@ -1810,7 +1824,8 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 self.coursename = self.list_coursename[n]
                 self.load_tables()
                 sid = self.student_id
-                #self.check_student(self.student_id, chat_id)                
+                await self.sender.sendMessage("Please wait for a while.")
+                #self.check_student(self.student_id, chat_id)
                 (txt, menu_item) = self.check_student(self.student_id, chat_id)
                 if len(txt)>0:
                     await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))                
@@ -2088,8 +2103,9 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(self.menu_home))
                 self.menu_id = 1
             elif resp == ml_grading:
-                ( sid_list , df )= self.grad_prediction()
+                (sid_list , df)= self.grad_prediction()
                 df.columns = ['Student ID#','Name', 'Prediction']
+                n = len(sid_list)
                 title = "AI Grading for " + self.courseid
                 html_msg_dict[title] = html_report(df, df.columns, [10, 15, 10], 20)
                 btn_list = build_menu( sid_list, 6, option_back, [])
@@ -2099,8 +2115,9 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 #bot_prompt(self.bot, self.chatid, txt, btn_list)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(btn_list))
                 self.menu_id = keys_dict[opt_aig]
+                retmsg = f"Total number of learners = {n}"
             elif resp == an_mcq:
-                (tbl1,tbl2,tbl3) = analyze_cohort(self.courseid, self.userdata, self.bot, self.chatid)
+                (tbl1,tbl2,tbl3,n) = analyze_cohort(self.courseid, self.userdata, self.bot, self.chatid)
                 if tbl1 == []:
                     await self.sender.sendMessage("There is no information available at the moment")
                     return
@@ -2120,6 +2137,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 df.columns = ['Grouping']
                 html_msg_dict[title] = html_report(df, df.columns, [120], 28)
                 
+                retmsg = f"Total number of learners = {n}"
             elif resp == an_mcqd:
                 txt = "MCQ Difficulty Analysis by:"
                 #bot_prompt(self.bot, self.chatid, txt, mcqdiff_menu)
@@ -2475,7 +2493,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
 
         elif self.menu_id > 0:
             syslog( str(self.student_id) , "Q:" + resp )
-            (txt,recommendation) = self.runfaq(resp)            
+            (txt,recommendation) = self.runfaq(resp)
             if (txt != ""):
                 #bot_prompt(self.bot, self.chatid, txt, self.menu_home)
                 await self.sender.sendMessage(txt)
@@ -2486,7 +2504,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 await self.bot.sendMessage(self.chatid, "You might want to ask :", reply_markup=self.reply_markup(rec_menu))
                 txt = ""
                 self.menu_id = bot_intance.keys_dict[option_faq]
-            # zz
 
         for title in list(html_msg_dict):
             for msg in html_msg_dict[title] :
@@ -3073,7 +3090,7 @@ def analyze_cohort(course_id, userdata, bot, chat_id):
     sid_list = [x for x in userdata.studentid]
     uname_list = [x for x in userdata.username]
     udict = dict(zip(sid_list,uname_list))
-
+    cnt = len(sid_list)
     avgsum_list = [ userdata[ "mcq_avg" + str(x) ].mean() for x in range( 1, 14 ) ]    
     rr = [ 1 if r>0 else 0 for r in avgsum_list ]
     rsum = sum(rr)
@@ -3117,8 +3134,8 @@ def analyze_cohort(course_id, userdata, bot, chat_id):
         
     if result_table==[]:
         bot.sendMessage(chat_id, "There is no information available at the moment.")
-        return ([],[],[])
-    return (result_table,summary_mcq,summary_as)
+        return ([],[],[],0)
+    return (result_table, summary_mcq, summary_as, cnt)
 
 def checkjoblist():
     global bot_intance
