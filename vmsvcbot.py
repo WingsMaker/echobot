@@ -50,7 +50,7 @@ omchat = vmnlplib.NLP_Parser()
 dt_model = vmaiglib.MLGrader()
 nn_model = vmffnnlib.NNGrader()
 option_mainmenu = 'svcbot_menu'
-option_back = "◀️" 
+option_back = "◀️"
 option_nlp = "NLP"
 option_ml = "Machine Learning"
 option_2fa = "2FA"
@@ -69,7 +69,7 @@ nlp_menu = [[nlp_dict, nlp_prompts, nlp_corpus, nlp_response], [nlp_train, nlp_s
 ml_data = "Model Data"
 ml_pipeline = "ML Pipeline"
 ml_report = "ML EDA"
-ml_train = "Train Model" 
+ml_train = "Train Model"
 ml_graph = "ML Graph"
 ml_menu = [[ml_data, ml_pipeline, ml_report],[ml_graph, ml_train, option_back]]
 sys_import = "Mass Import"
@@ -88,7 +88,7 @@ opt_setadmin = 'Set as Admin'
 opt_setlearner = 'Set as Learner'
 opt_resetemail = 'Change Email'
 opt_unbind = 'Reset Binding'
-useraction_menu = [[opt_blockuser, opt_setadmin , opt_setlearner],[opt_resetemail, opt_unbind, option_back]]    
+useraction_menu = [[opt_blockuser, opt_setadmin , opt_setlearner],[opt_resetemail, opt_unbind, option_back]]
 sys_params = "System Parameters"
 sys_pyt = "Python Shell 🐍"
 sys_cmd = "Commands Shell 📺"
@@ -99,7 +99,7 @@ client_menu = [[sys_clientname, sys_clientcopy, option_back]]
 
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
 string2date = lambda x,y : datetime.datetime.strptime(x,y).date()
-str2date = lambda x : string2date(x,"%d/%m/%Y")       
+str2date = lambda x : string2date(x,"%d/%m/%Y")
 date_today = datetime.datetime.now().date()
 dmy_str = lambda v : piece(v,'-',2) + '/' + piece(v,'-',1) + '/' + piece(v,'-',0)
 ymd_str = lambda v : piece(v,'-',0) + '/' + piece(v,'-',1) + '/' + piece(v,'-',2)
@@ -111,12 +111,12 @@ class BotInstance():
         self.Token = ""
         self.bot_name = ""
         self.bot_id = ""
-        self.user_list = {}        
+        self.user_list = {}
         self.chat_list = {}
         self.code2fa_list = {}
         self.vars = dict()
         self.Token = Token
-        self.mainmenu = svcbot_menu 
+        self.mainmenu = svcbot_menu
         self.cmd_dict = {}
         self.keys_dict = {}
         self.job_items = {}
@@ -130,10 +130,10 @@ class BotInstance():
         self.define_keys(users_menu, self.keys_dict[option_usermgmt])
         self.define_keys(useraction_menu, self.keys_dict[option_resetuser])
         self.keys_dict[option_2fa] = (self.keys_dict[option_mainmenu]*10) + 1
-        self.define_keys( client_menu, self.keys_dict[option_client])        
+        self.define_keys( client_menu, self.keys_dict[option_client])
         self.bot = telepot.aio.DelegatorBot(Token, [
             pave_event_space()( per_chat_id(),
-            create_open, MessageCounter, timeout=max_duration),            
+            create_open, MessageCounter, timeout=max_duration),     
         ])        
         svcbot = self.bot
         self.loop = None
@@ -230,14 +230,18 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 txt = "Hi " + req_user + ", your 2FA code is : " + code2fa
                 await bot.sendMessage(reply_id,txt)
         elif (content_type=="document") :
-            #if msg['document']['mime_type']=="text/plain":
-            fid = msg[content_type]['file_id']
-            fname = get_attachment(bot, fid)
-            file_name = msg['document']['file_name']
-            pcmd = f"cp -f {fname} ./om/{file_name} ; rm -f {fname}"
-            shellcmd(pcmd)
-            await bot.sendMessage(chat_id, f"file {file_name} received.")
-                
+            try:
+                fid = msg['document']['file_id']
+                fpdic = await bot.getFile(fid)
+                fpath = fpdic['file_path']
+                file_name = msg['document']['file_name']
+                fn = "https://api.telegram.org/file/bot" + bot._token + "/"  + fpath
+                fname = wget.download(fn)
+                pcmd = f"cp -f {fname} ./om/{file_name} ; rm -f {fname}"
+                shellcmd(pcmd)
+                await bot.sendMessage(chat_id, f"file {file_name} received.")
+            except:
+                return                
         elif content_type != "text":
             print( json.dumps(msg) )
             txt = "Thanks for the " + content_type + " but I do not need it for now."
