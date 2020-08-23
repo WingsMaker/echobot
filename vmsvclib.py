@@ -19,8 +19,9 @@ summary = """
 ║ bot_prompt         bot response with text and optional menu buttons         ║▒▒
 ║ build_menu         build telegram reply-to menu buttons with a list         ║▒▒
 ║ callgraph          generate flow diagram and save into png file             ║▒▒
-║ copydbtbl          append the dataframe into another table in RDS           ║▒▒ 
-║ copy2omdb          append the dataframe into another table in SQLite        ║▒▒ 
+║ conn_open          check database connection status (openned , closed)      ║▒▒
+║ copydbtbl          append the dataframe into another table in RDS           ║▒▒
+║ copy2omdb          append the dataframe into another table in SQLite        ║▒▒
 ║ decrypt            to decrypt text using fernet cryptography                ║▒▒
 ║ debug              to trace the arguments & return values, just add @debug  ║▒▒
 ║ edit_fields        update record based on a list of (key, value) pairs      ║▒▒
@@ -77,22 +78,15 @@ import sqlite3
 from sqlalchemy import create_engine
 import random
 import inspect
-#import smtplib
-#import functools
-#from functools import wraps
-#from pycallgraph import PyCallGraph
-#from pycallgraph import Config
-#from pycallgraph import GlobbingFilter
-#from pycallgraph.output import GraphvizOutput
 
 global edxcon, rdscon, rds_connstr, rds_pool, rdsdb 
 
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
-#matplotlib.use('Agg')          
+#matplotlib.use('Agg')
 
 def banner_msg(banner_title, banner_msg):
     txt = "❚█══ " + banner_title + " ══█❚"
-    txt += "\n" + banner_msg + "\n"  
+    txt += "\n" + banner_msg + "\n"
     return txt
 
 def bot_prompt(bot, chat_id, txt="", buttons=[], opt_resize = True):
@@ -124,22 +118,20 @@ def build_menu(btn_list, btns_rows = 3, extra_btn='',toadd_btn=[]):
     for btn in toadd_btn:
         if nn % btns_rows > 0:
             btn_list.append(btn)
-            nn += 1    
+            nn += 1
     kk = btns_rows - 1
     rr = int((nn+kk)/btns_rows)
     results = [  btn_list[n*btns_rows:][:btns_rows] for n in range(rr) ]
     return results
 
-#def callgraph(profiling_result_path):
-#    def fn_decorator(fn):
-#        @wraps(fn)
-#        def fn_decorated(*args, **kwargs):
-#            graphviz = GraphvizOutput()
-#            graphviz.output_file = profiling_result_path
-#            with PyCallGraph(output=graphviz, config=None):
-#                fn(*args, **kwargs)
-#        return fn_decorated
-#    return fn_decorator
+def conn_open():
+    global rds_connstr, rdscon
+    if 'ssl_ca' in rds_connstr:
+        stat = rdscon.open
+        return stat
+    if rds_connstr == 'omdb.db':
+        return rdscon is not None
+    return rdscon.open
 
 def copydbtbl(df, tblname):
     global rdscon
@@ -147,36 +139,23 @@ def copydbtbl(df, tblname):
     if '.db' in rds_connstr:
         df.to_sql(tblname, con=rdscon,index=False, if_exists='append') 
     else:
-        df.reset_index()    
-        rdsEngine = rds_engine()    
-        rdscon = rdsEngine.connect()    
+        df.reset_index()
+        rdsEngine = rds_engine()
+        rdscon = rdsEngine.connect()
         df.to_sql(tblname, con=rdsEngine, if_exists = 'append', index=False, chunksize = 1000)
         #rdscon.close()
         #ok=True
     #except:
     #    ok=False
-    #return ok        
+    #return ok
     return
 
 def copy2omdb(df, tbl):
     sqldb = "omdb.db"
     conn = sqlite3.connect(sqldb)
     df.to_sql(tbl, con=conn,index=False, if_exists='replace') 
-    conn.close()        
+    conn.close()
     return
-
-#def debug(func):
-#    @functools.wraps(func)
-#    def wrapper_debug(*args, **kwargs):
-#        print(f"▓▓▓▒▒▒▒▒▒▒░░░  {func.__name__}  ░░░▒▒▒▒▒▒▒▓▓▓")
-#        args_repr = [repr(a) for a in args]                      # 1
-#        kwargs_repr = [f"{k}={v!r}" for k, v in kwargs.items()]  # 2
-#        signature = ", ".join(args_repr + kwargs_repr)           # 3
-#        print(f"Calling {func.__name__}({signature})")
-#        value = func(*args, **kwargs)
-#        print(f"{func.__name__!r} returned {value!r}")           # 4
-#        return value
-#    return wrapper_debug
 
 def decrypt(msg):
     key = '4jYUFl-wbMZ4NIiI2kG3LMFD5KTTKiT5ZiE6Yhoshp0='
@@ -197,7 +176,7 @@ def edit_fields(client_name, courseid, tbl, idx, sid, resp, edit_list=[]):
         try:
             for sqlvar in resp.split('\n') :
                 if sqlvar != "":
-                    sqlcode = sqlvar.split(':')  
+                    sqlcode = sqlvar.split(':') 
                     updqry += ',' + sqlcode[0] + ' = ' + sqlcode[1] + ' '
             updqry = 'update ' + tbl + ' set ' + updqry[1:] 
             if edit_list == []:
@@ -224,14 +203,14 @@ def edit_fields(client_name, courseid, tbl, idx, sid, resp, edit_list=[]):
 
 def edit_records(client_name, courseid, tbl, idx, sid,  fld_prefix = ""):
     txt = ""
-    if sid > 0:        
+    if sid > 0:
         qry = "select * from " + tbl + " where client_name = '_c_' and courseid = '_x_';"
         qry = qry.replace('_c_', client_name)
         qry = qry.replace('_x_', courseid)
         df = rds_df( qry)
         if df is None:
             return txt
-        df.columns = get_columns(tbl)            
+        df.columns = get_columns(tbl)         
         rec_match = ( df[idx] == sid ) 
         if len(df[rec_match]) > 0:
             vars = []
@@ -404,10 +383,12 @@ def rds_df(query):
     #try:
     rdscon = rds_connector()
     #if rdscon is None:
-    if not rdscon.open:
+    #if not rdscon.open:
+    if not conn_open():
         rdscon = rds_connector()
         #if rdscon is None:
-        if not rdscon.open:
+        #if not rdscon.open:
+        if not conn_open():
             syslog("RDS connection unsuccessful !")
             return    
     rdscur = rdscon.cursor()
@@ -455,9 +436,11 @@ def rds_update(query):
     global rdscon
     rdscon = rds_connector()
     df = None
-    if rdscon is None:
+    #if rdscon is None:
+    if not conn_open():
         rdscon = rds_connector()
-        if rdscon is None:
+        #if rdscon is None:
+        if not conn_open():
             syslog("RDS connection unsuccessful !")
             return
     rdscur = rdscon.cursor()

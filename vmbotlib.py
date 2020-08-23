@@ -148,7 +148,7 @@ def do_main():
     vmsvclib.rdscon = None
     vmsvclib.rdsdb = None
     vmsvclib.rds_pool = 0
-    syslog('Starting up vmbot')   
+    syslog('Starting up vmbot')  
     print("starting up vmbot")
     if not loadconfig():
         syslog("error loading config")
@@ -160,10 +160,12 @@ def do_main():
     #    txt = "AI grading model data file ffnn_model.hdf5 is missing"
     #    syslog('system : '+ txt)
     syslog("Running telepot async library")
-    bot_intance = BotInstance()    
+    bot_intance = BotInstance()
+    vmbot = bot_intance.bot    
     loop = asyncio.get_event_loop()
-    loop.create_task(MessageLoop(bot_intance.bot).run_forever())
+    loop.create_task(MessageLoop(vmbot).run_forever())
     loop.create_task(job_scheduler())
+    bot_intance.loop = loop
     loop.run_forever()
     return 
 
@@ -179,11 +181,10 @@ async def job_scheduler():
     gmt = bot_intance.gmt  # azure version : gmt = 8
     while True :    
         timenow = time_hhmm(gmt)
-        #vmsvclib.rdscon = rds_connector()
-        #vmsvclib.rdscon = rdsdb.get_connection()
-        vmsvclib.rdscon = vmsvclib.rds_connector()
-        vmsvclib.rdscon.ping(True)
-        vmsvclib.rdscon.close()
+        if '.db' not in vmsvclib.rds_connstr:
+            vmsvclib.rdscon = vmsvclib.rds_connector()
+            vmsvclib.rdscon.ping(True)
+            vmsvclib.rdscon.close()
         await checkjoblist()
         if (timenow==automsg) and (automsg>0):
             syslog("running auto_notify")
@@ -728,6 +729,7 @@ class BotInstance():
         self.client_name = ""
         self.bot_running = False
         self.bot = None
+        self.loop =  None
         self.adm_list = []
         self.user_list = {}
         self.chat_list = {}
@@ -824,12 +826,6 @@ class BotInstance():
             ])
             vmbot = self.bot
             self.Token = Token
-            #loop = asyncio.get_event_loop()
-            #self.loop = loop
-            #loop.create_task(MessageLoop(self.bot).run_forever())
-            #asyncio.ensure_future(job_scheduler())
-            #loop.run_forever()
-            #loop.close()
         except:
             pass
         del par_dict, df, client_name
@@ -1466,6 +1462,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             result ='<pre> ▀▄▀▄▀▄ OmniMentor ▄▀▄▀▄▀\n Powered by Sambaash</pre>Contact <a href=\"tg://user?id=1064466049">@OmniMentor</a>'
             await bot.sendMessage(chat_id,result,parse_mode='HTML')
             syslog('system : ' + txt)
+            bot_intance.loop.stop()
                 
         elif resp == '/start' or resp == '/hellobot' or resp == btn_hellobot:            
             self.reset
