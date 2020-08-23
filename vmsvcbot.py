@@ -31,12 +31,6 @@ import re
 import requests
 
 import telepot
-#from telepot.loop import MessageLoop
-#from telepot.delegate import pave_event_space, per_chat_id, create_open, per_callback_query_chat_id
-#from telepot.namedtuple import ReplyKeyboardMarkup
-#from telepot.helper import IdleEventCoordinator
-# https://buildmedia.readthedocs.org/media/pdf/telepot/v12.5/telepot.pdf page 56
-# https://docs.telethon.dev/en/latest/concepts/asyncio.html
 import asyncio
 import telepot.aio
 from telepot.aio.loop import MessageLoop
@@ -96,11 +90,9 @@ opt_resetemail = 'Change Email'
 opt_unbind = 'Reset Binding'
 useraction_menu = [[opt_blockuser, opt_setadmin , opt_setlearner],[opt_resetemail, opt_unbind, option_back]]    
 sys_params = "System Parameters"
-sys_logs = "System Logs"
-sys_jobs = "System Jobs"
 sys_pyt = "Python Shell 🐍"
 sys_cmd = "Commands Shell 📺"
-system_menu = [[sys_params, sys_logs, sys_jobs],[sys_pyt, sys_cmd, option_back]]
+system_menu = [[sys_params, sys_pyt, sys_cmd, option_back]]
 sys_clientcopy = "Client Copy"
 sys_clientname = "Default Client"
 client_menu = [[sys_clientname, sys_clientcopy, option_back]]
@@ -119,7 +111,6 @@ class BotInstance():
         self.Token = ""
         self.bot_name = ""
         self.bot_id = ""
-        self.bot_running = False
         self.user_list = {}        
         self.chat_list = {}
         self.code2fa_list = {}
@@ -144,12 +135,12 @@ class BotInstance():
             pave_event_space()( per_chat_id(),
             create_open, MessageCounter, timeout=max_duration),            
         ])        
-        svcbot = self.bot        
-        self.bot_running = True        
-        loop = asyncio.get_event_loop()
-        self.loop = loop
-        loop.create_task(MessageLoop(self.bot).run_forever())
-        loop.run_forever()
+        svcbot = self.bot
+        self.loop = None
+        #loop = asyncio.get_event_loop()
+        #self.loop = loop
+        #loop.create_task(MessageLoop(self.bot).run_forever())
+        #loop.run_forever()
         return
 
     def __str__(self):
@@ -266,7 +257,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         elif resp=='/stop' and (chat_id in [adminchatid, developerid]):
             for d in bot_intance.user_list:
                 await self.bot.sendMessage(d, "System shutting down.")
-            bot_intance.bot_running = False            
             retmsg = 'System already shutdown.'            
             bot_intance.loop.stop()
           
@@ -421,18 +411,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 self.menu_id = keys_dict[option_mainmenu]
             elif resp == sys_params:
                 f=html_tbl(client_name, "params", "System Parameters", "system_params.html")
-                if f is None:
-                    await self.bot.sendMessage( chat_id, "Information not available" )
-                else:
-                    await self.bot.sendDocument(chat_id, document=f)
-            elif resp == sys_logs:
-                f=html_tbl("", "syslog", "System Logs", "system_logs.html")
-                if f is None:
-                    await self.bot.sendMessage( chat_id, "Information not available" )
-                else:
-                    await self.bot.sendDocument(chat_id, document=f)
-            elif resp == sys_jobs :
-                f=html_tbl(client_name, "job_list", "System joblist", "joblist.html")
                 if f is None:
                     await self.bot.sendMessage( chat_id, "Information not available" )
                 else:
@@ -764,26 +742,22 @@ def do_main():
     par_key = [x for x in df.key]
     par_dict = dict(zip(par_key, par_val))
     #SvcBotToken = par_dict['ServiceBot']
-    SvcBotToken = '989298710:AAEi6VVxa5dFBNJHQrQgKqcqdxj0QRJ9Bx4'
+    SvcBotToken = '989298710:AAEi6VVxa5dFBNJHQrQgKqcqdxj0QRJ9Bx4' # OmniMentorDemoBot
     #adminchatid = int(par_dict['adminchatid'])
     adminchatid = 71354936
     client_name = par_dict['client_name']
     gmt = int(par_dict['GMT'])
     #max_duration = int(par_dict['max_duration'])
     max_duration = 300
-    edx_time = edx_load_config(client_name)
     omchat.load_modelfile("ft_model.bin", client_name)
     dt_model.load_model("dt_model.bin")
     nn_model.model_loader("ffnn_model.hdf5")
     bot_intance = BotInstance(SvcBotToken, client_name, max_duration, adminchatid) 
     svcbot.sendMessage(adminchatid, "Click /start to connect the ServiceBot")
-    #edx_cnt = 0
-    #while svcbot.bot_running:  
-    #    time.sleep(3)
-    #try:
-    #    os.kill(os.getpid(), 9)
-    #except:
-    #    pass
+    loop = asyncio.get_event_loop()
+    loop.create_task(MessageLoop(svcbot).run_forever())
+    bot_intance.loop = loop
+    loop.run_forever()    
     return
 
 #------------------------------------------------------------------------------------------------------
