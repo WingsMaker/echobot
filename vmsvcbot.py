@@ -137,10 +137,6 @@ class BotInstance():
         ])        
         svcbot = self.bot
         self.loop = None
-        #loop = asyncio.get_event_loop()
-        #self.loop = loop
-        #loop.create_task(MessageLoop(self.bot).run_forever())
-        #loop.run_forever()
         return
 
     def __str__(self):
@@ -238,7 +234,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             fid = msg[content_type]['file_id']
             fname = get_attachment(bot, fid)
             file_name = msg['document']['file_name']
-            pcmd = f"cp -f {fname} ~/om/{file_name} ; rm -f {fname}"
+            pcmd = f"cp -f {fname} ./om/{file_name} ; rm -f {fname}"
             shellcmd(pcmd)
             await bot.sendMessage(chat_id, f"file {file_name} received.")
                 
@@ -260,6 +256,13 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             retmsg = 'System already shutdown.'            
             bot_intance.loop.stop()
           
+        elif (chat_id in [adminchatid, developerid]) and resp.startswith('/!'):
+            if len(resp) > 3:
+                try:
+                    fn = resp[3:]
+                    await bot.sendDocument(chat_id=self.chatid, document=open(fn, 'rb'))
+                except:
+                    return
         elif resp == '/start':
             result ='<pre> ▀▄▀▄▀▄ OmniMentor ▄▀▄▀▄▀\n Powered by Sambaash</pre>\nContact <a href=\"tg://user?id=1064466049">@OmniMentor</a>'
             await bot.sendMessage(chat_id,result,parse_mode='HTML')
