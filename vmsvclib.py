@@ -43,6 +43,7 @@ summary = """
 ║ render_table       output dataframe into HTML table in picture format       ║▒▒
 ║ shellcmd           to execute system commands from the server shell access  ║▒▒
 ║ time_hhmm          local time in hhmm numeric format                        ║▒▒
+║ time_hhmmss        local time in hhmmss numeric format                      ║▒▒
 ║ write2html         output dataframe content into HTML file                  ║▒▒
 ╚═════════════════════════════════════════════════════════════════════════════╝▒▒
  ▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒▒
@@ -51,7 +52,6 @@ import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore")
-
 import pandas as pd
 import pandas.io.formats.style
 import os, re, sys, time, datetime, string
@@ -70,9 +70,14 @@ import telepot
 from telepot.namedtuple import ReplyKeyboardMarkup
 import pymysql
 import pymysql.cursors
+import pymysqlpool
+#from pymysql_manager import ConnectionManager
+#from pymysqlpool.pool import Pool
 import sqlite3
 from sqlalchemy import create_engine
-import smtplib
+import random
+import inspect
+#import smtplib
 #import functools
 #from functools import wraps
 #from pycallgraph import PyCallGraph
@@ -80,7 +85,7 @@ import smtplib
 #from pycallgraph import GlobbingFilter
 #from pycallgraph.output import GraphvizOutput
 
-global edxcon, rdscon, rds_connstr
+global edxcon, rdscon, rds_connstr, rds_pool, rdsdb 
 
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
 #matplotlib.use('Agg')          
@@ -344,26 +349,12 @@ def printdict(obj):
     return
     
 def pycmd(resp):
-    #def pycmd(resp, parentbot):
-    #vars = parentbot.vars
     result = ""
-    #if 'print' in resp:
-    #    resp = resp.replace('print','str')
-    #if '"' in resp:
-    #    resp = resp.replace('"',"'")
     try:        
-    #    if '=' in resp:
-    #        var_name = resp.split('=')[0].strip()
-    #        var_expr = resp.split('=')[1].strip()
-    #        vars[var_name] = eval(var_expr)
-    #        result = "vars['" + var_name + "'] := " + str(vars[var_name])
-    #    else:
-    #    result = eval(eval('f"@"'.replace('@',resp.replace('{',"{vars['").replace('}',"']}"))))
         pycode = compile(resp, 'test', 'eval')
         result = str(eval(pycode))
     except:
         result = ""
-    #parentbot.vars = vars
     return result
 
 def querydf(sqldb, query):
@@ -377,21 +368,29 @@ def querydf(sqldb, query):
     return df
 
 def rds_connector():
-    global rds_connstr
+    global rds_connstr, rds_pool, rdsdb
     if rds_connstr=="":
         with open("vmbot.json") as json_file:  
             bot_info = json.load(json_file)
         rds_connstr = bot_info['omdb']
     if ':' in rds_connstr:
-        conn_info = rds_connstr.split(":")    
-        user = conn_info[1].replace('/','')    
-        pwhost = conn_info[2].split('/')[0].split('@')
-        passwd = pwhost[0]
-        host = pwhost[1]
-        if 'azure' in host:
-            rdscon = pymysql.connect(host=host, port=3306, user=user,passwd=passwd,db='omnimentor',ssl={'ca': 'BaltimoreCyberTrustRoot.crt.pem'})   
+        if 'ssl_ca' in rds_connstr:
+            if rds_pool == 0:
+                conn_info = rds_connstr.split(":")    
+                user = conn_info[1].replace('/','')    
+                pwhost = conn_info[2].split('/')[0].split('@')
+                passwd = pwhost[0]
+                host = pwhost[1]
+                dbase = conn_info[2].split('/')[1].split('?')[0]
+                ssl_pem=rds_connstr.split('=')[1]
+                rds_pool = 20
+                config={'host':host, 'user':user, 'password':passwd, 'database':dbase, 'autocommit':True, 'ssl':{'ca': ssl_pem}}
+                rdsdb = pymysqlpool.ConnectionPool(size=rds_pool,name='pool', **config)            
+            rdscon = rdsdb.get_connection()
+            rdscon.ping(True)                
         else:
-            rdscon = pymysql.connect(host=host, port=3306, user=user,passwd=passwd,db='omnimentor')
+            rdscon = pymysql.connect(host=host, port=3306, user=user,passwd=passwd,db=db)
+            rdscon.ping(True)
     elif '.db' in rds_connstr:
         rdscon = sqlite3.connect(rds_connstr)
     else:
@@ -404,21 +403,22 @@ def rds_df(query):
     df = None
     #try:
     rdscon = rds_connector()
-    if rdscon is None:
+    #if rdscon is None:
+    if not rdscon.open:
         rdscon = rds_connector()
-        if rdscon is None:
-            #print("RDS connection unsuccessful !")
-            return
+        #if rdscon is None:
+        if not rdscon.open:
+            syslog("RDS connection unsuccessful !")
+            return    
     rdscur = rdscon.cursor()
     rdscur.execute(query)
-    rows = rdscur.fetchall()
+    rows = rdscur.fetchall()    
     #rdscon.commit()
-    #rdscon.close()
+    rdscon.close()
     if len(rows) == 0:
-        #print("rds_df returns no data")
+        syslog("rds_df returns no data")
         return None
     else:
-        #print(rows)
         df = pd.DataFrame.from_dict(rows)   
     #except:
     #    pass
@@ -458,7 +458,7 @@ def rds_update(query):
     if rdscon is None:
         rdscon = rds_connector()
         if rdscon is None:
-            #print("RDS connection unsuccessful !")
+            syslog("RDS connection unsuccessful !")
             return
     rdscur = rdscon.cursor()
     rdscur.execute(query)
@@ -466,7 +466,7 @@ def rds_update(query):
         rdscon.commit()
     except:
         pass
-    #rdscon.close()
+    rdscon.close()    
     return 
 
 def render_table(data, col_width=3.0, row_height=0.625, font_size=14,
@@ -502,11 +502,28 @@ def shellcmd(cmd):
         output = ''
     return output
 
+def syslog(msg):
+    s = inspect.stack()[1]
+    date_now = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime() )
+    result = f"{date_now} :: INFO :: {s[3]} :: {s[2]} :: {msg}\n"
+    f = open('syslog.log','a')
+    f.write(result)
+    f.close()
+    return
+
 def time_hhmm(gmt):
     hh = int(datetime.datetime.now().strftime('%H'))
     mm = int(datetime.datetime.now().strftime('%M'))
     hrs = (hh+gmt+24) % 24
     return hrs*100+mm
+
+def time_hhmmss(gmt):
+    hh = int(datetime.datetime.now().strftime('%H'))
+    mm = int(datetime.datetime.now().strftime('%M'))
+    ss = int(datetime.datetime.now().strftime('%S'))
+    hrs = (hh+gmt+24) % 24
+    tt = (hrs*100+mm)*100+ss
+    return tt
 
 def write2html(df, title='', filename='report.html'):    
     if df is None:
@@ -557,14 +574,17 @@ def write2html(df, title='', filename='report.html'):
     return result
    
 if __name__ == "__main__":
-    global rdscon, rds_connstr
+    global rdscon, rds_connstr, rdsdb, rds_pool
     rds_connstr = ""
+    #rds_connstr = "mysql+pymysql://omnimentor@db-sambaashplatform-cluster-2a:omnimentor@db-sambaashplatform-cluster-2a.mysql.database.azure.com/omnimentor?ssl_ca=BaltimoreCyberTrustRoot.crt.pem"
+    rds_pool = 0
+    rdsdb = None
     rdscon = None
     rdscon = rds_connector()        
-    #df = rds_df("select * from userdata")    
-    #df.columns = get_columns("userdata")    
+    df = rds_df("select * from userdata")    
+    df.columns = get_columns("userdata")    
     #copy2omdb(df,"userdata")
-    #print(df.head(10))
-    xls2sqldb('userdata.csv', 'omdb.db')
+    print(df.head(10))
+    #xls2sqldb('userdata.csv', 'omdb.db')
     #
     print("End of vmsvclib.py")

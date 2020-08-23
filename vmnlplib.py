@@ -24,7 +24,6 @@ from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk.stem import WordNetLemmatizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 import contextlib
-
 import vmsvclib
 from vmsvclib import *
 
@@ -75,15 +74,14 @@ class NLP_Parser():
             vmsvclib.rdscon=vmsvclib.rds_connector()
             df = rds_df("select * from prompts;")
             if df is None:
-                print("failed at prompts")
+                syslog("failure reading table : prompts")
                 return 0
             df.columns = ['questions', 'resp']            
-            self.qn_resp = df.copy()
-            #print(df.head(10))
+            self.qn_resp = df.copy()            
             
             df = rds_df("select * from ft_corpus;")
             if df is None:
-                print("failed at ft_corpus")
+                syslog("failure reading table : ft_corpus")
                 return 0
             df.columns = ['label', 'prompt', 'response']            
             self.corpus_df = df.copy()
@@ -91,22 +89,19 @@ class NLP_Parser():
             df1 = rds_df("select * from faq;")
             if df1 is None:
                 return 0
-            df1.columns = ['questions']
-            #print(df1.head(10))
+            df1.columns = ['questions']            
             
             df2 = rds_df("select * from dictionary;")
             if df2 is None:
-                print("failed at dictionary")
+                syslog("failure reading table : dictionary")
                 return 0
-            df2.columns = ['keywords']            
-            #print(df2.head(10))
+            df2.columns = ['keywords']                        
 
             df3 = rds_df("select * from stopwords;")
             if df3 is None:
-                print("failed at stopwords")
+                syslog("failure reading table : stopwords")
                 return 0
             df3.columns = ['keywords']            
-            #print(df3.head(10))
             
             self.faq_list = [ x for x in df1.questions ]
             self.regword_list = [x for x in df2.keywords]
@@ -124,9 +119,9 @@ class NLP_Parser():
             #TfidfVec = TfidfVectorizer(tokenizer=self.tokenizer, stop_words='english')            
         self.TfidfVec = TfidfVec
         if ok==0:
-            print("model is incomplete")
+            syslog("model is incomplete")
         else:
-            print("model loading completed")
+            syslog("model loading completed")
         return        
 
     def load_corpus(self, config):
@@ -134,7 +129,7 @@ class NLP_Parser():
 
     def create_prompts_corpus(self, input_text):
         if self.model is None:
-            print("model is incomplete")
+            syslog("model is incomplete")
             return ""
         if '\n' in input_text:
             inp_txt = ' '.join([txt.strip() for txt in input_text.split('\n')])

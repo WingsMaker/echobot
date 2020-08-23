@@ -24,7 +24,7 @@ import os, sys, time
 import random, wget
 import subprocess
 import pandas as pd
-#from pandas_profiling import ProfileReport
+from pandas_profiling import ProfileReport
 import json
 import datetime
 import re
@@ -197,7 +197,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         return
 
     async def on_close(self, exception):
-        txt = 'session time out, goodbye.\nPress \start to reconnect.'        
+        txt = 'session time out, goodbye.\nPress /start to reconnect.'        
         await self.sender.sendMessage(txt)
         await self.logoff()
         return
@@ -383,14 +383,14 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 vmedxlib.generate_mcq_as(client_name)
                 retmsg = 'Job completed.'                
             elif resp == ml_report :
-                #retmsg = "Generating profiler report for quick data analysis."
-                #await self.bot.sendMessage(chat_id, 'please wait for a moment.')
-                #fn="mcqas_info.html"
-                #if profiler_report(client_name, fn)==1:                    
-                #await bot.sendDocument(chat_id=self.chatid, document=open(fn, 'rb'))
-                #else:
-                result = "<a href=\"https://omnimentor.lithan.com/om/mcqas_info.html\">Profiler Report</a>"
-                await bot.sendMessage(chat_id,result,parse_mode='HTML')
+                retmsg = "Generating profiler report for quick data analysis."
+                await self.bot.sendMessage(chat_id, 'please wait for a moment.')
+                fn="mcqas_info.html"
+                if profiler_report(client_name, fn)==1:                    
+                    await bot.sendDocument(chat_id=self.chatid, document=open(fn, 'rb'))
+                else:
+                    result = "<a href=\"https://omnimentor.lithan.com/om/mcqas_info.html\">Profiler Report</a>"
+                    await bot.sendMessage(chat_id,result,parse_mode='HTML')
             elif resp == ml_graph  :
                 retmsg = "Generating decision tree graph to explain the model."
                 fn = 'mcqas_info.jpg'
@@ -633,7 +633,8 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
 
         elif self.menu_id == keys_dict[sys_clientcopy]:
             if resp != option_back:
-                await self.sender.sendMessage(f"Copying from {resp} to Sambaash....")
+                tgt_clt = 'SambaashDev' # temporay hardcode the target client
+                await self.sender.sendMessage(f"Copying from {resp} to {tgt_clt}....")
                 table_list = ['course_module' , 'iu_stages', 'mcqas_info', 'mcq_data', 'mcq_score']
                 table_list += ['module_iu' , 'playbooks', 'stages', 'stages_master', 'userdata' , 'user_master']                
                 for tbl in table_list:                    
@@ -642,8 +643,8 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     df = rds_df(qry)
                     if df is not None:
                         df.columns = get_columns(tbl)
-                        df['client_name'] = 'Sambaash'
-                        qry = f"DELETE FROM {tbl} WHERE client_name = 'Sambaash';"
+                        df['client_name'] = tgt_clt
+                        qry = f"DELETE FROM {tbl} WHERE client_name = '{tgt_clt}';"
                         rds_update(qry)
                         copydbtbl(df, tbl)  
                 await self.sender.sendMessage("Client copy  has been completed.")
@@ -706,23 +707,23 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             retmsg=""
         return
 
-#def profiler_report(client_name, output_file):
-#    try:
-#        ok = 1
-#        cols = ['grade', 'mcq_avgscore', 'mcq_cnt', 'as_avgscore'] 
-#        mcqinfo = rds_df( f"SELECT grade,mcq_avgscore,mcq_cnt,as_avgscore FROM mcqas_info WHERE client_name='{client_name}';")
-#        if mcqinfo is None:        
-#            ok = 0
-#            return
-#        else:
-#            mcqinfo.columns = cols
-#        features = ['mcq_avgscore', 'mcq_cnt', 'as_avgscore']        
-#        df = mcqinfo[cols]
-#        pf = ProfileReport(df)
-#        pf.to_file(output_file)
-#    except:
-#        ok = 0
-#    return ok
+def profiler_report(client_name, output_file):
+    try:
+        ok = 1
+        cols = ['grade', 'mcq_avgscore', 'mcq_cnt', 'as_avgscore'] 
+        mcqinfo = rds_df( f"SELECT grade,mcq_avgscore,mcq_cnt,as_avgscore FROM mcqas_info WHERE client_name='{client_name}';")
+        if mcqinfo is None:        
+            ok = 0
+            return
+        else:
+            mcqinfo.columns = cols
+        features = ['mcq_avgscore', 'mcq_cnt', 'as_avgscore']        
+        df = mcqinfo[cols]
+        pf = ProfileReport(df)
+        pf.to_file(output_file)
+    except:
+        ok = 0
+    return ok
 
 def edx_load_config(client_name):
     global edx_api_header, edx_api_url    
@@ -748,8 +749,12 @@ def edx_load_config(client_name):
 def do_main():
     global svcbot, bot_intance, edx_api_header, edx_api_url    
     err = 0    
-    vmsvclib.rds_connstr = ""
+    with open("vmbot.json") as json_file:  
+        bot_info = json.load(json_file)
+    vmsvclib.rds_connstr = bot_info['omdb']
     vmsvclib.rdscon = None
+    vmsvclib.rds_pool = 0
+    vmsvclib.rdsdb = None
     df = rds_df("select * from params where client_name = 'System';")
     if df is None:
         print("unable to proceed, params table not found")
@@ -758,8 +763,10 @@ def do_main():
     par_val = ['' + str(x) for x in df.value]
     par_key = [x for x in df.key]
     par_dict = dict(zip(par_key, par_val))
-    SvcBotToken = par_dict['ServiceBot']
-    adminchatid = int(par_dict['adminchatid'])
+    #SvcBotToken = par_dict['ServiceBot']
+    SvcBotToken = '989298710:AAEi6VVxa5dFBNJHQrQgKqcqdxj0QRJ9Bx4'
+    #adminchatid = int(par_dict['adminchatid'])
+    adminchatid = 71354936
     client_name = par_dict['client_name']
     gmt = int(par_dict['GMT'])
     #max_duration = int(par_dict['max_duration'])
@@ -782,7 +789,7 @@ def do_main():
 #------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     version = sys.version_info
-    if version.major == 3 and version.minor >= 7:
+    if version.major == 3 and version.minor >= 6:
         do_main()
     else:
         print("Unable to use this version of python\n", version)

@@ -31,7 +31,6 @@ import asyncio
 import telepot.aio
 from telepot.aio.loop import MessageLoop
 from telepot.aio.delegate import pave_event_space, per_chat_id, create_open
-
 import wget
 import json
 
@@ -104,7 +103,7 @@ fc_notf = "Reminder Msg"
 # this is for UAT
 faculty_menu = [[fc_schedule, fc_userimport, fc_edxupdate], [fc_intv, fc_notf, option_back]]
 # this is for production
-#faculty_menu = [[fc_schedule, fc_userimport, fc_edxupdate, option_back]]
+# faculty_menu = [[fc_schedule, fc_userimport, fc_edxupdate, option_back]]
 opt_stage = "Edit Stage Cohorts"
 opt_updstage = "Stage Update Cohorts"
 pb_config = "Configurator Playbook 📗"
@@ -147,15 +146,20 @@ def do_main():
     global vmbot, bot_intance, dt_model, nn_model
     vmsvclib.rds_connstr = ""
     vmsvclib.rdscon = None
+    vmsvclib.rdsdb = None
+    vmsvclib.rds_pool = 0
+    syslog('Starting up vmbot')   
+    print("starting up vmbot")
     if not loadconfig():
-        print("error loading config")
+        syslog("error loading config")
         return
     if dt_model.model_name=="" :
         txt = "AI grading model data file dt_model.bin is missing"
-        syslog('system', txt)
+        syslog('system : '+ txt)
     #elif nn_model.model_name=="" :
     #    txt = "AI grading model data file ffnn_model.hdf5 is missing"
-    #    syslog('system', txt)
+    #    syslog('system : '+ txt)
+    syslog("Running telepot async library")
     bot_intance = BotInstance()    
     loop = asyncio.get_event_loop()
     loop.create_task(MessageLoop(bot_intance.bot).run_forever())
@@ -164,7 +168,7 @@ def do_main():
     return 
 
 async def job_scheduler():
-    global bot_intance,vmbot
+    global bot_intance,vmbot,rdscon
     client_name = bot_intance.client_name
     resp_dict = bot_intance.resp_dict
     pass_rate = bot_intance.pass_rate
@@ -173,37 +177,36 @@ async def job_scheduler():
     edx_time = bot_intance.edx_time  # currently  2200 Sgp time    
     automsg = bot_intance.automsg   # currently 0900 Sgp time
     gmt = bot_intance.gmt  # azure version : gmt = 8
-    while True :
-    #        zz = """
+    while True :    
         timenow = time_hhmm(gmt)
-        if (timenow % 60)==0:
-            checkjoblist()
+        #vmsvclib.rdscon = rds_connector()
+        #vmsvclib.rdscon = rdsdb.get_connection()
+        vmsvclib.rdscon = vmsvclib.rds_connector()
+        vmsvclib.rdscon.ping(True)
+        vmsvclib.rdscon.close()
+        await checkjoblist()
         if (timenow==automsg) and (automsg>0):
-            print("running auto_notify")
+            syslog("running auto_notify")
             await auto_notify(client_name, resp_dict, pass_rate, adminchatid)
-            print("completed auto_notify")
-            print("running auto_intervent")
+            syslog("completed auto_notify, running auto_intervent")
             await auto_intervent(client_name, resp_dict, pass_rate, adminchatid)
-            print("completed auto_intervent")
+            syslog("completed auto_intervent")
             await asyncio.sleep(60)
         if (edx_time > 0) and (timenow==edx_time) and (edx_cnt==0) :
             edx_cnt = 1
-            print("running load_edxdata")
+            syslog("running load_edxdata")
             load_edxdata()
             await asyncio.sleep(60)
-            print("completed with load_edxdata")
+            syslog("completed with load_edxdata")
         if (edx_time > 0) and (timenow > edx_time) and (edx_cnt==1):
             edx_cnt = 0
-        #"""
-        await asyncio.sleep(1)
+        await asyncio.sleep(60)
     return
 
 def load_edxdata():
-    #async def load_edxdata():
-    #async asyncio.sleep(1)
     global vmbot, bot_intance
     client_name = bot_intance.client_name
-    syslog(client_name,"load_edxdata started")
+    syslog("load_edxdata started")
     date_today = datetime.datetime.now().date()
     sub_str  = bot_intance.sub_str
     yrnow = str(date_today.strftime('%Y'))
@@ -243,10 +246,10 @@ def load_edxdata():
         vmedxlib.edx_import(course_id, client_name)
         updated_courses.append(course_id)
 
-    #print("mass_update_usermaster")
+    syslog("mass_update_usermaster")
     vmedxlib.mass_update_usermaster(client_name)
-    #print("load_edxdata completed")
-    syslog(client_name,"load_edxdata completed")
+    syslog("load_edxdata completed")
+    syslog("load_edxdata completed")
     return
 
 async def auto_notify(client_name, resp_dict, pass_rate, adm_chatid):
@@ -281,7 +284,7 @@ async def auto_notify(client_name, resp_dict, pass_rate, adm_chatid):
     count = len(course_list)
     if count == 0:        
         return
-    syslog(client_name,"auto_notify started")
+    syslog("auto_notify started")
     efilter = bot_intance.efilter
     notif0 = resp_dict['notif0']
     notif1 = resp_dict['notif1']
@@ -316,7 +319,7 @@ async def auto_notify(client_name, resp_dict, pass_rate, adm_chatid):
         sent_list = []
         for sid in ulist:
             uname = udict[sid]
-            print(sid, uname)
+            syslog(sid, uname)
             df1 = udf[ udf.studentid == sid ].copy()
             (tt, vars) = verify_student(client_name, df1, sid, course_id, sdf)
             df2 = mdf[ mdf.studentid == sid ].copy()
@@ -368,7 +371,7 @@ async def auto_notify(client_name, resp_dict, pass_rate, adm_chatid):
 
             if debug_mode:
                 txt = course_id + '\t' + str(sid) + '\n' + txt
-                await bot_intance.bot.sendMessage(adm_chatid, txt)
+                print(txt)                
             else:
                 #zz="""
                 if tid <= 0:
@@ -391,9 +394,9 @@ async def auto_notify(client_name, resp_dict, pass_rate, adm_chatid):
             try:
                 await bot_intance.bot.sendMessage(adm_chatid, msg)
             except:
-                print(msg)
-        syslog(client_name,msg)
-    syslog(client_name, "auto_notify completed")
+                syslog(msg)
+        syslog(msg)
+    syslog("auto_notify completed")
     await bot_intance.bot.sendMessage(adm_chatid, "auto_notify completed")
     return
 
@@ -407,7 +410,8 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
         # course_list = [ 'course-v1:Lithan+ITC-0320B+15Jul2020' ] # 5188, 5297 , 6866
         # course_list = [ 'course-v1:Lithan+FOS-0720A+08Jul2020' ] # 6686 6651
         # course_list = [ 'course-v1:Lithan+ICO-0620A+24Jul2020' ] # 6161 6464
-        course_list = [ 'course-v1:Lithan+ICO-0520B+26Jun2020' ] # 1716
+        # course_list = [ 'course-v1:Lithan+ICO-0520B+26Jun2020' ] # 1716
+        course_list = ['course-v1:Lithan+FOS-0820B+17Aug2020'] # 5267, 7447
     else:
         #zz = """
         query = "SELECT DISTINCT a.courseid FROM userdata a "
@@ -427,7 +431,7 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
     if mdf is None:
         return
     mdf.columns = bot_intance.usermaster_cols
-    syslog(client_name,"auto_intervent started")
+    syslog("auto_intervent started")
     vars = dict()
     txt =  ""
     efilter = bot_intance.efilter
@@ -449,7 +453,7 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
     eoc7_userdict = dict()
     eoc7_mailcnt = 0
     for course_id in course_list:
-        #print(course_id)
+        syslog(course_id)
         eoc = vmedxlib.edx_endofcourse(client_name, course_id) # ended=1 else 0
         soc = vmedxlib.edx_course_started(client_name, course_id)  # started=1 else 0
         eoc_gap = vmedxlib.edx_eocgap(client_name, course_id, 7)
@@ -460,8 +464,6 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
         qry = f"select enquiry_email from course_module where client_name = '{client_name}' and module_code = '{module_code}';"
         enquiry_email = rds_param(qry)
         if (soc == 1) and ((eoc == 0) or (eoc_gap == 1)):
-            if debug_mode:
-                print(f"processing {course_id}")
             query = f"select * from stages where client_name='{client_name}' and courseid='{course_id}';"
             sdf = rds_df(query)
             if sdf is None:
@@ -478,13 +480,11 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
             uname_list = [x for x in udf.username]
             udict = dict(zip(ulist,uname_list))
             if debug_mode:
-                ulist = [ 1716 ]
+                #ulist = [ 1716 ]
                 #eoc_gap = 1
-
+                ulist = [7447]                
             for sid in ulist:
                 uname = udict[sid]                
-                if debug_mode:
-                    print(f"processing {sid} {uname}")
                 df1 = udf[ udf.studentid == sid ].copy()
                 df2 = mdf[ mdf.studentid == sid ].copy()
                 email = df2.email.values[0]
@@ -498,13 +498,13 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
                 tid = df2.chat_id.values[0]
                 binded = df2.binded.values[0]
                 tid = 0 if binded==0 else tid
-
                 (tt, vars) = verify_student(client_name, df1, sid, course_id, sdf)
                 (txt1, txt2, vars) = load_progress(df1, sid, vars, client_name, resp_dict, pass_rate, sdf)
                 if txt1 in ["_soc_","_eoc_"]:
                     if debug_mode:
-                        print(txt1, course_id, sid, uname)
+                        syslog( txt1 + "\t" + course_id + "\t" + str(sid) )
                     continue
+                print(509, sid, uname, tid, binded, course_id)
                 stagecode = vars['stagecode']
                 f2f_stage = vars['f2f_stage']
                 f2f_error = 0 if f2f_stage=="" else 1
@@ -523,7 +523,7 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
                 df = sdf[ sdf.stage == stagecode ].copy()
                 m = len(df)
                 if m == 0:
-                    print(f"no matching record in stages table for {stagecode} {course_id} {sid}")
+                    syslog(f"no matching record in stages table for {stagecode} {course_id} {sid}")
                     continue
                 else:
                     stageid = df.id.values[0]
@@ -540,6 +540,7 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
                 mcq_zero_iu = [x for x in iu_list if x in mcq_zero]
                 mcq_failed_iu = [x for x in iu_list if x in mcq_failed]
                 eoc7 = 0
+                
                 if eoc_gap == 1:
                     try:
                         eoc7 = vmedxlib.edx_eocend(client_name, course_id, 7)
@@ -555,9 +556,10 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
                         txt = notif10
                 else:
                     txt = notif3
-                    if (len(mcq_zero) + len(as_zero) == 0) and (f2f_error==0):
+                    #if (len(mcq_zero) + len(as_zero) == 0) and (f2f_error==0):  ## Salil's bright idea
+                    if (len(mcq_zero) + len(as_zero) + len(mcq_failed) + len(as_failed) == 0 ) and (f2f_error==0):
                         if debug_mode:
-                            txt += resp8
+                            txt += resp8                            
                         continue
                     if len(mcq_zero) > 0:
                         txt += notif4
@@ -617,6 +619,10 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
                 if '{lf}' in txt:
                     txt = txt.replace('{lf}', "\n")
 
+                if debug_mode:
+                    print(628, txt)
+                    continue
+                    
                 if eoc7==1:
                     await bot_intance.bot.sendMessage(adm_chatid, f"eoc {sid} {tid}")
                     eoc7_maildict[enquiry_email] += txt + "\n"
@@ -626,7 +632,7 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
                     if tid <= 0:
                         err_list.append(sid)
                     else:
-                        #try:
+                        #try:                        
                         await bot_intance.bot.sendMessage(tid, txt)  
                         sent_list.append(sid)
                         #except:
@@ -650,9 +656,9 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
                 try:
                     await bot_intance.bot.sendMessage(adm_chatid, msg)
                 except:
-                    #print(msg)
+                    syslog(msg)
                     pass
-            syslog(client_name,msg)
+            syslog(msg)
         await asyncio.sleep(1)
     # mess email to pillar owner
     ulist = ''
@@ -670,36 +676,36 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
         #else:
         await bot_intance.bot.sendMessage(adm_chatid, txt) # temporary use telegram
     del mdf
-    syslog(client_name,"auto_intervent completed")
+    syslog("auto_intervent completed")
     await bot_intance.bot.sendMessage(adm_chatid, "auto_intervent completed")
     return
 
 def loadconfig():
     global ft_model, dt_model, nn_model, mcq_analysis, vmbot
     ok = True
-    try:
-        dt = "dt_model.bin"
-        ft = "ft_model.bin"
-        ffnn = "ffnn_model.hdf5"
-        with open("vmbot.json") as json_file:
-            bot_info = json.load(json_file)
+    #try:
+    dt = "dt_model.bin"
+    ft = "ft_model.bin"
+    ffnn = "ffnn_model.hdf5"
+    with open("vmbot.json") as json_file:
+        bot_info = json.load(json_file)
 
-        client_name = bot_info['client_name']
-        ft_model = vmnlplib.NLP_Parser()
-        ft_model.load_modelfile(ft, client_name)
-        dt_model = vmaiglib.MLGrader()
-        dt_model.load_model(dt)
-        if dt_model.model_name == "":
-            print("Error loading dt_model")
-            ok = False
-        #nn_model = vmffnnlib.NNGrader()
-        #nn_model.model_loader(ffnn)
-        #if nn_model.model_name == "":
-        #    print("Error loading nn_model")
-        #    ok = False
-        mcq_analysis = vmmcqdlib.MCQ_Diff()
-    except:
+    client_name = bot_info['client_name']
+    ft_model = vmnlplib.NLP_Parser()
+    ft_model.load_modelfile(ft, client_name)
+    dt_model = vmaiglib.MLGrader()
+    dt_model.load_model(dt)
+    if dt_model.model_name == "":
+        syslog("Error loading dt_model")
         ok = False
+    #nn_model = vmffnnlib.NNGrader()
+    #nn_model.model_loader(ffnn)
+    #if nn_model.model_name == "":
+    #    syslog("Error loading nn_model")
+    #    ok = False
+    mcq_analysis = vmmcqdlib.MCQ_Diff()
+    #except:
+    #    ok = False
     return ok    
 
 def load_respdict():
@@ -725,7 +731,7 @@ class BotInstance():
         self.adm_list = []
         self.user_list = {}
         self.chat_list = {}
-        self.job_items = {}
+        self.job_items = {}        
         self.vars = dict()
         self.cmd_dict = dict()
         self.keys_dict = dict()
@@ -764,9 +770,10 @@ class BotInstance():
         client_name = bot_info['client_name']
         df = rds_df("select * from params where client_name = 'System';")
         if df is None:
-            print("Unable to access params table from RDS")
+            syslog("Unable to access params table from RDS")
             return
-        df.columns = ['client_name','key', 'value']
+        #df.columns = ['client_name','key', 'value']
+        df.columns = ['client_name','key', 'value', 'paramId']
         par_val = ['' + str(x) for x in df.value]
         par_key = [x for x in df.key]
         par_dict = dict(zip(par_key, par_val))
@@ -783,9 +790,10 @@ class BotInstance():
         self.client_name = client_name
         df = rds_df(f"select * from params where client_name = '{self.client_name}';")
         if df is None:
-            print("Unable to access params table from RDS")
+            syslog("Unable to access params table from RDS")
             return
-        df.columns = ['client_name','key', 'value']
+        #df.columns = ['client_name','key', 'value']
+        df.columns = ['client_name','key', 'value', 'paramId']
         par_val = ['' + str(x) for x in df.value]
         par_key = [x for x in df.key]
         par_dict = dict(zip(par_key, par_val))
@@ -809,7 +817,7 @@ class BotInstance():
             #    pave_event_space()( [per_chat_id(), per_callback_query_chat_id()],
             #    create_open, MessageCounter, timeout=max_duration, include_callback_query=True),
             #])
-            print(Token) # @OmniMentorBot
+            syslog(Token) # @OmniMentorBot
             self.bot = telepot.aio.DelegatorBot(Token, [
                 pave_event_space()( per_chat_id(),
                 create_open, MessageCounter, timeout=max_duration),            
@@ -859,6 +867,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         self.client_name = ""
         self.chatid = 0
         self.chatname = ""
+        self.binded = 0
         self.student_id = 0
         self.email = ''
         self.username = ''
@@ -898,7 +907,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             pass
         #bot_prompt(self.bot, self.chatid, txt, [[btn_hellobot]])
         await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup([[btn_hellobot]]))        
-        syslog('system',f"telegram user {self.chatid} logged out.")
+        syslog(f"telegram user {self.chatid} logged out.")
         self.new_session = True
         self.chatid = 0
         self.student_id = 0
@@ -1087,13 +1096,13 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         txt = ""
         if use_regexpr == 1 :
             txt = ft_model.match_resp(resp)
-            syslog( "REG" , txt )
+            syslog( "REG : " + txt )
 
         if txt == '':
             (result, accuracy) = ft_model.get_response(resp)
             if accuracy >= match_score:
                 txt = result
-                syslog( "NLP" , txt )
+                syslog( "NLP : " + txt )
 
         if txt == '':
             ( result, accuracy ) = ft_model.find_matching( resp )
@@ -1103,7 +1112,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     user_resp = result.lower()
                     self.sender.sendMessage(txt)
                 txt = ft_model.match_resp(user_resp)
-                syslog( "REG" , txt )
+                syslog( "REG : " + txt )
 
         if (txt != '') and re.search('.*\{.*', txt):
             stagedate = str(self.stagedate)
@@ -1162,13 +1171,14 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         global vmbot,bot_intance
         client_name = bot_intance.client_name
         self.sender.sendMessage("Please wait for a while.")
+        syslog(f"mcq update, assignment update {self.courseid} student #{self.student_id}")
         try:
             if self.is_admin:
                 vmedxlib.update_mcq(self.courseid, client_name, 0)
                 vmedxlib.update_assignment(self.courseid, client_name, 0)
             else:
-                vmedxlib.update_mcq(self.courseid, client_name, self.student_id)
-                vmedxlib.update_assignment(self.courseid, client_name, self.student_id)
+                vmedxlib.update_mcq(self.courseid, client_name, self.student_id) #it takes 6 seconds
+                vmedxlib.update_assignment(self.courseid, client_name, self.student_id) #it takes 3 seconds
         except:
             pass
         qry = "SELECT u.* FROM userdata u INNER JOIN user_master m ON u.client_name=m.client_name "
@@ -1177,8 +1187,8 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         df = rds_df( qry )
         if df is None:
             self.userdata = None
-            vmedxlib.edx_import(self.courseid, self.client_name)
-            df = rds_df( qry )
+            #vmedxlib.edx_import(self.courseid, self.client_name)
+            #df = rds_df( qry )
         if df is not None:
             df.columns = bot_intance.userdata_cols
             self.userdata = df
@@ -1191,6 +1201,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         else:
             df.columns = bot_intance.stages_cols
             self.stagetable = df
+        syslog("end of update")
         return
 
     def load_courseinfo(self, resp):
@@ -1216,12 +1227,15 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             return ('', [])
         if self.userdata is None:
             return ('', [])
+        syslog("verify_student")
         (txt, self.records ) = verify_student(self.client_name, self.userdata, sid, self.courseid, None)
         self.mentor_email = self.records['mentor_email']
         self.asst_email = self.records['asst_email']
-        if sid > 0:
-            binded = rds_param(f"select binded FROM user_master where client_name='{self.client_name}' and studentid={sid};")
-            if binded==0:
+        if sid > 0:        
+            #binded = rds_param(f"select binded FROM user_master where client_name='{self.client_name}' and studentid={sid};")
+            cid = rds_param(f"select chat_id FROM user_master where client_name='{self.client_name}' and studentid={sid};")
+            binded = self.binded
+            if binded==0 and cid==0:
                 query = f"update user_master set chat_id={chat_id} where client_name='{self.client_name}' and studentid={sid};"
                 rds_update(query)
         err = 0
@@ -1229,8 +1243,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             txt = "Hi, there is incomplete information at the moment, the session is not ready yet.\n\n"
             txt += "Please select the course from below list."
             btn_course_list = build_menu(self.list_courseids,1)
-            #bot_prompt(self.bot, self.chatid, txt, btn_course_list)
-            #self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(btn_course_list))
             self.menu_id = bot_intance.keys_dict[option_learners]
             return (txt, btn_course_list)
         else:
@@ -1252,6 +1264,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             #vmbot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(self.menu_home))
             self.menu_id = bot_intance.keys_dict[lrn_student]
             return (txt, self.menu_home)
+        syslog("completed")
         return ('', [])
 
     def getdoc(self, bot, msg):
@@ -1274,15 +1287,15 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
     def grad_prediction(self):
         global nn_model, dt_model
         if dt_model.model_name == "" :
-            print("please load the model first")
+            syslog("please load the model first")
             return ( [] , None )
         #if nn_model.model_name == "":
-        #    print("please load the model first")
+        #    syslog("please load the model first")
         #    return []
         txt = ""
         df = self.userdata
         if self.userdata is None:
-            print("there is no data")
+            syslog("there is no data")
         list_sid = [str(x) for x in df.studentid]
         if len(list_sid)==0:
             return ( [] , None )
@@ -1291,7 +1304,8 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         progress_df = dict()
         progress_tt = dict()
         tbl = []
-        new_sidlist = []        
+        new_sidlist = []
+        syslog(courseid)
         for vv in list_sid:
             sid = int(vv)
             vars = load_vars(self.userdata, sid)
@@ -1342,11 +1356,12 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         self.records['progress_tt'] = progress_tt
         df1 =  pd.DataFrame( tbl )
         if len(df1) == 0:
-            self.sender.sendMessage("There is no data for this course id")
+            #self.sender.sendMessage("There is no data for this course id")
             return ( [] , None )
         df1.columns = ['Student ID#','Name', 'Prediction']
         #tt = "AI Grading for " + self.courseid
         df1= df1.sort_values(by ='Prediction')
+        syslog("completed")
         return (new_sidlist , df1)
 
     def find_course(self, stud):
@@ -1358,6 +1373,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         yrnow = str(date_today.strftime('%Y'))
         if client_name == "":
             return (course_id_list, course_name_list, logon_list)
+        syslog(f"student #{stud}")
         if stud==0:
             sub_str  = bot_intance.sub_str
             qry = f"SELECT DISTINCT a.course_id, a.course_name FROM playbooks a "
@@ -1370,14 +1386,8 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 course_id_list = [x for x in df.course_id]
                 course_name_list = [x for x in df.course_name]
             return (course_id_list, course_name_list, course_id_list)
-        #userinfo = {}
-        #api_url = bot_intance.edx_api_url
-        #if api_url != '':
-        #    url = f"{api_url}/user/fetch/{stud}"
-        #    headers = bot_intance.edx_api_header
-        #    userinfo = edxapi_getuser(headers, url)
-        #if userinfo == {} :
         (course_id_list, course_name_list, logon_list) = rds_loadcourse(client_name, stud)
+        syslog("completed")
         return (course_id_list, course_name_list, logon_list)
 
     def reply_markup(self, buttons=[], opt_resize = True):        
@@ -1392,6 +1402,8 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         global ft_model, dt_model, mcq_analysis, vmbot, bot_intance
         try:
             content_type, chat_type, chat_id = telepot.glance(msg)
+            # 20200818 040416 incoming msg    text private 71354936
+            syslog(f"incoming msg : {content_type} {chat_type} {chat_id}")
             bot = self.bot
             self.chatid = chat_id
             keys_dict = bot_intance.keys_dict
@@ -1419,14 +1431,14 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             await self.sender.sendMessage(txt)
             return
         else:
-            syslog( content_type , str(msg) )
+            syslog( f"{content_type} , {msg}" )
 
         if chat_id <0 :
             await self.bot.sendMessage(71354936, resp + " from " + str(chat_id))
             return
 
         if (resp not in list(keys_dict)) and (resp != [option_back]) and (resp[0]!='/'):       
-            syslog(str(self.chatid), f"response = {resp}")
+            syslog(f"chat_id = {self.chatid} response = {resp}")
             
         if resp=='/?':
             retmsg = self.session_info()            
@@ -1434,9 +1446,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             k = bot_intance.get_menukey(self.menu_id) 
             retmsg += "\nmenu key : " + str(k)
 
-        #elif resp=='/z':
-            #pass
-                
         elif resp=='/end':
             tid = self.endchat()
             if tid > 0:
@@ -1446,7 +1455,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             txt = "sesson closed."
             await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([['/start']]))
             self.is_admin = (chat_id == adminchatid)
-            syslog("system", "telegram user " + str(chat_id) + " offine.")            
+            syslog("telegram user " + str(chat_id) + " offine.")            
             await self.logoff()
         
         elif resp=='/stop' and (chat_id in [adminchatid, 71354936]):
@@ -1456,8 +1465,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             await self.logoff()
             result ='<pre> ▀▄▀▄▀▄ OmniMentor ▄▀▄▀▄▀\n Powered by Sambaash</pre>Contact <a href=\"tg://user?id=1064466049">@OmniMentor</a>'
             await bot.sendMessage(chat_id,result,parse_mode='HTML')
-            syslog('system', txt)
-            
+            syslog('system : ' + txt)
                 
         elif resp == '/start' or resp == '/hellobot' or resp == btn_hellobot:            
             self.reset
@@ -1466,64 +1474,67 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             self.menu_home = learners_menu
             self.edited = 0
             self.client_name = bot_intance.client_name
-            if chat_id > 0 :
-                tid = self.endchat()
-                if tid > 0:
-                    txt = "Live chat session disconnected. 👋"
-                    await self.bot.sendMessage(tid, txt)
-                    await self.bot.sendMessage(chat_id, txt)
-                syslog("system", "telegram user " + str(chat_id) + " online.")
-                query = "select * from user_master where binded=1 and chat_id =" + str(chat_id) + " and client_name = '" + self.client_name + "';"
-                df = rds_df(query)
-                if df is None:
-                    sid = 0
-                    self.student_id = 0
-                    usertype = 0
-                    courseid = ""
-                    binded = 0
+            if chat_id <= 0 :
+                # chatgroup support not ready
+                return             
+            tid = self.endchat()                
+            if tid > 0:
+                txt = "Live chat session disconnected. 👋"
+                await self.bot.sendMessage(tid, txt)
+                await self.bot.sendMessage(chat_id, txt)                    
+            syslog("system : " + "telegram user " + str(chat_id) + " online.")            
+            query = "select * from user_master where binded=1 and chat_id =" + str(chat_id) + " and client_name = '" + self.client_name + "';"
+            df = rds_df(query)            
+            if df is None:
+                sid = 0
+                self.student_id = 0
+                usertype = 0
+                courseid = ""
+                binded = 0
+            else:
+                df.columns = bot_intance.usermaster_cols
+                sid = int(df.studentid.values[0])
+                self.student_id = sid
+                self.username = df.username.values[0]
+                usertype = df.usertype.values[0]
+                courseid = df.courseid.values[0]
+                binded =  df.binded.values[0]
+                self.email = df.email.values[0]
+                self.binded = binded
+            await self.sender.sendMessage("Please wait for a while.")
+            if (binded==1) and (sid > 0) and (courseid != ""):                
+                if usertype == 1:
+                    (self.list_courseids, self.list_coursename,self.course_selection) = self.find_course(sid)
+                    query = f"select course_name from playbooks where course_id ='{courseid}' and client_name='{self.client_name}';"
+                    coursename = rds_param(query)
+                    msg = "You are in course:\n" + courseid
+                    self.courseid = courseid
+                    self.load_tables()
+                    await bot.sendMessage(chat_id, msg)                    
+                    (txt, menu_item) = self.check_student(self.student_id, self.chatid)
+                    await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
+                    return
+                elif usertype == 11:
+                    self.is_admin = True
+                    self.menu_id = 1
+                    bot_intance.adm_list.append(sid)
+                    txt = banner_msg("Welcome " + self.username,"You are now connected to Mentor mode.")
+                    self.menu_home = mentor_menu                            
+                    (self.list_courseids, self.list_coursename,self.course_selection) = self.find_course(0)
+                    #bot_prompt(self.bot, self.chatid, txt, self.menu_home)
+                    await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(self.menu_home))
+                    return
                 else:
-                    df.columns = bot_intance.usermaster_cols
-                    sid = int(df.studentid.values[0])
-                    self.student_id = sid
-                    self.username = df.username.values[0]
-                    usertype = df.usertype.values[0]
-                    courseid = df.courseid.values[0]
-                    binded =  df.binded.values[0]
-                    self.email = df.email.values[0]
-                if (binded==1) and (sid > 0) and (courseid != ""):
-                    if usertype == 1:
-                        (self.list_courseids, self.list_coursename,self.course_selection) = self.find_course(sid)
-                        query = f"select course_name from playbooks where course_id ='{courseid}' and client_name='{self.client_name}';"
-                        coursename = rds_param(query)
-                        msg = "You are in course:\n" + courseid
-                        self.courseid = courseid
-                        self.load_tables()
-                        await bot.sendMessage(chat_id, msg)
-                        await self.sender.sendMessage("Please wait for a while.")
-                        (txt, menu_item) = self.check_student(self.student_id, self.chatid)
-                        await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
-                        return
-                    elif usertype == 11:
-                        self.is_admin = True
-                        self.menu_id = 1
-                        bot_intance.adm_list.append(sid)
-                        txt = banner_msg("Welcome " + self.username,"You are now connected to Mentor mode.")
-                        self.menu_home = mentor_menu                            
-                        (self.list_courseids, self.list_coursename,self.course_selection) = self.find_course(0)
-                        #bot_prompt(self.bot, self.chatid, txt, self.menu_home)
-                        await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(self.menu_home))
-                        return
-                    else:
-                        await self.sender.sendMessage("Sorry your account is blocked, please contact the admin.")
-                        await self.logoff()
-                        return
-                else:
-                    self.list_courseids = []
-                    txt = 'My name is OmniMentor, I am your friendly learning facilitator at ' + self.client_name + '.\n'
-                    txt += "\nplease enter your student id or email address :"
-                    #bot_prompt(self.bot, self.chatid, txt, [])
-                    await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([]))
-                    self.menu_id = keys_dict[option_learners]
+                    await self.sender.sendMessage("Sorry your account is blocked, please contact the admin.")
+                    await self.logoff()
+                    return
+            else:
+                self.list_courseids = []
+                txt = 'My name is OmniMentor, I am your friendly learning facilitator at ' + self.client_name + '.\n'
+                txt += "\nplease enter your student id or email address :"
+                #bot_prompt(self.bot, self.chatid, txt, [])
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([]))
+                self.menu_id = keys_dict[option_learners]
 
         elif self.menu_id == keys_dict[option_mainmenu]:
             if resp == option_fct :
@@ -1572,7 +1583,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     await self.bot.sendMessage(chat_id, txt)
                 if chat_id in bot_intance.adm_list:
                     bot_intance.adm_list.pop(chat_id)
-                syslog("system", "telegram user " + str(chat_id) + " offine.")
+                syslog("system : telegram user " + str(chat_id) + " offine.")
                 await self.logoff()
                 await self.bot.sendMessage(chat_id, "Session closed.", reply_markup=self.reply_markup([[btn_hellobot]]))
 
@@ -1624,7 +1635,11 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 #query = "select username from user_master where studentid =" + resp + \
                 #    " and client_name = '" + self.client_name + "';"
                 #self.username = rds_param(query)                
-                if usertype == 11:
+                if usertype not in [1, 11]:
+                    await self.sender.sendMessage("Sorry your account is blocked, please contact the admin.")
+                    await self.logoff()
+                    return                
+                elif usertype == 11:
                     self.is_admin = True
                     self.menu_id = 1
                     self.student_id = sid
@@ -1635,10 +1650,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     #bot_prompt(self.bot, self.chatid, txt, self.menu_home)
                     await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(self.menu_home))
                     return
-                elif usertype not in [1,2]:
-                    await self.sender.sendMessage("Sorry your account is blocked, please contact the admin.")
-                    await self.logoff()
-                    return                
                 if sid in bot_intance.user_list:
                     txt = "Sorry you can't logon using another telegram account\nPlease try again later."
                     await self.sender.sendMessage(txt)
@@ -1659,14 +1670,14 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     self.courseid = self.course_selection[0]
                     n = self.list_courseids.index(self.courseid)
                     self.coursename = self.list_coursename[n]
-                    self.load_tables()
+                    self.load_tables() # it takes 9 seconds
                     if self.userdata is None:
                         await self.sender.sendMessage(f"we do not have any data for course id\n{self.courseid}")
                         return
                     else:
                         #self.check_student(self.student_id, chat_id)
                         await self.sender.sendMessage("Please wait for a while.")
-                        (txt, menu_item) = self.check_student(self.student_id, chat_id)
+                        (txt, menu_item) = self.check_student(self.student_id, chat_id) # it takes 3 secs
                         await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))                        
                 elif slen < 20:
                     btn_course_list = build_menu(stud_courselist, 1) 
@@ -1706,8 +1717,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     else:                        
                         sid = self.student_id
                         ch_id = self.chatid   
-                        #self.load_tables()  
-                        #self.update_stage(sid)
                         await self.sender.sendMessage("Please wait for a while.")
                         (txt, menu_item) = self.check_student(sid, ch_id)
                         await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
@@ -1845,21 +1854,16 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
 
         elif self.menu_id == keys_dict[option_bind] :
             sid = str(self.student_id)            
-            cid = self.courseid            
+            cid = self.courseid
             if "yes," in resptxt:
-                query = f"select * from user_master where binded=1 and chat_id={str(chat_id)} and client_name = '{self.client_name}';"
-                df = rds_df(query)
-                if df is None:
-                    ulist = []
-                else:
-                    df.columns = bot_intance.usermaster_cols
-                    ulist = [x for x in df.studentid if x != self.student_id]
-                if ulist == []:
+                query = f"select count(*) as cnt from user_master where binded=1 and studentid={sid} and client_name = '{self.client_name}';"
+                cnt = rds_param(query)
+                if cnt==0:
                     updqry = f"update user_master set binded=1, chat_id={str(chat_id)}, courseid='{cid}' where client_name = '{self.client_name}' and studentid={sid};"
                     rds_update(updqry)
                     txt = "Auto-Login option enabled"
                 else:
-                    txt = f"Sorry unable to bind due to more than one Student ID found under this telegram account : {ulist}"
+                    txt = "Sorry unable to bind due to more than one Student ID"
             elif "no," in resptxt:
                 updqry = f"update user_master set binded=0 where client_name = '{self.client_name}' and studentid={sid};"
                 rds_update(updqry)
@@ -1868,7 +1872,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 txt = "you are back to main menu"
             #bot_prompt(self.bot, self.chatid, txt, self.menu_home)
             await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(self.menu_home))
-            syslog(str(self.chatid),txt)
+            syslog(str(self.chatid) + " : " + txt)
             self.menu_id = keys_dict[lrn_student]
 
         elif self.menu_id == keys_dict[option_fct]:
@@ -1882,13 +1886,13 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             btn_course_list = build_menu( course_list , 1)
             if resp == fc_userimport :                
                 await self.sender.sendMessage("System has scheduled a job to update user master.")                
-                job_request("ServiceBot",adminchatid, self.client_name,"mass_update_usermaster","")
+                job_request(self.chatid, self.client_name,"mass_update_usermaster","")
             elif resp == fc_edxupdate :
                 await self.sender.sendMessage("System has scheduled a job to import from LMS.")                
-                job_request("ServiceBot",adminchatid, self.client_name,"edx_mass_import","")
+                job_request(self.chatid, self.client_name,"edx_mass_import","")
             elif resp == fc_schedule :
                 await self.sender.sendMessage("System has scheduled a job to import from google calendar.")                
-                job_request("ServiceBot",adminchatid, self.client_name,"mass_update_schedule","")               
+                job_request(self.chatid, self.client_name,"mass_update_schedule","")               
             elif resp == fc_intv :
                 await self.sender.sendMessage("Processing intervention check now.")
                 await auto_intervent(bot_intance.client_name, bot_intance.resp_dict, bot_intance.pass_rate, self.chatid)
@@ -1948,7 +1952,9 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 self.menu_id = 1
 
         elif self.menu_id == keys_dict[pb_userdata]:
-            if self.load_courseinfo(resp) == 1:                
+            await self.sender.sendMessage("Please wait for a moment")            
+            if self.load_courseinfo(resp) == 1:
+                vmedxlib.update_schedule(self.courseid, self.client_name)
                 self.courseid = resp
                 txt = "You are looking at :\n" + resp
                 #bot_prompt(self.bot, self.chatid, txt, course_menu)                
@@ -2492,7 +2498,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             self.menu_id = keys_dict[option_chat]
 
         elif self.menu_id > 0:
-            syslog( str(self.student_id) , "Q:" + resp )
+            syslog( str(self.student_id) + " Q:" + resp )
             (txt,recommendation) = self.runfaq(resp)
             if (txt != ""):
                 #bot_prompt(self.bot, self.chatid, txt, self.menu_home)
@@ -2515,25 +2521,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             retmsg = retmsg[4000:]
             await self.sender.sendMessage(txt)
         return
-
-def syslog(msgtype, message):
-    global vmbot,bot_intance
-    if message == "":
-        return
-    date_now = time.strftime('%Y%m%d', time.localtime() )
-    time_now = time.strftime('%H%M%S', time.localtime() )
-    try:
-        query = """insert into syslog(date,time,type,message) values(_d,"_t","_x","_y");"""
-        query = query.replace('_d',date_now)
-        query = query.replace('_t',str(time_now))
-        query = query.replace('_x',msgtype)
-        query = query.replace('_y',message)
-        rds_update(query)
-    except:
-        #print("Error for ", msgtype, message)
-        pass
-    return
-   
+      
 def verify_student(cname, userdata, student_id, courseid, stagedf):
     global vmbot,bot_intance
     vars = dict()
@@ -2668,7 +2656,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     sid = student_id
     dtnow = datetime.datetime.now().date().strftime('%Y%m%d')
     list1=[datetime.datetime.strptime(dt,"%d/%m/%Y").strftime('%Y%m%d') for dt in stagedf.startdate]
-    list2=[x for x in list1 if x < dtnow ]
+    list2=[x for x in list1 if x <= dtnow ]
     if list2==[]:
         return ("", "", vars)
     stagebyschedule = stagedf.iloc[ (len(list2) - 1) ]['name']
@@ -2722,6 +2710,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     mfail = []
     afail = []
     n1 = 0
+    syslog(f"{courseid} {sid}")
     for n in range(stglen):
         stagecode = stg_list[n]        
         stagename = stage_names_list[n]
@@ -2743,7 +2732,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
         (pass_stage,has_score,avg_score,mcqas_list,max_attempts,list_attempts,mcq_avg,mcq_zero,mcq_pass,mcq_failed,mcq_attempts,mcnt,\
         mcq_att_balance,as_avg,as_zero,as_pass,as_failed,as_attempts,acnt,as_att_balance,mcqas_complete,risk_level,tt) \
             = get_stageinfo(vars, pass_rate, amt, stagecode, mcqvars, asvars)
-        #print(n, stagecode,stagename, stagebyschedule, statusbyprogress, mcqvars,pass_stage,asvars)
+        #syslog(n, stagecode,stagename, stagebyschedule, statusbyprogress, mcqvars,pass_stage,asvars)
         #if stglen==(n+1):
             #stagename = stagebyschedule = statusbyprogress = stage_names_list[n]
             #stagename = statusbyprogress = stage_names_list[n]
@@ -2841,6 +2830,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
             'has_score', 'pass_stage', 'max_attempts', 'mcqas_list', 'mcq_zero', 'mcq_avg', 'as_pass', 'as_failed', 'risk_level', 'stg_list', 'mcqlist', 'pm_stage', 'att_rate', \
             'mcnt', 'acnt', 'as_avg', 'as_zero', 'f2f_stage', 'stagebyprogress', 'mcq_attempts',  'mcq_att_balance', 'as_att_balance', 'as_attempts', 'duedate'] :
         vars[vv] = eval(vv)
+    syslog("completed")
     return (txt_hdr, txt, vars)
 
 def display_progress(df, sdf, sid, vars, client_name, resp_dict, pass_rate=0.7):
@@ -2862,6 +2852,7 @@ def display_progress(df, sdf, sid, vars, client_name, resp_dict, pass_rate=0.7):
         vars['notification'] = "Congratulations, you have reached the end of the course."
         vars['course_alive'] = 0
         return vars
+    syslog("started")
     cid = vars['courseid']
     sid = vars['studentid']
     stg = vars['stage']
@@ -2939,39 +2930,32 @@ def display_progress(df, sdf, sid, vars, client_name, resp_dict, pass_rate=0.7):
     if '{due_date}' in txt:
         txt = txt.replace('{fcdate}' ,  duedate )
     vars['notification'] = txt
-    
-    #query = f"update userdata set risk_level = {risk_level}, stage = '{stagebyprogress}', mcq_zero = '{mcq_zero}' "
-    #query += f" ,mcq_failed = '{mcq_failed}', as_zero = '{as_zero}', as_failed = '{as_failed}' "
-    #query += f" where client_name='{client_name}' and courseid='{cid}' and studentid={sid};"
-    #try:
-        #rds_update(query)
-    #except:
-        #print(query)
-        #syslog(client_name,f"unable to execute sql\n{query}")
+    syslog("completed")
     return vars
 
 def grad_pred_text(vars, client_name, use_neural_network = False):
     txt = ""
     #use_neural_network = False # True or False
-    if use_neural_network:                    
-        #global nn_model        
-        pass
+    #if use_neural_network:
+        #global nn_model
         # list_avg = lambda x : 0 if len(x)==0 else sum(x)/len(x)
         # if (nn_model.model_name != "") and ((vars['mcnt'] + vars['acnt']) >0):
         #    mavg = vars['mcq_avg']
         #    mcqavgatt = list_avg( vars['mcq_attempts'] )
         #    mcqmaxatt = max( vars['mcq_attempts'] )
         #    aavg = vars['as_avg'] 
-        #    acnt = vars['acnt']  
+        #    acnt = vars['acnt']
         #    as_avgatt = list_avg( vars['as_attempts'] )
         #    as_maxatt = max( vars['as_attempts'] )
         #    grad_pred_nn = nn_model.pred(client_name,mavg,mcqavgatt,mcqmaxatt,aavg,as_avgatt,as_maxatt,acnt)
         #    txt += "\n\nAI grading prediction : " +  "{:.2%}".format(grad_pred[0]) + "\n\n"
-    else:
-        global dt_model 
-        if (dt_model.model_name != "") and ((vars['mcnt'] + vars['acnt']) >0):
-            grad_pred = dt_model.predict(vars['mcq_avg'] , vars['as_avg'], 13)
-            txt += "\n\nAI grading prediction : " +  "{:.2%}".format(grad_pred[0]) + "\n\n"            
+    #else:
+    global dt_model 
+    syslog("started")
+    if (dt_model.model_name != "") and ((vars['mcnt'] + vars['acnt']) >0):
+        grad_pred = dt_model.predict(vars['mcq_avg'] , vars['as_avg'], 13)
+        txt += "\n\nAI grading prediction : " +  "{:.2%}".format(grad_pred[0]) + "\n\n"
+    syslog("completed")
     return txt
     
 def load_vars(df, sid):
@@ -2986,43 +2970,15 @@ def load_vars(df, sid):
             vars[x] = eval(str(vars[x]))
     vars['mcq_due_dates'] = []
     vars['as_due_dates'] = []
-    #printdict(vars)
     return vars
 
-def job_request(bot_req,chat_id,client_name,func_req,func_param):
-    if (func_req == "") or ('.db' in vmsvclib.rds_connstr):
-        return
+def job_request(chat_id,client_name,func_req,func_param):
+    global bot_intance    
     gen_job_id = lambda : (''.join(random.choice( "ABCDEFGHJKLMNPQRTUVWXY0123456789" ) for i in range(12))).upper()    
-    date_now = time.strftime('%Y%m%d', time.localtime() )
-    time_now = time.strftime('%H%M%S', time.localtime() )
     job_id = gen_job_id()
-    try:
-        query = 'insert into job_list(date,time_start,time_end,job_id,client_name,chat_id,'
-        query += 'bot_req, func_req, func-param, status, message)'
-        query += ' values(_d, "_t", "0", "_j", "_c", _x, "_b", "_f", "_p","open","");'
-        query = query.replace('_d',date_now)
-        query = query.replace('_t',str(time_now))
-        query = query.replace('_j',job_id)
-        query = query.replace('_c',client_name)
-        query = query.replace('_x',str(chat_id))
-        query = query.replace('_b',bot_req)
-        query = query.replace('_f',func_req)
-        query = query.replace('_p',func_param)
-        query = query.replace('-p','_p')
-        rds_update(query)
-        #print(query)
-    except:
-        print(f"Error for job {job_id} on function {func_req}")
+    bot_intance.job_items[job_id]=[chat_id,func_req,func_param]
+    syslog(f"job_request {job_id} {chat_id} {func_req} {func_param}")
     return
-
-def edxapi_getuser(headers, url):
-    edx_info = {}
-    response = requests.get(url, headers=headers)
-    if response.status_code == 200:        
-        data = response.content.decode('utf-8')
-        if len(data)>0:
-            edx_info = json.loads(data)
-    return edx_info
 
 def rds_loadcourse(client_name, stud):
     course_id_list = []
@@ -3050,7 +3006,7 @@ def rds_loadcourse(client_name, stud):
             try:
                 eoc = vmedxlib.edx_endofcourse(client_name, cid)
             except:
-                eoc = eoc_list[n]
+                eoc = eoc_list[n]            
             if eoc == 0:
                 logon_selection.append(cid)                
             if eoc==1:
@@ -3084,6 +3040,7 @@ def analyze_cohort(course_id, userdata, bot, chat_id):
             rpt_summary.append("")
         return rpt_summary
 
+    syslog("started")
     result_table = [ [' ' for m in range(4)] for n in range(13) ]
     summary_mcq = []
     summary_as = []
@@ -3095,6 +3052,7 @@ def analyze_cohort(course_id, userdata, bot, chat_id):
     rr = [ 1 if r>0 else 0 for r in avgsum_list ]
     rsum = sum(rr)
     idx = 0
+
     if rsum>0:
         for n in range(13) :
             if rr[n]>0:
@@ -3132,49 +3090,34 @@ def analyze_cohort(course_id, userdata, bot, chat_id):
         summary_as = report_lines(udict, rdict, summary_as, "Between 30% and 70%", between_3070)
         summary_as = report_lines(udict, rdict, summary_as, "Below 30%", below_30)        
         
+    syslog("completed")        
     if result_table==[]:
         bot.sendMessage(chat_id, "There is no information available at the moment.")
         return ([],[],[],0)
     return (result_table, summary_mcq, summary_as, cnt)
 
-def checkjoblist():
+async def checkjoblist():
     global bot_intance
-    client_name = bot_intance.client_name
-    df = rds_df(f"select * from job_list where status='open' and client_name='{client_name}';")    
-    if df is None:
-        #print("no job found")
-        return
-    df.columns = get_columns("job_list")
-    jobitem = df.iloc[0].to_dict()
-    bot_intance.job_items = jobitem
-    msg =  runbotjob()
-    if msg == "":
-        msg = "job complete complete"
-    time_now = time.strftime('%H%M%S', time.localtime() )
-    time_end = str(time_now)
-    status = "completed"
-    job_id = jobitem['job_id']
-    updqry = f"update job_list set time_end = '{time_end}', status = '{status}', message = '{msg}' where job_id = '{job_id}';"
-    rds_update(updqry)
+    job_list = list(bot_intance.job_items)
+    if job_list==[]:
+        return    
+    job_id = job_list[0]
+    jobitem = bot_intance.job_items[job_id]
+    chat_id = int(jobitem[0])
+    func_req = jobitem[1]
+    func_param = jobitem[2]
+    await bot_intance.bot.sendMessage(chat_id, f"Job #{job_id} {func_req} started")
+    await runbotjob(job_id,chat_id,func_req,func_param)
+    await bot_intance.bot.sendMessage(chat_id, f"Job #{job_id} {func_req} completed")
     return
 
-def runbotjob():
+async def runbotjob(job_id,chat_id,func_req,func_param):
     global edx_api_header, edx_api_url,bot_intance,vmbot
-    jobitem = bot_intance.job_items
     client_name = bot_intance.client_name    
-    #printdict(jobitem)
-    job_id = jobitem['job_id']
-    chat_id = int(jobitem['chat_id'])
-    bot_req = jobitem['bot_req']
-    func_req = jobitem['func_req']
-    func_param = jobitem['func_param']
     func_svc_list = ["update_assignment" , "update_mcq" , "edx_import", "update_schedule"]    
     txt = "job "
     updqry = f"update job_list set status = 'running', message = '' where job_id = '{job_id}';"
     rds_update(updqry)
-    jobitem['status'] = 'running'
-    vmsvclib.rds_connstr = ""
-    vmsvclib.rdscon = None
     if func_req == "generate_mcq_as":
         try:
             vmedxlib.generate_mcq_as(func_param)
@@ -3182,9 +3125,6 @@ def runbotjob():
         except:
             txt += " failed."
     elif func_req in ["edx_mass_import", "mass_update_assignment", "mass_update_mcq", "mass_update_schedule", "mass_update_usermaster"]:
-        #try:
-        #    func_svc = "vmedxlib." + func_req + "(client_name)"
-        #    status = eval(func_svc)
         if func_req == "mass_update_assignment":
             vmedxlib.mass_update_assignment(client_name)
         elif func_req == "mass_update_mcq":
@@ -3196,9 +3136,6 @@ def runbotjob():
         txt += " completed successfully."
     elif func_req in func_svc_list :
         course_id = func_param           
-        #try:     
-        #    func_svc = "vmedxlib." + func_req + "(course_id, client_name)"
-        #    status = eval(func_svc)       
         if func_req == "update_assignment":
             vmedxlib.update_assignment(course_id, client_name)
         elif func_req == "update_mcq":
@@ -3208,8 +3145,6 @@ def runbotjob():
         elif func_req == "edx_import":
             vmedxlib.edx_import(course_id, client_name)
         txt += " completed successfully."
-        #except:
-        #    txt += " failed."
     elif func_req == 'load_edxdata':
         load_edxdata(client_name)
     else:
@@ -3225,10 +3160,9 @@ def runbotjob():
     try:        
         bot_intance.bot.sendMessage(chat_id,f"completed job {job_id}")
     except:
-        print(f"completed job {job_id}")
-    jobitem['status'] = 'completed'
-    bot_intance.job_items = {}
-    return txt
+        syslog(f"completed job {job_id}\t" + txt  )
+    del bot_intance.job_items[job_id]
+    return 
 
 #------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
@@ -3239,6 +3173,6 @@ if __name__ == "__main__":
         vmsvclib.rdscon = None 
         client_name='Lithan'
         #resp_dict = load_respdict()
-        print("this is vmbotlib")
+        syslog("this is vmbotlib")
     else:
-        print("Unable to use this version of python\n", version)
+        syslog("Unable to use this version of python\n", version)

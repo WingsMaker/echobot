@@ -17,7 +17,6 @@ import numpy as np
 import pickle
 import vmsvclib
 import os
-import logging
 import json
 
 #import tensorflow.compat.v1 as tf
@@ -42,7 +41,7 @@ class NNGrader():
         self.model_name = "FeedForwardNN"        
         self.model = None
         os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-        logging.getLogger('tensorflow').setLevel(logging.FATAL)    
+        #logging.getLogger('tensorflow').setLevel(logging.FATAL)    
         #tf.disable_v2_behavior() 
         #print(tf.__version__)  # correction is 1.2.0 ? 2.2.0 ?
         #print(keras.__version__)  # make sure using version 2.0.9 ? 2.2.5 ? 2.3.0 ? 2.4.2 ?

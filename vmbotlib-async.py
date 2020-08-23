@@ -156,6 +156,7 @@ def do_main():
     #elif nn_model.model_name=="" :
     #    txt = "AI grading model data file ffnn_model.hdf5 is missing"
     #    syslog('system', txt)
+    syslog("OmniMentor_Bot","Running telepot async library")
     bot_intance = BotInstance()    
     loop = asyncio.get_event_loop()
     loop.create_task(MessageLoop(bot_intance.bot).run_forever())
@@ -2522,16 +2523,9 @@ def syslog(msgtype, message):
         return
     date_now = time.strftime('%Y%m%d', time.localtime() )
     time_now = time.strftime('%H%M%S', time.localtime() )
-    try:
-        query = """insert into syslog(date,time,type,message) values(_d,"_t","_x","_y");"""
-        query = query.replace('_d',date_now)
-        query = query.replace('_t',str(time_now))
-        query = query.replace('_x',msgtype)
-        query = query.replace('_y',message)
-        rds_update(query)
-    except:
-        #print("Error for ", msgtype, message)
-        pass
+    f = open('vmbot.log','a')
+    f.write(f"{date_now} {str(time_now)} {msgtype}\t{message}\n")
+    f.close()
     return
    
 def verify_student(cname, userdata, student_id, courseid, stagedf):
@@ -2668,7 +2662,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     sid = student_id
     dtnow = datetime.datetime.now().date().strftime('%Y%m%d')
     list1=[datetime.datetime.strptime(dt,"%d/%m/%Y").strftime('%Y%m%d') for dt in stagedf.startdate]
-    list2=[x for x in list1 if x < dtnow ]
+    list2=[x for x in list1 if x <= dtnow ]
     if list2==[]:
         return ("", "", vars)
     stagebyschedule = stagedf.iloc[ (len(list2) - 1) ]['name']
