@@ -222,9 +222,14 @@ class NNGrader():
         return 
 
 if __name__ == '__main__':
-    with open("vmbot.json") as json_file:  
-        bot_info = json.load(json_file)
+    with open("vmbot.json") as json_file:
+            bot_info = json.load(json_file)
     client_name = bot_info['client_name']
+    #client_name = 'SambaashDev'
+    vmsvclib.rds_connstr = bot_info['omdb']
+    vmsvclib.rdscon = None
+    vmsvclib.rds_pool = 0
+    vmsvclib.rdsdb = None
     nn_model = NNGrader()
     print(nn_model)
     dumpfile = "ffnn_model.hdf5"

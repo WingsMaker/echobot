@@ -85,7 +85,7 @@ class MCQ_Diff():
         df.columns = ['Average Score %', 'MCQ', 'QN', 'Average Attempts', 'MCQ No. Question No.']
         #df['Average Score %'] = df['Average Score %'] * 100
         df['Average Score %'] = df.apply(lambda x : float(x['Average Score %'])*100, axis=1)
-        
+       
         # Using groupby to display top 10 questions sorted by average score in ascending order
         # Can change the number of questions displayed by varying bracketed .head() number
         # Can change rounding significant figures by varying bracketed .roud() number        
@@ -123,18 +123,25 @@ class MCQ_Diff():
 
 # Tested to be working
 if __name__ == '__main__':        
-    vmsvclib.rds_connstr = ""
+    with open("vmbot.json") as json_file:
+            bot_info = json.load(json_file)
+    client_name = bot_info['client_name']
+    #client_name = 'SambaashDev'
+    vmsvclib.rds_connstr = bot_info['omdb']
     vmsvclib.rdscon = None
-    vmsvclib.rdscon=vmsvclib.rds_connector()
+    vmsvclib.rds_pool = 0
+    vmsvclib.rdsdb = None
     mcq_analysis = MCQ_Diff()
     print(mcq_analysis)
     with open("vmbot.json") as json_file:  
         bot_info = json.load(json_file)
-    client_name = bot_info['client_name']
+    #client_name = bot_info['client_name']
     course_id = "course-v1:Lithan+FOS-1219A+04Dec2019"
+    client_name = 'SambaashDev'
+    course_id = 'course-v1:Lithan+FOS-0820B+17Aug2020'
     
     mcq_analysis.load_mcqdata(client_name, course_id)
-    options = [ 0,1,2 ]
+    options = [ 0,1 ]
     if 0 in options:
         df = mcq_analysis.top10attempts()
         #plt.savefig('attempts.png', dpi=100)

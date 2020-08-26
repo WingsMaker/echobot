@@ -78,8 +78,8 @@ def edx_mcqcnt(course_id):
     response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)
     if response.status_code==200:
         data = response.content.decode('utf-8')
-        if len(data)>0:
-            mcqcnt = int("0" + str(data))
+        if len(data)>0 and data.isnumeric():
+            mcqcnt = int(str(data))
     return mcqcnt
 
 def edx_ascnt(course_id):
@@ -90,8 +90,8 @@ def edx_ascnt(course_id):
     response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)
     if response.status_code==200:
         data = response.content.decode('utf-8')
-        if len(data)>0:
-            ascnt = int("0" + str(data))
+        if len(data)>0 and data.isnumeric():
+            ascnt = int(str(data))
     return ascnt
 
 def edx_userdata(course_id):
@@ -206,11 +206,12 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
                 qn = getnumstr(rec['option_display_name'])
             iu = int(rec['IU'])
             state = eval(rec['state'].replace('null','""').replace('false','0').replace('true','1'))
-            attempts = state['attempts']
+            #attempts = state['attempts']
             statekey = list(state['correct_map'])[0]
             correctness = state['correct_map'][statekey]['correctness']
             qnscore = 1.0 if correctness=='correct' else 0
             grade = 1.0 if pp==0 else float(sc/pp)
+            attempts = 0 if qnscore == 0 else state['attempts']            
             course_id_list.append(rec['course_id'])
             student_id_list.append(rec['student_id'])
             iu_list.append(iu)
@@ -244,7 +245,8 @@ def edx_assignment_score(course_id, student_id=0):
             grade_list = [x['score'] for x in rec]
             pp_list = [x['points_possible'] for x in rec]
             iu_list = [x['IU'] for x in rec]
-            att_list = [x['attempts'] for x in rec]
+            #att_list = [x['attempts'] for x in rec]
+            att_list = [ 0 if x['score']==0 else x['attempts'] for x in rec]
             data = {'student_id': student_id_list, 'score': grade_list, 'points_possible':pp_list, 'IU': iu_list ,'attempts': att_list}
             df = pd.DataFrame.from_dict(data)
             df['is_num'] = df.apply(lambda x: 1 if x['IU'].isnumeric() else 0, axis=1)
@@ -572,10 +574,12 @@ def update_mcq(course_id, client_name, student_id=0):
         condqry = f"client_name = '{client_name}' and courseid = '{course_id}' and studentid  = {student_id}"
         cond_qry = f"client_name = '{client_name}' and course_id = '{course_id}' and student_id  = {student_id}"
     syslog("edx_mcqcnt : " + course_id)
-    #mcqcnt = edx_iu_counts(course_id, client_name)
     mcqcnt = edx_mcqcnt(course_id)
-    if mcqcnt==0:
-        return 
+    if mcqcnt<=0:
+        syslog(f"edx_mcqcnt returns {mcqcnt}")
+        mcqcnt = edx_iu_counts(course_id, client_name)
+        if mcqcnt==0:
+            return 
     syslog(f"edx_mcqinfo : {mcqcnt} IUs found on {course_id}")
     mcq_df = edx_mcqinfo(client_name, course_id, student_id)
     if len(mcq_df) > 0:
@@ -1410,7 +1414,7 @@ if __name__ == "__main__":
     edx_api_url = "http://localhost:8080/edx/v1"
     edx_api_header = {'Authorization': 'Basic ZWR4YXBpOlVzM3VhRUxJVXZENUU4azNXdG9E', 'Content-Type': 'text/plain'}
     #client_name = "Sambaash"    
-    #client_name = "Lithan"    
+    client_name = "Lithan"    
     #vmsvclib.rds_connstr = ""
     vmsvclib.rds_connstr = bot_info['omdb']
     vmsvclib.rdscon = None
@@ -1426,7 +1430,9 @@ if __name__ == "__main__":
     #update_mcq(course_id, client_name, sid)
     #update_mcq(course_id, client_name)
     #df = student_course_list(sid)    
+    
     print(client_name, course_id, sid) 
+    
     #results = edx_iu_counts(course_id, client_name)
     #results = sms_lecturer(client_name, course_id, sid)    
     #results = sms_attendance(course_id, sid)

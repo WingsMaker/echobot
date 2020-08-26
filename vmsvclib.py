@@ -16,7 +16,6 @@ summary = """
 ║ ███████████████████████     Functions Name       ███████████████████████    ║▒▒
 ╟─────────────────────────────────────────────────────────────────────────────╢▒▒
 ║ banner_msg         create a string of text banner in a line                 ║▒▒
-║ bot_prompt         bot response with text and optional menu buttons         ║▒▒
 ║ build_menu         build telegram reply-to menu buttons with a list         ║▒▒
 ║ callgraph          generate flow diagram and save into png file             ║▒▒
 ║ conn_open          check database connection status (openned , closed)      ║▒▒
@@ -89,28 +88,6 @@ def banner_msg(banner_title, banner_msg):
     txt += "\n" + banner_msg + "\n"
     return txt
 
-def bot_prompt(bot, chat_id, txt="", buttons=[], opt_resize = True):
-    if (chat_id == 0) or (txt == ""):
-        return
-    if chat_id < 0:
-        sent = bot.sendMessage(chat_id, txt)
-        #edited = telepot.message_identifier(sent)
-        return
-    if buttons == []:
-        hide_keyboard = {'hide_keyboard': True}
-        sent = bot.sendMessage(chat_id, txt, reply_markup=hide_keyboard)
-        return
-    try:
-        if chat_id > 0:
-            mark_up = ReplyKeyboardMarkup(keyboard=buttons,one_time_keyboard=True,resize_keyboard=opt_resize)
-            sent = bot.sendMessage(chat_id, txt, reply_markup=mark_up)
-        else:
-            sent = bot.sendMessage(chat_id, txt)
-    except:
-        sent = bot.sendMessage(chat_id, txt)
-    #edited = telepot.message_identifier(sent)
-    return
-
 def build_menu(btn_list, btns_rows = 3, extra_btn='',toadd_btn=[]):
     if extra_btn != '':
         btn_list.append(extra_btn)
@@ -136,6 +113,7 @@ def conn_open():
 def copydbtbl(df, tblname):
     global rdscon
     #try:
+    rdscon = rds_connector()
     if '.db' in rds_connstr:
         df.to_sql(tblname, con=rdscon,index=False, if_exists='append') 
     else:
@@ -313,7 +291,7 @@ def html_tbl(clt, tblname, titlename, fn):
         return None
     query = f"select * from {tblname}"
     if clt != "":
-        query += f"  where client_name = '{clt}';"
+        query += f" where client_name = '{clt}';"
     df = rds_df(query)
     if df is None:
         f = None

@@ -26,6 +26,7 @@
 import sys
 import vmbotlib
 import matplotlib
+#import asyncio
 
 # 
 #  __  __       _
@@ -38,6 +39,7 @@ if __name__ == "__main__":
     matplotlib.use('Agg')
     version = sys.version_info    
     if version.major == 3 and version.minor >= 6:
+        #asyncio.run(vmbotlib.do_main())
         vmbotlib.do_main()
     else:
         print("Unable to use this version of python\n", version)
