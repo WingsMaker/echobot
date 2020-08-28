@@ -375,7 +375,7 @@ def rds_df(query):
     #rdscon.commit()
     rdscon.close()
     if len(rows) == 0:
-        syslog("rds_df returns no data")
+        #syslog("rds_df returns no data")
         return None
     else:
         df = pd.DataFrame.from_dict(rows)   

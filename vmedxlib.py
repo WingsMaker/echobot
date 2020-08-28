@@ -211,7 +211,7 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
             correctness = state['correct_map'][statekey]['correctness']
             qnscore = 1.0 if correctness=='correct' else 0
             grade = 1.0 if pp==0 else float(sc/pp)
-            attempts = 0 if qnscore == 0 else state['attempts']            
+            attempts = 0 if qnscore == 0 else state['attempts']     
             course_id_list.append(rec['course_id'])
             student_id_list.append(rec['student_id'])
             iu_list.append(iu)
@@ -384,9 +384,12 @@ def edx_endofcourse(client_name, course_id):
         query += "STR_TO_DATE(stagedate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
     try:
         result = rds_param(query)
-        eoc=int(result)
+        #print(result)
+        eoc = 1 if result=='' else int(result)
+        #eoc=int(result)
+        #print(eoc)
     except:
-        eoc = 0
+        eoc = 1
     return eoc
 
 def edx_eocgap(client_name, course_id, gap=7):
@@ -1048,7 +1051,8 @@ def stage_code(txt):
 def get_google_calendar(course_id, client_name):
     cohort_id = piece(piece(course_id,':',1),'+',1)
     module_code = cohort_id.split('-')[0]
-    qry = f"select course_code from module_iu where module_code = '{module_code}' and client_name='{client_name}' limit 1;"
+    #qry = f"select course_code from module_iu where module_code = '{module_code}' and client_name='{client_name}' limit 1;"
+    qry = f"select course_code from course_module where module_code = '{module_code}' and client_name='{client_name}' limit 1;"
     course_code = rds_param(qry)
     # direct_cohort_url = f"https://realtime.sambaash.com/v1/calendar/fetch?cohortId={cohort_id}"
     # multi_cohorts_url = "https://realtime.sambaash.com/v1/calendar/fetch?cohortId=EIT-0219A/EIT-0119B"
@@ -1307,8 +1311,7 @@ def mass_update_usermaster(client_name):
     syslog(f"completed on {client_name}")
     return
 
-def test_google_calendar(course_id):
-    client_name = "Sambaash"
+def test_google_calendar(course_id, client_name):    
     stage_list = get_google_calendar(course_id, client_name)
     for x in stage_list:
         print(x)
@@ -1386,7 +1389,7 @@ def perform_unit_tests(client_name = 'Sambaash', course_id = "course-v1:Lithan+F
     course_list = search_course_list("FOS%2020")
     print( course_list )
     print("====== test case 12 google calendar ==========")
-    test_google_calendar(course_id)
+    test_google_calendar(course_id, client_name)
     print("test_google_calendar completed")    
     print("====== test case 13 edx_import ==========")    
     #edx_import(course_id,  client_name)
@@ -1414,25 +1417,24 @@ if __name__ == "__main__":
     edx_api_url = "http://localhost:8080/edx/v1"
     edx_api_header = {'Authorization': 'Basic ZWR4YXBpOlVzM3VhRUxJVXZENUU4azNXdG9E', 'Content-Type': 'text/plain'}
     #client_name = "Sambaash"    
-    client_name = "Lithan"    
+    #client_name = "Lithan"    
     #vmsvclib.rds_connstr = ""
     vmsvclib.rds_connstr = bot_info['omdb']
     vmsvclib.rdscon = None
     vmsvclib.rds_pool = 0
     vmsvclib.rdsdb = None
     #course_id = 'course-v1:Lithan+FOS-0720A+08Jul2020'
-    course_id = 'course-v1:Lithan+FOS-0820B+17Aug2020' # 7093, 7139, 7680 7233 
+    #course_id = 'course-v1:Lithan+FOS-0820B+17Aug2020' # 7093, 7139, 7680 7233 
     #course_id = 'course-v1:Lithan+FOS-0720A+08Jul2020' # 6516
     #course_id = 'course-v1:Lithan+SMI-0420A+03Jul2020' # 5418
     sid = 7233
-    #test_google_calendar(course_id)
+    course_id = 'course-v1:Lithan+CPI-0320A+27Jul2020'
     #print("running update_mcq")
     #update_mcq(course_id, client_name, sid)
     #update_mcq(course_id, client_name)
     #df = student_course_list(sid)    
-    
-    print(client_name, course_id, sid) 
-    
+    print(client_name, course_id, sid)
+    update_schedule(course_id, client_name)
     #results = edx_iu_counts(course_id, client_name)
     #results = sms_lecturer(client_name, course_id, sid)    
     #results = sms_attendance(course_id, sid)
@@ -1445,8 +1447,6 @@ if __name__ == "__main__":
     #print(results)
     #att_rate = sms_att_rate(client_name, course_id, sid)        
     #print(f"Attendance rate = {att_rate}")
-    #update_mcq(course_id, client_name, sid)
-    #update_schedule(course_id, client_name)
     #
     #=====================================
     # edx_mass_import(client_name)
@@ -1456,6 +1456,5 @@ if __name__ == "__main__":
     # mass_update_usermaster(client_name)
     # perform_unit_tests(client_name, course_id, sid)
     #=====================================
-    #
-    print("check user_master")
+    #    
     print("This is vmedxlib.py")

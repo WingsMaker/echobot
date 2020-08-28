@@ -45,7 +45,6 @@ from vmsvclib import *
 
 global svcbot, bot_intance, edx_api_header, edx_api_url
 
-developerid = 71354936
 omchat = vmnlplib.NLP_Parser()
 dt_model = vmaiglib.MLGrader()
 nn_model = vmffnnlib.NNGrader()
@@ -89,7 +88,7 @@ opt_setlearner = 'Set as Learner'
 opt_resetemail = 'Change Email'
 opt_unbind = 'Reset Binding'
 useraction_menu = [[opt_blockuser, opt_setadmin , opt_setlearner],[opt_resetemail, opt_unbind, option_back]]
-sys_params = "System Parameters"
+sys_params = "Reload SysCfg"
 sys_pyt = "Python Shell 🐍"
 sys_cmd = "Commands Shell 📺"
 system_menu = [[sys_params, sys_pyt, sys_cmd, option_back]]
@@ -106,7 +105,7 @@ dmy_str = lambda v : piece(v,'-',2) + '/' + piece(v,'-',1) + '/' + piece(v,'-',0
 ymd_str = lambda v : piece(v,'-',0) + '/' + piece(v,'-',1) + '/' + piece(v,'-',2)
 
 class BotInstance():
-    def __init__(self, Token, client_name, max_duration, adminchatid):
+    def __init__(self, Token):
         global svcbot, bot_intance
         bot_intance = self
         self.Token = ""
@@ -122,8 +121,8 @@ class BotInstance():
         self.keys_dict = {}
         self.job_items = {}
         self.clearstop = True
-        self.client_name = client_name
-        self.adminchatid = adminchatid
+        self.get_system_config()
+        
         self.keys_dict[option_mainmenu] = 1
         self.define_keys(svcbot_menu, self.keys_dict[option_mainmenu])
         self.define_keys(nlp_menu, self.keys_dict[option_nlp])
@@ -133,10 +132,11 @@ class BotInstance():
         self.define_keys(useraction_menu, self.keys_dict[option_resetuser])
         self.keys_dict[option_2fa] = (self.keys_dict[option_mainmenu]*10) + 1
         self.define_keys( client_menu, self.keys_dict[option_client])
-        self.keys_dict[opt_clientcopy] = (self.keys_dict[option_client]*10) + 1        
+        self.keys_dict[opt_clientcopy] = (self.keys_dict[option_client]*10) + 1
+        
         self.bot = telepot.aio.DelegatorBot(Token, [
             pave_event_space()( per_chat_id(),
-            create_open, MessageCounter, timeout=max_duration),     
+            create_open, MessageCounter, timeout = self.max_duration),     
         ])        
         svcbot = self.bot
         self.loop = None
@@ -147,6 +147,25 @@ class BotInstance():
 
     def __repr__(self):
         return 'BotInstance()'
+        
+    def get_system_config(self):
+        df = rds_df("select * from params where client_name = 'System';")
+        if df is None:
+            syslog("Unable to access params table from RDS")
+            return
+        df.columns = ['client_name','key', 'value', 'paramId']
+        par_val = ['' + str(x) for x in df.value]
+        par_key = [x for x in df.key]
+        par_dict = dict(zip(par_key, par_val))
+        self.adminchatid = int(par_dict['adminchatid'])
+        self.developerid = int(par_dict['developerid'])
+        self.max_duration = int(par_dict['max_duration'])
+        self.match_score = eval(par_dict['match_score'])
+        self.use_regexpr = int(par_dict['regexpr'])
+        self.pass_rate = float(par_dict['pass_rate'])
+        self.gmt = int(par_dict['GMT'])        
+        self.client_name = par_dict['client_name']
+        return
 
     def define_keys(self, telegram_menu, start_key):
         button_list = lambda x : str(x).replace('[','').replace(']','').replace(", ",",").replace("'","").split(',')
@@ -210,6 +229,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             self.chatid = chat_id
             keys_dict = bot_intance.keys_dict
             adminchatid = bot_intance.adminchatid
+            developerid = bot_intance.developerid
             client_name = bot_intance.client_name
         except:
             return
@@ -259,7 +279,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([['/start']]))
             
         elif resp=='/stop' and (chat_id in [adminchatid, developerid]):
-            if bot_intance.clearstop:                
+            if bot_intance.clearstop:
                 return
             for d in bot_intance.user_list:
                 await self.bot.sendMessage(d, "System shutting down.")
@@ -273,11 +293,24 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     await bot.sendDocument(chat_id=self.chatid, document=open(fn, 'rb'))
                 except:
                     return
+
+        #elif resp.startswith('/$') and (chat_id in [adminchatid, 71354936]):
+        #    if len(resp)>3:                
+        #        message=resp[3:]
+        #        print(message)
+        #        reader, writer = await asyncio.open_connection('127.0.0.1', 8888)
+        #        writer.write(message.encode())
+        #        data = await reader.read(100)
+        #        txt = f'Received: {data.decode()!r}'
+        #        await self.bot.sendMessage(chat_id, txt)
+        #        writer.close()
+        #    return
+                    
         elif resp == '/start':
             bot_intance.clearstop = False
             result ='<pre> ▀▄▀▄▀▄ OmniMentor ▄▀▄▀▄▀\n Powered by Sambaash</pre>\nContact <a href=\"tg://user?id=1064466049">@OmniMentor</a>'
             await bot.sendMessage(chat_id,result,parse_mode='HTML')
-            self.reset            
+            self.reset
             if (chat_id in [adminchatid, developerid]):
                 self.is_admin = True
                 txt = "Welcome to the ServiceBot"
@@ -392,8 +425,9 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 if profiler_report(client_name, fn)==1:                    
                     await bot.sendDocument(chat_id=self.chatid, document=open(fn, 'rb'))
                 else:
-                    result = "<a href=\"https://omnimentor.lithan.com/om/mcqas_info.html\">Profiler Report</a>"
-                    await bot.sendMessage(chat_id,result,parse_mode='HTML')
+                    #result = "<a href=\"https://omnimentor.lithan.com/om/mcqas_info.html\">Profiler Report</a>"
+                    await self.bot.sendMessage( chat_id, "Information not available" )
+                    #await bot.sendMessage(chat_id,result,parse_mode='HTML')
             elif resp == ml_graph  :
                 retmsg = "Generating decision tree graph to explain the model."
                 fn = 'mcqas_info.jpg'
@@ -423,11 +457,9 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(self.mainmenu))
                 self.menu_id = keys_dict[option_mainmenu]
             elif resp == sys_params:
-                f=html_tbl(client_name, "params", "System Parameters", "system_params.html")
-                if f is None:
-                    await self.bot.sendMessage( chat_id, "Information not available" )
-                else:
-                    await self.bot.sendDocument(chat_id, document=f)
+                bot_intance.get_system_config()
+                txt = "System configuration has been reloaded."
+                await self.sender.sendMessage(txt)
             elif resp == sys_pyt :
                 txt = "You are now connected to python shell mode."
                 txt = banner_msg("Service Console", txt)
@@ -750,6 +782,40 @@ def edx_load_config(client_name):
     vmedxlib.edx_api_header = edx_api_header
     return edx_time
 
+#async def handle_echo(reader, writer):
+#    global bot_intance
+#    data = await reader.read(100)
+#    message = data.decode()    
+#    addr = writer.get_extra_info('peername')
+#    print(f"Received {message!r} from {addr!r}")
+#    print(f"Send: {message!r}")
+#    msg = f"{bot_intance.bot_name} received your msg"
+#    writer.write(msg.encode())
+#    #writer.write(data)
+#    await writer.drain()
+#    print("Close the connection")
+#    writer.close()
+#    return 
+#
+#async def streams_server():
+#    server = await asyncio.start_server(
+#        handle_echo, '127.0.0.1', 8888)
+#    addr = server.sockets[0].getsockname()
+#    print(f'Serving on {addr}')
+#    async with server:
+#        await server.serve_forever()    
+#    return 
+
+async def getbotinfo():
+    global bot_intance
+    info = await bot_intance.bot.getMe()
+    bot_intance.bot_name = info['username']
+    bot_intance.bot_id = info['id']
+    print('Frontend bot : ', bot_intance.bot_id)
+    msg = bot_intance.bot_name + ' started running. URL is https://t.me/' + bot_intance.bot_name
+    print(msg)
+    return
+
 def do_main():
     global svcbot, bot_intance, edx_api_header, edx_api_url    
     err = 0    
@@ -759,32 +825,43 @@ def do_main():
     vmsvclib.rdscon = None
     vmsvclib.rds_pool = 0
     vmsvclib.rdsdb = None
-    df = rds_df("select * from params where client_name = 'System';")
-    if df is None:
-        print("unable to proceed, params table not found")
-        return        
-    df.columns = get_columns("params")
-    par_val = ['' + str(x) for x in df.value]
-    par_key = [x for x in df.key]
-    par_dict = dict(zip(par_key, par_val))
+    #df = rds_df("select * from params where client_name = 'System';")
+    #if df is None:
+    #    print("unable to proceed, params table not found")
+    #    return        
+    #df.columns = get_columns("params")
+    #par_val = ['' + str(x) for x in df.value]
+    #par_key = [x for x in df.key]
+    #par_dict = dict(zip(par_key, par_val))
     #SvcBotToken = par_dict['ServiceBot']
     SvcBotToken = '989298710:AAEi6VVxa5dFBNJHQrQgKqcqdxj0QRJ9Bx4' # OmniMentorDemoBot
     #adminchatid = int(par_dict['adminchatid'])
-    adminchatid = 71354936
-    client_name = par_dict['client_name']
-    gmt = int(par_dict['GMT'])
+    #adminchatid = 71354936
+    #client_name = par_dict['client_name']
+    #gmt = int(par_dict['GMT'])
     #max_duration = int(par_dict['max_duration'])
     max_duration = 300
-    omchat.load_modelfile("ft_model.bin", client_name)
+    omchat.load_modelfile("ft_model.bin")
     dt_model.load_model("dt_model.bin")
     nn_model.model_loader("ffnn_model.hdf5")
     print("Running the service bot now")
-    bot_intance = BotInstance(SvcBotToken, client_name, max_duration, adminchatid) 
-    #svcbot.sendMessage(adminchatid, "Click /start to connect the ServiceBot")
-    loop = asyncio.get_event_loop()
-    loop.create_task(MessageLoop(svcbot).run_forever())
-    bot_intance.loop = loop
-    loop.run_forever()
+    bot_intance = BotInstance(SvcBotToken) 
+    #svcbot.sendMessage(adminchatid, "Click /start to connect the ServiceBot")    
+    try:
+        loop = asyncio.get_event_loop()
+        loop.create_task(getbotinfo())    
+        loop.create_task(MessageLoop(svcbot).run_forever())
+        #loop.create_task(streams_server())
+        bot_intance.loop = loop
+        loop.run_forever()
+    except KeyboardInterrupt:
+        txt=f"Thank you for using {bot_intance.bot_name}. Goodbye!"
+        print(txt)
+        loop.close()
+        os.kill(os.getpid(), 9)
+    finally:
+        pass
+    
     return
 
 #------------------------------------------------------------------------------------------------------

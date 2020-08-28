@@ -29,7 +29,6 @@ from vmsvclib import *
 
 fasttext.FastText.eprint = print
 
-global rdsconnector
 # ▓▓▓▒▒▒▒▒▒▒░░░  FastText NLP Model  ░░░▒▒▒▒▒▒▒▓▓▓
 class NLP_Parser():
     def __init__(self):
@@ -67,7 +66,7 @@ class NLP_Parser():
             temp_string += ' '
         return temp_string  
 
-    def load_modelfile(self, dumpfile, client_name):
+    def load_modelfile(self, dumpfile):
         #try:
         if True:
             ok = 0
@@ -315,13 +314,14 @@ if __name__ == "__main__":
     print(ft_model)    
     with open("vmbot.json") as json_file:  
         bot_info = json.load(json_file)
-    client_name = bot_info['client_name']
-    vmsvclib.rds_connstr = ""
-    vmsvclib.rdscon = None 
+    vmsvclib.rds_connstr = bot_info['omdb']
+    vmsvclib.rdscon = None
+    vmsvclib.rds_pool = 0
+    vmsvclib.rdsdb = None
     opts = [ 0,1,2,3,4,5 ]
     if 0 in opts :
         print("Loading model from pickle")
-        ft_model.load_modelfile("ft_model.bin", client_name)
+        ft_model.load_modelfile("ft_model.bin")
         faq_list = ft_model.faq_list
         print( str(faq_list[:5]))
     if 1 in opts :
