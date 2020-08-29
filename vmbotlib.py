@@ -665,7 +665,7 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
                     continue
 
                 if eoc7==1:
-                    await bot_intance.bot.sendMessage(adm_chatid, f"eoc {sid} {tid}")
+                    #await bot_intance.bot.sendMessage(adm_chatid, f"eoc {sid} {tid}")
                     eoc7_maildict[enquiry_email] += txt + "\n"
                     eoc7_userdict[enquiry_email] += ',' + uname
                     eoc7_mailcnt += 1
@@ -932,13 +932,14 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
 
     async def logoff(self, txt = "Have a great day!"):
         global bot_intance
-        try:
-            if self.chatid in [d for d in bot_intance.user_list]:
-                bot_intance.user_list.pop(self.chatid)
-            if self.chatid in [d for d in bot_intance.adm_list]:
-                bot_intance.adm_list.pop(self.chatid)
-        except:
-            pass
+        #try:
+        if self.chatid in [d for d in bot_intance.user_list]:
+            bot_intance.user_list.pop(self.chatid)
+        #if self.chatid in [d for d in bot_intance.adm_list]:
+        if self.student_id in bot_intance.adm_list:
+            bot_intance.adm_list.remove(self.student_id)
+        #except:
+        #    pass
         await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup([[btn_hellobot]]))        
         syslog(f"telegram user {self.chatid} logged out.")
         self.new_session = True
@@ -1629,8 +1630,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     txt = "Live chat session disconnected. 👋"
                     await self.bot.sendMessage(tid, txt)
                     await self.bot.sendMessage(chat_id, txt)
-                if chat_id in bot_intance.adm_list:
-                    bot_intance.adm_list.pop(chat_id)
                 syslog("system : telegram user " + str(chat_id) + " offine.")
                 await self.logoff()
                 await self.bot.sendMessage(chat_id, "Session closed.", reply_markup=self.reply_markup([[btn_hellobot]]))
