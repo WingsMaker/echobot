@@ -19,14 +19,13 @@ warnings.filterwarnings("ignore")
 import pandas as pd
 import pandas.io.formats.style
 #from pandas_profiling import ProfileReport
-
-import os, re, sys, time, datetime, string, random
-import subprocess
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtk
 
+import calendar
+import os, re, sys, time, datetime, string, random
+import subprocess
 import requests
-
 import telepot
 import asyncio
 import telepot.aio
@@ -1612,7 +1611,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 yesno_menu = build_menu([opt_yes,opt_no],1,option_back)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(yesno_menu))
                 txt = ""
-                self.menu_id = bot_intance.keys_dict[option_bind]            
+                self.menu_id = keys_dict[option_bind]
             elif resp == option_usermgmt: 
                 txt = 'To search for student-ID or reset User by student-ID.'
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(users_menu))
@@ -1623,8 +1622,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(admin_menu))
                     self.menu_id = keys_dict[option_admin]
                 else:
-                    await self.sender.sendMessage('This option is strickly for Sambaash admin.')
-            
+                    await self.sender.sendMessage('This option is strickly for Sambaash admin.')            
             elif (resp == option_back) or (resp == "0"):
                 tid = self.endchat()
                 if tid > 0:
@@ -1821,19 +1819,21 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 self.menu_id = keys_dict[option_faq]
             elif resp == option_gethelp:
                 mentor_id = self.mentor_chatid()
-                bot_intance.user_list[ self.chatid ][4] = "👋"
                 if mentor_id <= 0:
-                    mentor_id = adminchatid
-                result = '<b>Learner needs assistance 👋</b>'
-                result +='\n<pre>Course id    : ' +  self.courseid
-                result += '\nStudent ID   : ' + str(self.student_id) 
-                result += '\nStudent Name : ' + self.username + '</pre>'
-                result += '\nContact : <a href=\"tg://user?id=' + str(self.chatid) + '">@' + self.chatname + '</a>'
-                try:
-                    await bot.sendMessage(mentor_id,result,parse_mode='HTML')
-                    retmsg = "Please wait, our faculty admin will connect with you on a live chat" 
-                except:
-                    retmsg = 'Sorry we are not able to reach the mentor at the moment.'
+                    #mentor_id = adminchatid
+                    retmsg = 'Sorry the mentor information is not registered yet.' # add registeration process
+                else:
+                    result = '<b>Learner needs assistance 👋</b>'
+                    result +='\n<pre>Course id    : ' +  self.courseid
+                    result += '\nStudent ID   : ' + str(self.student_id) 
+                    result += '\nStudent Name : ' + self.username + '</pre>'
+                    result += '\nContact : <a href=\"tg://user?id=' + str(self.chatid) + '">@' + self.chatname + '</a>'
+                    bot_intance.user_list[ self.chatid ][4] = "👋"
+                    try:
+                        await bot.sendMessage(mentor_id,result,parse_mode='HTML')
+                        retmsg = "Please wait, our faculty admin will connect with you on a live chat" 
+                    except:
+                        retmsg = 'Sorry we are not able to reach the mentor at the moment.'
             elif resp == option_mychat:
                 (status, info) = self.livechat()
                 if status == 2:
@@ -1856,9 +1856,13 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 yesno_menu = build_menu([opt_yes,opt_no],1,option_back)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(yesno_menu))
                 txt = ""
-                self.menu_id = bot_intance.keys_dict[option_bind]
+                self.menu_id = keys_dict[option_bind]
             elif resp == option_info:
                 retmsg = self.session_info()
+                #df = self.stagetable
+                #title = "Course Schedule for :\n" + self.courseid
+                #msg = stage_calendar(df)
+                #html_msg_dict[ title ] = [ msg ]
 
         elif self.menu_id == keys_dict[option_mycourse] :
             if (resp == option_back) or (resp == "0"):
@@ -1907,9 +1911,14 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 syslog(f"user {sid} undo binding")
             elif (resp == option_back) or (resp == "0"):
                 txt = "you are back to main menu"
-            await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(self.menu_home))
-            syslog(str(self.chatid) + " : " + txt)
-            self.menu_id = keys_dict[lrn_student]
+            syslog(str(self.chatid) + " : " + txt)            
+            if self.is_admin :
+                await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(mentor_menu))
+                self.menu_id = 1
+            else:
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(self.menu_home))
+                self.menu_id = keys_dict[lrn_student]
+            
 
         elif self.menu_id == keys_dict[option_2fa]:
             code2FA = bot_intance.code2fa_list[chat_id]
@@ -2066,10 +2075,15 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 if self.stagetable is None:
                     retmsg = "The schedule information is not available"
                 else:
-                    title = "Course Schedule for " + self.courseid
-                    cols = ['id', 'stage', 'name', 'startdate', 'stagedate', 'IU']
-                    df = self.stagetable[cols]
-                    html_msg_dict[title] = html_report(df, cols, [5,5,10,10,10,40], 8)
+                    #title = "Course Schedule for : " + self.courseid
+                    #cols = ['id', 'stage', 'name', 'startdate', 'stagedate', 'IU']
+                    #df = self.stagetable[cols]
+                    #html_msg_dict[title] = html_report(df, cols, [5,5,10,10,10,40], 30)
+                    df = self.stagetable
+                    title = "Course Schedule for :\n" + self.courseid
+                    msg = stage_calendar(df)
+                    html_msg_dict[ title ] = [ msg ]
+                    
             elif resp == ps_stage:
                 if self.stagetable is None:
                     retmsg = "The unit guides information is not available"
@@ -2701,8 +2715,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup([[option_back]]))
                                 self.menu_id = keys_dict[option_chat]
                             else:
-                                await self.sender.sendMessage(info)
-                            
+                                await self.sender.sendMessage(info)                            
                 elif (resp == option_back) or (resp == "0"):
                     if self.is_admin :
                         await self.bot.sendMessage(self.chatid, 'You are back in the main menu', reply_markup=self.reply_markup(mentor_menu))
@@ -3478,14 +3491,47 @@ async def runbotjob(job_id,chat_id,func_req,func_param):
     del bot_intance.job_items[job_id]
     return 
 
+def stage_calendar(df):
+    xstr = lambda x : '   ' if x == 0 else ('  ' + str(x))[-3:]
+    ystr = lambda x,y,z : y[x] if x in list(z) else '   '
+    slist = [('   '+x)[-3:] for x in df.stage]
+    tlist = [datetime.datetime.strptime(dt,"%d/%m/%Y").strftime('%Y%m%d') for dt in df.startdate]    
+    mlist = list(set([ int(x[4:][:2]) for x in tlist]))
+    mlist = sorted(set([ int(x[4:][:2]) for x in tlist]))
+    sdict = dict(zip(tlist, slist))
+    yy = int(tlist[0][:4])
+    #msg_list = []
+    title_list = []
+    calendar.setfirstweekday(calendar.SUNDAY)
+    msg = ""
+    for mm in mlist:
+        weeklist = calendar.monthcalendar(yy,mm)
+        title = datetime.datetime(yy, mm, 1).strftime('%Y %B')
+        dlist = [ int(x[-2:]) for x in tlist if int(x[4:][:2])==mm]
+        flist = [ sdict[x] for x in tlist if int(x[4:][:2])==mm]
+        rdict = dict(zip(dlist,flist))
+        msg += title + '\nSun Mon Tue Wed Thu Fri Sat\n'
+        #msg = 'Sun Mon Tue Wed Thu Fri Sat\n'
+        for ww in weeklist:
+            msg += ' '.join([xstr(y) for y in ww]) + '\n'
+            msg += ' '.join([ ystr(x,rdict,dlist) for x in ww ]) + '\n'
+        msg += '\n'
+        #title_list.append(title)        
+        #msg_list.append(msg)
+    #return (title_list,msg_list)
+    return msg
+
 #------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     version = sys.version_info
-    if version.major == 3 and version.minor >= 7:        
+    if version.major == 3 and version.minor >= 6: 
         #do_main()
-        vmsvclib.rds_connstr = ""
-        vmsvclib.rdscon = None 
-        client_name='Lithan'
-        syslog("this is vmbotlib")
+        with open("vmbot.json") as json_file:  
+            bot_info = json.load(json_file)
+        client_name = bot_info['client_name']
+        vmsvclib.rds_connstr = bot_info['omdb']
+        vmsvclib.rdscon = None
+        vmsvclib.rds_pool = 0
+        vmsvclib.rdsdb = None
     else:
         syslog("Unable to use this version of python\n", version)
