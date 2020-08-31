@@ -255,3 +255,121 @@ while(any options selected?) {
   }
 go back to System Admin menu;
 
+# Reminder notification workflow
+begin auto_notify;
+prepare relevant T-1 course_list;
+prepare relevant user list;
+while(course_id in course_list) {
+  prepare mcq list and assignment list;
+  while(student_id in course_id) {
+    if(mcq pending or assignment pending)
+      if(binded user)
+        send reminder msg to student;
+        if(failed to send)
+          add to list of failed-to-remind;
+        else
+          add to list of send-successful;
+      else
+        add to list of failed-to-remind
+  }
+  send summary of reminder message to mentor with the 2 lists;
+}
+inform upon completion of reminder msg;
+
+# Intervention notification workflow
+begin auto_intervent;
+prepare relevant active course_list;
+prepare relevant user list;
+while(course_id in course_list) {	
+  if((soc is true) and ((eoc is false)
+    or (eoc within grace period)) {
+    get related learners score data;
+    get related user master;
+    }
+  else
+    skip this course_id;
+  filter away non-learners;
+  while(student_id in course_id) {
+    verify student progress;
+    if(not-in-progress)
+      if(binded user)
+        send intervention msg to student;
+        if(failed to send)
+          add to list of failed-to-intervene;
+        else
+          add to list of send-successful;
+      else
+        add to list of failed-to-intervene;
+        
+    if(eoc is true and reached duedate)        
+      send email to course admin;
+  }
+  send summary of intervention message to mentor with the 2 lists;
+}
+inform upon completion of intervention msg;
+
+# vmbotlib.load_edxdata
+build course_list for eoc = 0;
+while (course_id in course_list) {
+  compute eoc and eoc_grace;
+  if(course is active or eoc within eoc_grace) {
+    perform update_mcq;
+    perform update_assignment;
+    perform update_schedule;
+    add into updated_courses;
+  }
+  update playbooks table on eoc status;
+}
+new_course_list = list of new courses yet to import;
+while (course_id in new_course_list)
+  perform edx_import;
+perform mass_update_usermaster;  
+  
+# vmedxlib.update_mcq
+given course_id;
+get mcq score data from rest api;
+if (data available)
+  update table mcq_data;
+perform aggregation on mcq scores;   
+if (aggregated data available)  
+  update table mcq_score;
+transform aggregated data by student_id into userdata format;
+update table userdata by student_id;
+
+# vmedxlib.update_assignment
+given course_id;
+get grading, assignment data from rest api;
+perform aggregation on grading, scores, attempts;   
+transform aggregated data by student_id into userdata format;
+update table userdata by student_id;
+
+# vmedxlib.update_schedule
+given course_id;
+get google calendar data from rest api;
+compute stage_list from calendar data;
+perform update_stage_table using stage_list;
+compute stagedate using startdate and num_of_days;
+update stages table on startdate,stagedate;
+update IU column of stages table based on stages_master;
+compute stage_by_schdule and update userdata table;
+initialised null values on stagedate, startdate from stage table;
+initialised null values on mcq_zero, mcq_failed,as_zero, as_failed from userdata table;
+done;
+
+# vmedxlib.edx_import
+given course_id;
+compute module_code,module_id;
+get course_name from rest api;
+compute eoc;
+update playbooks;
+if (records not found in stages table)
+  update stages table using stages_master;
+read LMS data using rest api;
+transform and update into userdata;
+initialised mcq and assignment fields;
+if (mcq and assignment has data) {
+  perform update_assignment;
+  perform update_mcq;
+}  
+perform update_schedule;
+
