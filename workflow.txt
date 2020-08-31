@@ -1,0 +1,257 @@
+## https://app.code2flow.com/
+# General frontend workflow
+
+OmniMentor Frontend;
+start:
+Starting the session;
+if(auto-logon?) {
+  verify the account by telegram-id;
+} else {
+  prompt of email or student_id;
+  if(email entered?) 
+    retrieve student_id;
+  verify account by student_id;  
+}
+if(blocked?) {
+  Inform blocked user;
+  goto end;
+}
+if(learner mode) {
+  live update student records;
+  welcome message; 
+  while(learner service?)
+    process learner's request;
+}
+else {
+  faculty/mentor menu;
+  while(admin service?) 
+    process admin function;
+}
+end:
+logout;
+goto start;
+
+
+# Learner frontend workflow
+Learner frontend workflow;
+display welcome message and menu;
+while(options selected is not logout?) {
+  if (**My Courses**)
+    show list of related courses;
+  if (**Schedule**)
+    show the course calendar;
+  if (**Chart**)
+    plot and show the score chart;
+  if (**Contact me**)
+    send a message to mentor;
+  if (**LiveChat**)
+    connect to live chat;
+  if (**FAQ**)
+    show a list of questions;
+  if (**Info**)
+    display relevant info;
+  if (**Auto Sign-In**) 
+    if (activate?) 
+      activate;
+    else if (deactivate?) 
+      deactivate;
+  else
+    NLP chat;
+}
+logout;
+
+# Faculty frontend workflow;
+Faculty frontend workflow;
+display menu;
+while(options selected is not logout?) {
+  if (**Faculty Admin**)
+    display Faculty Admin menu;
+  if (**Playbooks**)
+    display Playbooks menu;
+  if (**Analysis**)
+    display Analysis menu;
+  if (**Manage Users**)
+    display Manage Users menu;
+  if (**Chat**)
+    display Chat menu;
+  if (**System Admin**)
+    display System Admin menu;
+  if (Auto Sign-In selected) 
+    if (activate?) 
+      activate;
+    else if (deactivate?) 
+      deactivate;
+}
+logout;
+
+# Faculty Admin Menu
+Faculty Admin workflow;
+display menu;
+while(following options selected?) {
+  if (**Schedule Update**)
+    perform schedule update;
+  if (**LMS Import**)
+    perform LMS Import;
+  if (**Mentor Import**)
+    perform mentor import;
+}
+back to main menu;
+
+# Playbooks Menu
+Playbooks workflow;
+display menu;
+while(any options selected?) {
+  if (**Configurator Playbooks**) {
+    list out all related course info;
+  }
+  else if (**Persona Playbooks**) {
+    prompt for course_id;
+    display playbook menu;
+    while(next option selected?) {
+      if(**Learners List**)
+        display user data;
+      if(**Learner's Progress**)
+        display learners progress;
+      if(**Schedule**)
+        display course schedule;
+      if(**MCQ Pending**)
+        display MCQ pending listing;
+      if(**MCQ Failed**)
+        display MCQ failed listing;
+      if(**Assignment Pending**)
+        display Assignment pending listing;
+      if(**Assignment Failed**)
+        display Assignment failed listing;
+    }
+  }
+  else if (**Learners at risk**) {
+    prompt for course_id;
+    display report for selected course_id;
+  }
+}
+
+# Analysis Menu
+Analysis workflow;
+prompt for course_id;
+display menu;
+while(any options selected?) {
+  if (**AI Grading**) {
+    list out all related course info;
+  }
+  else if (**MCQ Analysis**) {
+    Assignment & MCQ Score Summary;
+    MCQ Grouping for current course_id;
+    Assignment Grouping for current course_id;
+  }
+  else if (**MCQ Difficulty Analysis**) {
+    display MCQ Diff menu;
+    while(next option selected?) {
+      if(**By MCQ Attempts**)
+        MCQ Analysis Difficulty By MCQ Attempts;
+      if(**By MCQ Scores**)
+        MCQ Analysis Difficulty By MCQ Scores;
+      if(**By MCQ Average**)
+	prompt MCQ Question;
+        MCQ Analysis Difficulty By MCQ Average on selected question;
+    }
+  }
+  else if (**Graph**) {
+    display bar plot for selected course_id;
+  }
+}
+
+
+# Manage Users Menu
+prompt for course_id;
+display menu;
+while(any options selected?) {
+  if (**Name Search**)
+    list out name matched users;
+  else if (**Email Search**)
+    list out email matched users;    
+  else if (**Reset User**) {
+    display menu;
+    while(next option selected?) {
+      if (**Block this user**)
+        set UserType to 0;
+      else if (**Set as admin**)
+        set UserType to 11;
+      else if (**Set as learner**)
+        set UserType to 1;
+      else if (**Change Email**)
+        update email address;
+      else if (**Reset Binding**)
+        set Binded to 0;
+    }
+  }
+  else if (**Active Users**)
+    list out online users;
+  else if (**Binded Users**)
+    list out binded users;
+  else if (**Blocked Users**)
+    list out blocked users;
+  }
+
+# System Admin Menu
+# System Admin Menu
+display System Admin menu;
+while(any options selected?) {
+  if (**NLP**)
+    display NLP menu;
+  else if (**ML**)
+    display ML menu;
+  else if (**Clients**)
+    display Clients menu;
+  else if (**SysConf**)
+    reload the system configuration without restart the bot;
+  }
+go back to Mentor menu;
+
+# NLP Menu
+display NLP menu;
+while(any options selected?) {
+  if (**Dictionary**)
+    table export for dictionary object;
+  else if (**Bot Prompts**)
+    table export for prompts object;
+  else if (**Corpus**)
+    table export for ft_corpus object;
+  else if (**Responses**)
+    table export for responses object;
+  else if (**Train NLP**)
+    Re-train the NLP model;
+  else if (**Stopwords**)
+    table export for stopwords object;
+  else if (**FAQ List**)
+    table export for faq object;
+  }
+go back to System Admin menu;
+
+# ML Menu
+display ML menu;
+while(any options selected?) {
+  if (**Model Data**)
+    table export for mcqas_info object;
+  else if (**ML Pipeline**)
+    generate data for machine learning;
+  else if (**ML EDA**)
+    generate data profpler report;
+  else if (**ML Graph**)
+    plot model chart;
+  else if (**Train Model**)
+    Re-train the machine learning model;
+  }
+go back to System Admin menu;
+
+# Clients Menu
+display Clients menu;
+while(any options selected?) {
+  if (**Client Copy**)
+    copy data from source client to target client;
+  else if (**Client Delete**)
+    delete data for the select client;
+  else if (**Reload Config**)
+    reload the client specific configuration without restart the bot;
+  }
+go back to System Admin menu;
+
