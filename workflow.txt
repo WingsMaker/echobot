@@ -300,7 +300,7 @@ while(course_id in course_list) {
     skip this course_id;
   filter away non-learners;
   while(student_id in course_id) {
-    verify student progress;
+    verify student_progress;
     if(not-in-progress)
       if(binded user)
         send intervention msg to student;
@@ -488,3 +488,59 @@ and att_rate < 75%)
 update userdata table;
 update internal variable vars;
 done;
+
+# vmbotlib.get_stageinfo
+given stagecode, mcq and assignment info, pass_rate, fee_amt;
+perform evaluate_progress with mcq_info,
+   mcq_required_pertaining_to_stage;
+perform evaluate_progress with assignment_info,
+   assignment_req_pertaining_to_stage;
+compute avg_score,  max_mcq_attempts, mcq_as_completed, 
+  ma_list, mcq_pending, assignment_pending;
+pass_stage = False;
+if(stage = SOC and fee_amt = 0)
+  pass_stage = True;
+if( (mcq_as_completed is True) and (avg_score >= pass_rate))
+  pass_stage = True;
+if(stage = EOC)
+  pass_stage = (fee_amt is zero ?);
+risk_level = 0;
+if(mcq_pending or assignment_pending)
+  risk_level=1;
+if(avg_score < pass_rate and max_mcq_attempts<4)
+  risk_level=2;
+if(avg_score < pass_rate and avg_score>0)
+  risk_level=2;
+if(mcq_pending and avg_score=0)
+  risk_level=3;
+if(fee_amt>0)
+  pass_stage = False;
+done;
+
+# vmbotlib.evaluate_progress
+given score_data, iu_list, passing_rate, mcq_assignment_type;
+compute iu_attempts,iu_score,score_pass,score_zero,score_failed;
+compute score_avg as total_score 
+from iu_score over counts of iu_score;
+transform score_data into score_pass with score beyond passing_rate;
+transform score_data into score_zero 
+with score equals to zero;
+transform score_data into score_failed 
+with score below passing_rate and is not zero;
+show mcq_assignment_type," average test score : ",score_avg with 2 decimal points;
+show mcq_assignment_type," test passed : ",listing from score_pass;
+show mcq_assignment_type," test failed : ",listing from score_failed;
+show mcq_assignment_type," test pending : ",listing from score_zero;
+compute attempts_balance;
+done;
+
+# vmbotlib.verify_student
+given student_id,userdata,stage_data, course_id;
+create vars using userdata;
+get student_name, learner_stage from userdata;
+Inform user on learner_stage;
+prepare stage_list, date_list;
+get assistance_email and mentor_email;
+save above results into vars;
+done;
+
