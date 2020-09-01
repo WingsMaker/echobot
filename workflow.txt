@@ -409,3 +409,82 @@ else if(assignment_score >= 30%)
 else
   summary_report("Below 30%");
 done;
+
+# vmbotlib.display_progress
+perform load_progress;
+if(status is incomplete) or
+  (status is not ready) or 
+  (status is EOC)
+  exit;
+if(mcqas_complete 
+and avg_score >= pass_rate)
+  inform "We noticed that 
+  your progress is as per schedule.
+  Well Done! Keep good work.";
+if(f2f_error is True)
+  if(pm_stage is True)
+    inform "We noticed that 
+    you have not attended Face to Face ......";
+  else
+    if(attendance_rate >= 75%)
+      inform "We noticed that 
+      you have not attended Face to Face.......";      
+    else
+      inform "We noticed that 
+      you have not attended Face to Face.....
+      and not reached 75% of attendance.....";"
+if(mcq_zero>0 
+and avg_score=0)
+  inform "We noticed that you have not started and/or 
+  attempted any of the eLearning nor the MCQs";
+if(mcqas_list>0 
+and avg_score < pass_rate 
+and max_attempts < 4)
+  inform "We noticed that 
+  you have not score above 70%";
+if(mcq_zero>0)
+  inform "We noticed that 
+    you have not started or attempted MCQ.....";
+if(as_zero>0)
+  inform "You have not attempted Assignment.....";
+done;  
+
+# vmbotlib.load_progress
+given student_id, course_info;
+compute course_id,
+  stagebyschedule,
+  stage_list,
+  startdate_list,
+  duedate_list;
+compute mcq_duedate, 
+assignment_duedate,
+elearning_duedate,
+flipclass_duedate, pm_stage;
+load stage_list,
+mcq_list, 
+assignment_list,
+numofdays_per_stage 
+from stage table;
+get attendance_missing_datelist 
+from rest api;
+while(stage in stage_list)
+  check attendance;
+  perform get_stageinfo;
+  compute att_rate, 
+  pass_stage, 
+  risk_level;
+  update stage_info, 
+  stagebyprogress;
+  determine stage_progress;  
+if(stagebyschedule = EOC 
+and pass_stageis True
+and att_rate >= 75%)
+  inform "_eoc_";
+else
+  inform stagebyprogress;
+if(pm_stage is True
+and att_rate < 75%)
+  risk_level set to 3;
+update userdata table;
+update internal variable vars;
+done;
