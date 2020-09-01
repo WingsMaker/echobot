@@ -30,6 +30,7 @@ else {
 end:
 logout;
 goto start;
+done;
 
 
 # Learner frontend workflow
@@ -59,6 +60,7 @@ while(options selected is not logout?) {
     NLP chat;
 }
 logout;
+done;
 
 # Faculty frontend workflow;
 Faculty frontend workflow;
@@ -83,6 +85,7 @@ while(options selected is not logout?) {
       deactivate;
 }
 logout;
+done;
 
 # Faculty Admin Menu
 Faculty Admin workflow;
@@ -96,6 +99,7 @@ while(following options selected?) {
     perform mentor import;
 }
 back to main menu;
+done;
 
 # Playbooks Menu
 Playbooks workflow;
@@ -129,6 +133,7 @@ while(any options selected?) {
     display report for selected course_id;
   }
 }
+done;
 
 # Analysis Menu
 Analysis workflow;
@@ -159,7 +164,7 @@ while(any options selected?) {
     display bar plot for selected course_id;
   }
 }
-
+done;
 
 # Manage Users Menu
 prompt for course_id;
@@ -191,8 +196,8 @@ while(any options selected?) {
   else if (**Blocked Users**)
     list out blocked users;
   }
+done;
 
-# System Admin Menu
 # System Admin Menu
 display System Admin menu;
 while(any options selected?) {
@@ -206,6 +211,7 @@ while(any options selected?) {
     reload the system configuration without restart the bot;
   }
 go back to Mentor menu;
+done;
 
 # NLP Menu
 display NLP menu;
@@ -226,6 +232,7 @@ while(any options selected?) {
     table export for faq object;
   }
 go back to System Admin menu;
+done;
 
 # ML Menu
 display ML menu;
@@ -242,6 +249,7 @@ while(any options selected?) {
     Re-train the machine learning model;
   }
 go back to System Admin menu;
+done;
 
 # Clients Menu
 display Clients menu;
@@ -254,6 +262,7 @@ while(any options selected?) {
     reload the client specific configuration without restart the bot;
   }
 go back to System Admin menu;
+done;
 
 # Reminder notification workflow
 begin auto_notify;
@@ -275,6 +284,7 @@ while(course_id in course_list) {
   send summary of reminder message to mentor with the 2 lists;
 }
 inform upon completion of reminder msg;
+done;
 
 # Intervention notification workflow
 begin auto_intervent;
@@ -307,6 +317,7 @@ while(course_id in course_list) {
   send summary of intervention message to mentor with the 2 lists;
 }
 inform upon completion of intervention msg;
+done;
 
 # vmbotlib.load_edxdata
 build course_list for eoc = 0;
@@ -324,6 +335,7 @@ new_course_list = list of new courses yet to import;
 while (course_id in new_course_list)
   perform edx_import;
 perform mass_update_usermaster;  
+done;
   
 # vmedxlib.update_mcq
 given course_id;
@@ -372,4 +384,28 @@ if (mcq and assignment has data) {
   perform update_mcq;
 }  
 perform update_schedule;
+done;
 
+# vmbotlib.analyze_cohort
+Start MCQ Analysis;
+given course_id;
+load userdata;
+aggregate mcq and assignment scores by student_id;
+
+if(mcq_score >= 70%)
+  summary_report("70% and above");
+else if(mcq_score >= 30%)
+  summary_report("Between 30% and 70%");
+else
+  summary_report("Below 30%");
+
+if(mcq_attemps >=2)
+  summary_report("2 or more attempts");
+
+if(assignment_score >= 70%)
+  summary_report("70% and above");
+else if(assignment_score >= 30%)
+  summary_report("Between 30% and 70%");
+else
+  summary_report("Below 30%");
+done;
