@@ -42,6 +42,7 @@ summary = """
 ║ rds_update         perform SQL update query for RDS database                ║▒▒
 ║ render_table       output dataframe into HTML table in picture format       ║▒▒
 ║ shellcmd           to execute system commands from the server shell access  ║▒▒
+║ syslog             standard logger for working in async, this replaces it   ║▒▒
 ║ time_hhmm          local time in hhmm numeric format                        ║▒▒
 ║ time_hhmmss        local time in hhmmss numeric format                      ║▒▒
 ║ write2html         output dataframe content into HTML file                  ║▒▒
@@ -60,7 +61,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import six
 import math
-import sqlite3
 import wget
 import json
 import cryptography
@@ -70,7 +70,7 @@ import telepot
 from telepot.namedtuple import ReplyKeyboardMarkup
 import pymysql
 import pymysql.cursors
-import pymysqlpool
+import pymysqlpool  # python3.8 -m pip install aiomysql  # https://github.com/terrycain/aiomysql/tree/sha256
 #from pymysql_manager import ConnectionManager
 #from pymysqlpool.pool import Pool
 import sqlite3
@@ -78,7 +78,7 @@ from sqlalchemy import create_engine
 import random
 import inspect
 
-global edxcon, rdscon, rds_connstr, rds_pool, rdsdb 
+global edxcon, rdscon, rds_connstr, rds_pool, rdsdb, rds_schema
 
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
 #matplotlib.use('Agg')
@@ -111,22 +111,20 @@ def conn_open():
     return rdscon.open
 
 def copydbtbl(df, tblname):
-    global rdscon
-    #try:
-    rdscon = rds_connector()
-    if '.db' in rds_connstr:
-        df.to_sql(tblname, con=rdscon,index=False, if_exists='append') 
-    else:
-        df.reset_index()
-        rdsEngine = rds_engine()
-        rdscon = rdsEngine.connect()
-        df.to_sql(tblname, con=rdsEngine, if_exists = 'append', index=False, chunksize = 1000)
-        #rdscon.close()
-        #ok=True
-    #except:
-    #    ok=False
-    #return ok
-    return
+    try:
+        if '.db' in rds_connstr:
+            conn = rds_connector()
+            df.to_sql(tblname, con=conn,index=False, if_exists='append') 
+        else:
+            df.reset_index()
+            rdsEngine = rds_engine()
+            conn = rdsEngine.connect()
+            df.to_sql(tblname, con=conn, if_exists = 'append', index=False, chunksize = 1000)
+            conn.close()
+        ok=True
+    except:
+        ok=False
+    return ok    
 
 def copy2omdb(df, tbl):
     sqldb = "omdb.db"
@@ -257,11 +255,14 @@ def get_attachment(bot, fid):
     return fname
     
 def get_columns(tablename):
+    global rds_schema
     if '.db' in rds_connstr:
         df = querydf(rds_connstr, f"PRAGMA table_info('{tablename}');")
         cols = [x for x in df.name]
         return cols
-    query = f"SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_NAME = '{tablename}';"
+    #query = f"SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_NAME = '{tablename}';"
+    #query = f"SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_SCHEMA = 'omnimentor' AND TABLE_NAME = '{tablename}';"
+    query = f"SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_SCHEMA = '{rds_schema}' AND TABLE_NAME = '{tablename}';"
     df = rds_df(query)
     df.columns = ['COLUMN_NAME']
     cols = [ x for x in df.COLUMN_NAME ]
@@ -305,6 +306,15 @@ def printdict(obj):
     print(*obj.items(), sep = '\n')
     return
     
+def sqlcmd(resp):
+    result = ""
+    try:        
+        pycode = compile(resp, 'test', 'eval')
+        result = str(eval(pycode))
+    except:
+        result = ""
+    return result
+
 def pycmd(resp):
     result = ""
     try:        
@@ -343,6 +353,7 @@ def rds_connector():
                 rds_pool = 20
                 config={'host':host, 'user':user, 'password':passwd, 'database':dbase, 'autocommit':True, 'ssl':{'ca': ssl_pem}}
                 rdsdb = pymysqlpool.ConnectionPool(size=rds_pool,name='pool', **config)            
+            #rdscon = pymysql.connect(host=host, port=3306, user=user,passwd=passwd,db=dbase,ssl={'ca': ssl_pem})            
             rdscon = rdsdb.get_connection()
             rdscon.ping(True)                
         else:
@@ -378,7 +389,7 @@ def rds_df(query):
         #syslog("rds_df returns no data")
         return None
     else:
-        df = pd.DataFrame.from_dict(rows)   
+        df = pd.DataFrame.from_dict(rows)
     #except:
     #    pass
     return df
@@ -389,7 +400,7 @@ def rds_engine():
         with open("vmbot.json") as json_file:  
             bot_info = json.load(json_file)
         rds_connstr = bot_info['omdb']
-    rdsEngine = create_engine(rds_connstr, pool_recycle=3600)    
+    rdsEngine = create_engine(rds_connstr, pool_recycle=3600)
     return rdsEngine
 
 def rds_param(query, retval="", dfmode=False):
@@ -468,7 +479,9 @@ def syslog(msg):
     date_now = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime() )
     result = f"{date_now} :: INFO :: {s[3]} :: {s[2]} :: {msg}\n"
     f = open('syslog.log','a')
-    f.write(result)
+    fname = 'syslog.log'
+    with open(fname, "a", encoding="utf-8") as f:
+        f.write(str(result))
     f.close()
     return
 
@@ -535,17 +548,24 @@ def write2html(df, title='', filename='report.html'):
     return result
    
 if __name__ == "__main__":
-    global rdscon, rds_connstr, rdsdb, rds_pool
-    rds_connstr = ""
+    global rdscon, rds_connstr, rdsdb, rds_pool, rds_schema
+    rds_schema = "omnimentor"
+    #rds_connstr = ""
+    rds_connstr = "omdb.db"
     #rds_connstr = "mysql+pymysql://omnimentor@db-sambaashplatform-cluster-2a:omnimentor@db-sambaashplatform-cluster-2a.mysql.database.azure.com/omnimentor?ssl_ca=BaltimoreCyberTrustRoot.crt.pem"
     rds_pool = 0
     rdsdb = None
     rdscon = None
-    rdscon = rds_connector()        
-    df = rds_df("select * from userdata")    
-    df.columns = get_columns("userdata")    
+    rdscon = rds_connector()
+    qry = "update playbooks set eoc=0 where course_id = 'course-v1:Lithan+PMP-0220A+25Jul2020';"
+    #qry = "update menu_text set text = 'การประมวลผลภาษาธรรมชาติ' where lang='th' and menu_key=1020701;"
+    #rds_update(qry)
+    #qry = "SELECT DISTINCT a.course_id, a.course_name FROM playbooks a INNER JOIN course_module c ON a.client_name=c.client_name and a.module_code=c.module_code where c.enabled=1 AND a.client_name='SambaashDev' ORDER BY a.course_id;"
+    #df = rds_df(qry)    
+    #df.columns = get_columns("userdata")    
+    #df.columns = ['course_id','course_name']
     #copy2omdb(df,"userdata")
-    print(df.head(10))
+    #print(df.head(10))
     #xls2sqldb('userdata.csv', 'omdb.db')
     #
     print("End of vmsvclib.py")
