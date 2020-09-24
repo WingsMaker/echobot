@@ -18,7 +18,6 @@ warnings.filterwarnings("ignore")
 
 import pandas as pd
 import pandas.io.formats.style
-#from pandas_profiling import ProfileReport
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mtk
 
@@ -31,34 +30,28 @@ import asyncio
 import telepot.aio
 from telepot.aio.loop import MessageLoop
 from telepot.aio.delegate import pave_event_space, per_chat_id, create_open
-#from urllib3.exceptions import ReadTimeoutError
 import wget
 import json
-from googletrans import Translator
 import wikipedia
 from nltk.chat.eliza import eliza_chatbot
 import vmnlplib
 import vmaiglib
-#import vmffnnlib
 import vmmcqdlib
 import vmsvclib
 import vmedxlib
 from vmsvclib import *
 
-global bot_intance, ft_model, dt_model, nn_model, mcq_analysis
+global bot_intance, ft_model, dt_model, mcq_analysis
 global rdscon, rds_connstr, edx_api_header, edx_api_url
 
 # following will be replaced by generic config without hardcoded.
-debug_mode = False    # False True
 use_mailapi = False
-translator = Translator()
 max_iu_cnt = 20
 btn_hellobot = "Hello OmniMentor 👩‍🎓 👨‍🎓🤖"
 option_back = "◀️"
 option_mainmenu = "mainmenu"
 option_learners = "Learners 👩"
 option_faculty = "Faculty"
-sys_cmd = "Commands Shell 📺"
 option_mycourse = "My Courses"
 option_faq = "FAQ"
 option_mychat = "LiveChat"
@@ -84,7 +77,8 @@ option_searchbyname = "Name Search"
 option_searchbyemail = "Email Search"
 option_resetuser = "Reset User"
 option_admin_users = "Admin Users"
-option_active_users = "Active Users"
+#option_active_users = "Active Users"
+option_active_users = "Activated Users"
 option_blocked_users = "Blocked Users"
 option_binded_users = "Binded Users"
 opt_blockuser = 'Block this user'
@@ -106,7 +100,6 @@ ps_mcqzero = "MCQ Pending"
 ps_mcqfailed = "MCQ Failed"
 ps_aszero = "Assignment Pending"
 ps_asfailed = "Assignment Failed"
-#ps_progress = "Learner's Progress"
 ps_progress = "Learners Progress"
 an_mcq = "MCQ Analysis"
 an_chart = "Graph"
@@ -122,10 +115,8 @@ opt_mcqavg = "MCQ Avg Cohorts"
 opt_analysis = "Analysis Cohorts"
 option_nlp = "NLP"
 option_ml = "Machine Learning"
-option_client = "Clients"
 option_restful = "API Dashboard"
 option_syscfg = "Reload Config"
-option_lang = "Language Config"
 option_intervention = "Intervention Msg"
 option_reminder = "Reminder Msg"
 sys_clientcopy = "Client Copy"
@@ -152,7 +143,7 @@ rest_ass = "Assignment"
 rest_cal = "Calendar"
 rest_cid = "Course ID"
 rest_sid = "Student ID"
-mainmenu = [[option_learners, option_faculty , sys_cmd]]
+mainmenu = [[option_learners, option_faculty]]
 learners_menu = [[option_mycourse, option_schedule, option_mychart],\
     [option_gethelp, option_mychat, option_faq], [option_binduser, option_info, option_back]]
 mentor_menu = [[option_fct, option_pb, option_analysis, option_usermgmt], [option_chat, option_bindadm, option_admin, option_back]]
@@ -164,7 +155,7 @@ playbook_menu= [[pb_config, pb_userdata, pb_riskuser,option_back]]
 course_menu = [[ps_userdata, ps_progress, ps_schedule],[ps_mcqzero, ps_mcqfailed, ps_stage], [ps_aszero, ps_asfailed, option_back]]
 analysis_menu = [[ml_grading, an_mcq, an_mcqd, an_chart, option_back]]
 mcqdiff_menu = [[an_avgatt,an_avgscore,an_mcqavg,option_back]]
-admin_menu = [[option_nlp, option_ml, option_restful, option_client],[option_lang, option_syscfg, option_alerts, option_back]]
+admin_menu = [[option_nlp, option_ml, option_restful],[option_syscfg, option_alerts, option_back]]
 alerts_menu = [[option_intervention, option_reminder, option_back]]
 client_menu = [[sys_clientcopy, sys_clientdelete, sys_clientconfig, option_back]]
 nlp_menu = [[nlp_dict, nlp_prompts, nlp_corpus, nlp_response], [nlp_train, nlp_stopwords, nlp_faq, option_back]]
@@ -180,12 +171,12 @@ sorted_numlist = lambda y : list(set([int(x) for x in ''.join([z for z in y if z
 iu_reading = lambda z: ','.join([ str(x+1) for x in range(max(z))])
 
 def do_main():
-    global bot_intance, dt_model, nn_model
+    global bot_intance, dt_model
     vmsvclib.rds_connstr = ""
     vmsvclib.rdscon = None
     vmsvclib.rdsdb = None
     vmsvclib.rds_pool = 0
-    
+  
     syslog('Starting up vmbot')
     print("starting up vmbot")
     if not loadconfig():
@@ -194,9 +185,6 @@ def do_main():
     if dt_model.model_name=="" :
         txt = "AI grading model data file dt_model.bin is missing"
         syslog('system : '+ txt)
-    #elif nn_model.model_name=="" :
-    #    txt = "AI grading model data file ffnn_model.hdf5 is missing"
-    #    syslog('system : '+ txt)
     syslog("Running telepot async library")
     bot_intance = BotInstance()
     vmbot = bot_intance.bot
@@ -325,24 +313,12 @@ async def load_edxdata():
     syslog("load_edxdata completed")
     return
 
-def msgout(msg):
-    global bot_intance
-    if bot_intance.lang=='en':
-        return msg
-    try:
-        result = translator.translate(msg, dest=bot_intance.lang)
-        txt = result.text
-    except:
-        txt = msg
-    return txt
-
 def loadconfig():
-    global ft_model, dt_model, nn_model, mcq_analysis
+    global ft_model, dt_model, mcq_analysis
     ok = True
     try:
         dt = "dt_model.bin"
         ft = "ft_model.bin"
-        ffnn = "ffnn_model.hdf5"
         ft_model = vmnlplib.NLP_Parser()
         ft_model.load_modelfile(ft)
         dt_model = vmaiglib.MLGrader()
@@ -350,11 +326,6 @@ def loadconfig():
         if dt_model.model_name == "":
             syslog("Error loading dt_model")
             ok = False
-        #nn_model = vmffnnlib.NNGrader()
-        #nn_model.model_loader(ffnn)
-        #if nn_model.model_name == "":
-        #    syslog("Error loading nn_model")
-        #    ok = False
         mcq_analysis = vmmcqdlib.MCQ_Diff()
     except:
         ok = False
@@ -381,8 +352,6 @@ class BotInstance():
         self.vars = dict()
         self.cmd_dict = dict()
         self.keys_dict = dict()
-        self.menu_dict = dict()
-        self.menukey_dict = dict()
         self.keys_dict[option_mainmenu] = 1
         self.define_keys( mainmenu, self.keys_dict[ option_mainmenu ])
         self.define_keys( learners_menu, self.keys_dict[ option_learners ])
@@ -398,12 +367,10 @@ class BotInstance():
         self.define_keys( users_menu, self.keys_dict[ option_usermgmt ])
         self.define_keys( admin_menu, self.keys_dict[ option_admin ])
         self.define_keys( useraction_menu, self.keys_dict[ option_resetuser ])
-        self.define_keys( client_menu, self.keys_dict[option_client])
         self.define_keys( rest_menu, self.keys_dict[option_restful])
         self.define_keys( alerts_menu, self.keys_dict[option_alerts])
         self.define_keys( ml_menu, self.keys_dict[option_ml])
         self.define_keys( nlp_menu, self.keys_dict[option_nlp])
-        #self.define_keys( lang_menu, self.keys_dict[option_lang])
         self.keys_dict[ option_chatlist ] = (self.keys_dict[ option_chat ]*10) + 1
         self.keys_dict[ option_chatempty ] = (self.keys_dict[ option_chat ]*10) + 2
         self.keys_dict[ opt_pbusr ] = (self.keys_dict[ pb_userdata ]*10) + 1
@@ -415,23 +382,13 @@ class BotInstance():
         self.keys_dict[opt_tgtclt] = (self.keys_dict[option_admin]*10) + 1
         self.keys_dict[opt_tgtclt] = (self.keys_dict[option_admin]*10) + 1
          
-        #printdict(self.keys_dict)
-        #for lang in ['en', 'zh-cn','zh-tw','hi','ta','bn','tl','id','ms','my','th','vi','ja','ko']:
-        #    for mtxt, mkey in (self.keys_dict).items():            
-        #        if lang == 'en':
-        #            txt = mtxt
-        #        else:
-        #            result = translator.translate(mtxt, dest=lang)
-        #            txt = result.text
-        #        if "'" in txt:
-        #            query = f"""insert into menu_text(menu_key,lang,text) values({mkey}, '{lang}', "{txt}");"""
-        #        else:
-        #            query = f"insert into menu_text(menu_key,lang,text) values({mkey}, '{lang}', '{txt}');"
-        #        rds_update(query)        
-        # printdict(self.cmd_dict)
         with open("vmbot.json") as json_file:
             bot_info = json.load(json_file)
         #printdict(bot_info)
+        if 'debug' in list(bot_info):
+            self.debug_mode = (int(bot_info['debug'])==1)
+        else:    
+            self.debug_mode = False
         self.Token = bot_info['BotToken']
         self.client_name = bot_info['client_name']
         self.schema = "omnimentor"
@@ -440,7 +397,6 @@ class BotInstance():
         vmsvclib.rds_schema = self.schema
         self.get_system_config()
         self.get_client_config()
-        self.load_menu_text()
         self.sub_str  = "SUBSTRING" if ':' in vmsvclib.rds_connstr else "SUBSTR"
         try:        
             syslog(self.Token) # @OmniMentorBot
@@ -457,31 +413,6 @@ class BotInstance():
 
     def __repr__(self):
         return 'BotInstance()'
-
-    def load_menu_text(self):
-        df = rds_df(f"select * from menu_text;")
-        if df is None:
-            cnt = 0
-        else:         
-            df.columns = get_columns("menu_text")
-            cnt = len(df)
-        if cnt <= 0:
-            return
-        menu_list = [x for x in df.menu_key]
-        lang_list = [x for x in df.lang]
-        txt_list = [x for x in df.text]
-        self.menu_dict = dict()
-        self.menukey_dict = {}
-        for lang in ['en', 'zh-cn','zh-tw','hi','ta','bn','tl','id','ms','my','th','vi','ja','ko']:
-            self.menu_dict[lang] = dict()
-            self.menukey_dict[lang] = dict()
-        for n in range(cnt):
-            lang = lang_list[n]
-            menu_key = menu_list[n]            
-            menu_txt = txt_list[n]
-            self.menu_dict[lang][menu_key] = menu_txt
-            self.menukey_dict[lang][menu_txt] = menu_key
-        return
 
     def get_system_config(self):
         df = rds_df("select * from params where client_name = 'System';")
@@ -850,10 +781,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
 
     async def runfaq(self, resp):
         global ft_model, bot_intance
-        dt = translator.detect(resp)
-        if dt.lang != 'en':
-            result = translator.translate(resp, dest='en')
-            resp = result.text
         accuracy = 0
         match_score = bot_intance.match_score
         use_regexpr = bot_intance.use_regexpr
@@ -933,7 +860,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         client_name = bot_intance.client_name
         syslog(f"mcq update, assignment update {self.courseid} student #{self.student_id}")
         #if '.db' not in vmsvclib.rds_connstr:
-        if not  debug_mode:
+        if not bot_intance.debug_mode:
             if self.is_admin:
                 #vmedxlib.update_assignment(self.courseid, client_name, 0)
                 #vmedxlib.update_mcq(self.courseid, client_name, 0)
@@ -1041,13 +968,10 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         return txt
 
     def grad_prediction(self):
-        global nn_model, dt_model
+        global dt_model
         if dt_model.model_name == "" :
             syslog("please load the model first")
             return ( [] , None )
-        #if nn_model.model_name == "":
-        #    syslog("please load the model first")
-        #    return []
         txt = ""
         df = self.userdata
         if self.userdata is None:
@@ -1086,18 +1010,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             if (mcnt+acnt)>0:
                 mavg = 0 if mcnt == 0 else sum(mscores) / mcnt
                 aavg = 0 if acnt == 0 else sum(ascores) / acnt
-                # current not working
-                #use_neural_network = False   # True or False
-                #if use_neural_network:
-                #    #mavgatt = sum([gx(n) for n in range(1,14)]) / 13
-                #    #mmaxatt = max([gx(n) for n in range(1,14)])
-                #    #as_avgatt = sum([gy(n) for n in range(1,14)]) / 13
-                #    #as_maxatt = max([gy(n) for n in range(1,14)])
-                #    #grad_pred = nn_model.pred(client_name,mavg,mavgatt,mmaxatt,aavg,as_avgatt,as_maxatt,acnt)
-                #    #if grad_pred is None:
-                #    #    continue
-                #    pass
-                #else:
                 grad_pred = dt_model.predict(mavg , aavg, mcnt)
                 grades = grad_pred[0]
             
@@ -1146,10 +1058,19 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 df.columns = ['course_id','course_name']
                 course_id_list = [x for x in df.course_id]
                 course_name_list = [x for x in df.course_name]
-            return (course_id_list, course_name_list, course_id_list)
+            return (course_id_list, course_name_list, course_id_list)            
         (course_id_list, course_name_list, logon_list) = rds_loadcourse(client_name, stud)
         syslog("completed")
         return (course_id_list, course_name_list, logon_list)
+
+    def pycmd(self, cmdstr):
+        result = ""
+        try:        
+            pycode = compile(cmdstr, 'test', 'eval')
+            result = str(eval(pycode))
+        except:
+            result = ""
+        return result
 
     def reply_markup(self, buttons=[], opt_resize = True):        
         global bot_intance
@@ -1157,25 +1078,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         if buttons == []:
             mark_up = {'hide_keyboard': True}
         else:
-            lang0 = bot_intance.prevlang
-            lang1 = bot_intance.lang
-            if lang0 == lang1 :
-                newbuttons = buttons.copy()
-            else:
-                newbuttons = []
-                for btngroup in buttons:
-                    btngrp = []
-                    for btn in btngroup:
-                        txt = str(btn)
-                        if btn in list(bot_intance.menukey_dict[lang0]):
-                            mkey = bot_intance.menukey_dict[lang0][btn]
-                            txt = bot_intance.menu_dict[lang1][mkey]
-                        elif btn in list(bot_intance.menukey_dict['en']):
-                            mkey = bot_intance.menukey_dict['en'][btn]
-                            txt = bot_intance.menu_dict[lang1][mkey]
-                        btngrp.append(txt)
-                    newbuttons.append(btngrp)
-            mark_up = ReplyKeyboardMarkup(keyboard=newbuttons,one_time_keyboard=True,resize_keyboard=opt_resize)
+            mark_up = ReplyKeyboardMarkup(keyboard=buttons,one_time_keyboard=True,resize_keyboard=opt_resize)
         return mark_up
 
     async def on_chat_message(self, msg):
@@ -1186,8 +1089,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             bot = self.bot
             self.chatid = chat_id
             keys_dict = bot_intance.keys_dict
-            menu_dict = bot_intance.menu_dict
-            menukey_dict = bot_intance.menukey_dict
             adminchatid = bot_intance.adminchatid
             developerid = bot_intance.developerid
             lang = bot_intance.lang
@@ -1224,10 +1125,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             await self.bot.sendMessage(adminchatid, txt)
             return
 
-        if resp in list(bot_intance.menukey_dict[lang]):
-            mkey = bot_intance.menukey_dict[lang][resp]
-            resp = bot_intance.menu_dict['en'][mkey]
-
         if (resp not in list(keys_dict)) and (resp != option_back) and (resp[0]!='/'):       
             syslog(f"chat_id = {self.chatid} response = {resp}")
 
@@ -1245,38 +1142,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             syslog("telegram user " + str(chat_id) + " offine.")            
             await self.logoff()
             
-        elif resp=='/cmd' and (chat_id in [adminchatid, developerid]) and self.is_admin: # for emergency use
-            txt = "You are now connected to command shell mode."
-            txt = banner_msg("Service Console", txt)
-            await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([[option_back]]))
-            self.menu_id = keys_dict[sys_cmd]
-
-        elif self.menu_id == keys_dict[sys_cmd]:
-            if resp == option_back :
-                txt = "You are back in the system menu"
-                txt = msgout(txt)
-                menu_item = admin_menu.copy()
-                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
-                self.menu_id = keys_dict[option_admin]
-            else:
-                try:
-                    txt = shellcmd(resp)
-                except:
-                    txt = ""                    
-                txt_list = txt.split('\n') if len(txt)>0 else []
-                html_msglist = []
-                if txt_list!=[]:
-                    cnt = int((len(txt_list)+19)/20)
-                    html_msglist = []
-                    for n in range(cnt):
-                        m = n*20
-                        result = '\n'.join(txt_list[m:][:20])
-                        html_msglist.append(result)
-                if html_msglist != []:                    
-                    for msg in html_msglist:
-                        await self.bot.sendMessage(chat_id,"<pre>" + msg +  "</pre>",parse_mode='HTML')
-            return
-        
         elif resp=='/stop' and (chat_id in [adminchatid, developerid]):
             txt = 'System shutting down.'
             txt = msgout(txt)
@@ -1287,13 +1152,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             await bot.sendMessage(chat_id,result,parse_mode='HTML')
             syslog('system : ' + txt)
             bot_intance.loop.stop()
-
-        elif (len(resp) > 3) and resp.startswith('/!') and (chat_id in [adminchatid, developerid]) and self.is_admin:
-            try:
-                fn = resp[3:]
-                await bot.sendDocument(chat_id=self.chatid, document=open(fn, 'rb'))
-            except:
-                return
 
         elif resp == '/start' or resp == '/hellobot' or resp == btn_hellobot:            
             self.reset
@@ -1622,7 +1480,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 retmsg = "please enter your student id or email address :"
 
         elif self.menu_id == keys_dict[lrn_student] and resp in [option_mycourse,option_schedule,option_faq, option_mychat, option_mychart, option_binduser, option_gethelp, option_info, option_back]:
-            #if (resp == option_back) or (resp == "0"):
             if (resp == option_back) :
                 await self.logoff()
             elif resp == option_mycourse:
@@ -1768,7 +1625,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                 self.menu_id = 1
             elif resp == fc_edxupdate :
-                txt = "Schedule update for which course ?"
+                txt = "LMS Import for which course ?"
                 txt = msgout(txt)
                 playbooklist_menu = [[x] for x in self.list_courseids]
                 playbooklist_menu.append([option_back])
@@ -1802,12 +1659,21 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             self.menu_id = keys_dict[option_fct]
 
         elif self.menu_id == keys_dict[fc_edxupdate]:
+            course_id = ""
             if resp in self.list_courseids:
+                course_id = resp
+            else:
+                course_list = vmedxlib.search_course_list("%" + resp + "%" )
+                if len(course_list)==1:
+                    course_id = course_list[0]
+            if course_id != "":
                 txt = "Running LMS import now."
                 txt = msgout(txt)
                 await self.sender.sendMessage(txt)
-                vmedxlib.edx_import(resp, self.client_name)
-                retmsg = f"LMS import for {resp} has been completed." 
+                vmedxlib.edx_import(course_id, self.client_name)
+                qry = f"update playbooks set eoc=0 where course_id = '{course_id}' and client_name = '{self.client_name}';"
+                rds_update(qry)
+                retmsg = f"LMS import for {course_id} has been completed." 
                 syslog(retmsg)
             txt = "you are back to the menu"
             txt = msgout(txt)
@@ -2127,7 +1993,8 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 html_msg_trans = False
             elif resp == an_mcq:
                 (tbl1,tbl2,tbl3,n) = analyze_cohort(self.courseid, self.userdata, self.bot, self.chatid)
-                if (tbl1 == []) or (tbl2 == []) or (tbl3 == []):
+                #if (tbl1 == []) or (tbl2 == []) or (tbl3 == []):
+                if (tbl1 == []) or (tbl2 + tbl3 == []):
                     txt = "There is no information available at the moment"
                     txt = msgout(txt)
                     await self.sender.sendMessage(txt)
@@ -2140,17 +2007,19 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 df.columns = ['MCQ Test #', 'Average Score' , 'Assignment Test #', 'Average Score']
                 html_msg_dict[title] = html_report(df, df.columns, [15,15,15,15], 20)
 
-                title  = "MCQ Grouping for " + self.courseid
-                title = msgout(title)
-                df =  pd.DataFrame( tbl2 )
-                df.columns = ['Grouping']
-                html_msg_dict[title] = html_report(df, df.columns, [120], 28)
+                if tbl2 != []:
+                    title  = "MCQ Grouping for " + self.courseid
+                    title = msgout(title)
+                    df =  pd.DataFrame( tbl2 )
+                    df.columns = ['Grouping']
+                    html_msg_dict[title] = html_report(df, df.columns, [120], 28)
 
-                title  = "Assignment Grouping for " + self.courseid
-                title = msgout(title)
-                df =  pd.DataFrame( tbl3 )
-                df.columns = ['Grouping']
-                html_msg_dict[title] = html_report(df, df.columns, [120], 28)
+                if tbl3 != []:
+                    title  = "Assignment Grouping for " + self.courseid
+                    title = msgout(title)
+                    df =  pd.DataFrame( tbl3 )
+                    df.columns = ['Grouping']
+                    html_msg_dict[title] = html_report(df, df.columns, [120], 28)
 
                 retmsg = f"Total number of learners = {n}"
                 retmsg = msgout(retmsg)
@@ -2325,21 +2194,31 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 html_msg_dict[title] = html_report(df, df.columns, [10,30,40,20], 25)
                 html_msg_trans = False
             elif resp == option_active_users :
-                sid_list = [ bot_intance.user_list[x][1] for x in list(bot_intance.user_list) ] + bot_intance.adm_list
-                sid_list = list(set(sid_list))
-                slist = ','.join([str(x) for x in sid_list])
-                query = f"select studentid,username,email from user_master where client_name = '{self.client_name}' and "
-                query += f"studentid in ({slist}) limit 50;"
-                result = "List of active users (top 50)\n"
+                query = f"select studentid,username,email,chat_id from user_master where client_name = '{self.client_name}' and usertype = 1 limit 50;"
+                result = "List of activated learners (top 50)\n"
                 df = rds_df(query)
                 if df is None:
                     txt = "Sorry, no results found."
                     txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     return
-                df.columns = ['studentid','username','email']
+                df.columns = ['studentid','username','email','chat_id']
                 title = msgout(result)
-                html_msg_dict[title] = html_report(df, df.columns, [10,20,40], 25)
+                html_msg_dict[title] = html_report(df, df.columns, [10,30,40,20], 25)
+                #sid_list = [ bot_intance.user_list[x][1] for x in list(bot_intance.user_list) ] + bot_intance.adm_list
+                #sid_list = list(set(sid_list))
+                #slist = ','.join([str(x) for x in sid_list])
+                #query = f"select studentid,username,email from user_master where client_name = '{self.client_name}' and "
+                #query += f"studentid in ({slist}) limit 50;"
+                #result = "List of active users (top 50)\n"
+                #df = rds_df(query)
+                #if df is None:
+                #    txt = "Sorry, no results found."
+                #    txt = msgout(txt)
+                #    await self.sender.sendMessage(txt)
+                #    return
+                #df.columns = ['studentid','username','email']
+                #html_msg_dict[title] = html_report(df, df.columns, [10,20,40], 25)
                 html_msg_trans = False
             elif "@" in resp:
                 query = f"select studentid,username,email from user_master where client_name = '{self.client_name}' and lower(email) like '%{resptxt}%' ;"
@@ -2452,11 +2331,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 txt = msgout(txt)
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(ml_menu))
                 self.menu_id = keys_dict[option_ml]
-            elif resp == option_client :
-                txt = "Current client is " + self.client_name 
-                txt = msgout(txt)
-                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(client_menu))
-                self.menu_id = keys_dict[option_client]
             elif resp == option_restful:
                 self.records['cid'] = ""
                 self.records['sid'] = 0
@@ -2474,44 +2348,12 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 txt = "System configuration has been reloaded."
                 txt = msgout(txt)
                 await self.sender.sendMessage(txt)
-            elif resp == option_lang:
-                txt = "Please select your language:"
-                txt = msgout(txt)
-                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(lang_menu))
-                self.menu_id = keys_dict[option_lang]                
             elif resp == option_back :
                 txt = 'Please select the following mode:'
                 txt = msgout(txt)
                 menu_item = self.menu_home.copy()
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                 self.menu_id = 1
-
-        elif self.menu_id == keys_dict[option_lang]:
-            lang_list = ['English','简体中文','繁體中文','हिंदी','தமிழ்','বাংলা','Filipino','Indonesian', 'Malay','မြန်မာ','ไทย','Việt Nam','日本語','한국어']
-            lang_codes = ['en', 'zh-cn','zh-tw','hi','ta','bn','tl','id','ms','my','th','vi','ja','ko']
-            if resp in lang_list:
-                txt = "Please wait for a moment."
-                txt = msgout(txt)
-                await self.sender.sendMessage(txt)
-                idx = lang_list.index(resp)
-                lang = lang_codes[idx]
-                bot_intance.prevlang = bot_intance.lang
-                bot_intance.lang = lang
-                txt = "Language set to " + resp 
-                txt = msgout(txt)
-                updsql = f"UPDATE params SET VALUE = '{lang}' WHERE client_name = '{self.client_name}' AND `key` = 'lang';";
-                rds_update(updsql)
-                try:
-                    await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([['/start']]))
-                except:
-                    pass
-                
-            elif (resp == option_back) or (resp == "0"):
-                txt = "You are back in the main menu"
-                txt = msgout(txt)
-                menu_item = admin_menu.copy()
-                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
-                self.menu_id = keys_dict[option_admin]
 
         elif self.menu_id == keys_dict[option_nlp]:
             txt = "Information not available"
@@ -2595,20 +2437,9 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             elif resp == ml_graph  :
                 retmsg = "Generating decision tree graph to explain the model."
                 fn = 'mcqas_info.jpg'
-                #use_neural_network = False # True or False
-                #if use_neural_network:                    
-                #    nn_model.plot_graph(fn)
-                #    status = 1
-                #else:
-                #    status = dt_model.tree_graph(fn) # no more supported since azure host running
-                #if status==1:
                 f = open(fn, 'rb')
                 await bot.sendPhoto(self.chatid, f)
             elif resp == ml_train :
-                #use_neural_network = False # or False
-                #if use_neural_network:
-                #    retmsg = nn_model.train_model(self.client_name, "ffnn_model.hdf5")
-                #else:
                 txt = 'please wait for a moment.'
                 txt = msgout(txt)
                 await self.bot.sendMessage( chat_id, txt )
@@ -2622,98 +2453,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 menu_item = admin_menu.copy()
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                 self.menu_id = keys_dict[option_admin]
-
-        elif self.menu_id == keys_dict[option_client] :
-            if resp == option_back :
-                txt = "You are back in the main menu"
-                txt = msgout(txt)
-                menu_item = admin_menu.copy()
-                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
-                self.menu_id = keys_dict[option_admin]
-            elif resp in [sys_clientcopy ,sys_clientdelete]:
-                df = rds_df("select distinct client_name from user_master order by client_name;")
-                if df is None:
-                    retmsg = "Information not available"
-                else:
-                    df.columns = ['client_name']
-                    client_list = [x for x in df.client_name] + [option_back]
-                    if resp == sys_clientcopy :
-                        txt = "Client copy from client :"
-                    else:
-                        txt = "Select the client for deletion :"
-                    txt = msgout(txt)
-                    await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([client_list]))
-                    self.menu_id = keys_dict[opt_tgtclt]
-                    self.records['clt_opt'] = keys_dict[resp]
-            elif resp == sys_clientconfig :                    
-                bot_intance.get_client_config()
-                txt = "Client configuration has been reloaded."
-                txt = msgout(txt)
-                await self.sender.sendMessage(txt)
-
-        elif self.menu_id == keys_dict[opt_tgtclt]:
-            if resp == option_back:
-                txt = "You are back in the client menu"
-                txt = msgout(txt)
-                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(client_menu))
-                self.menu_id = keys_dict[option_client]
-                return
-            if self.records['clt_opt'] == keys_dict[sys_clientcopy]:
-                self.records['src_clt'] = resp
-                txt = "Enter the target client name (case sensitive (0 to exit):"
-                txt = msgout(txt)
-                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(client_menu))
-                self.menu_id = self.records['clt_opt']
-            if self.records['clt_opt'] == keys_dict[sys_clientdelete]:                
-                txt = f"deleting data for client_name = {resp}...."
-                txt = msgout(txt)
-                await self.sender.sendMessage(txt)
-                table_list = ['course_module' , 'iu_stages', 'mcqas_info', 'mcq_data', 'mcq_score']
-                table_list += ['module_iu' , 'playbooks', 'stages', 'stages_master', 'userdata' , 'user_master']                
-                for tbl in table_list:                    
-                    qry = f"DELETE FROM {tbl} WHERE client_name = '{resp}';"
-                    rds_update(qry)
-                txt = f"Client deletion has been completed. Pls proceed to clear parameters."
-                txt = msgout(txt)
-                await self.sender.sendMessage(txt)
-                txt = "You are back in the client menu"
-                txt = msgout(txt)
-                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(client_menu))
-                self.menu_id = keys_dict[option_client]
-        
-        elif self.menu_id == keys_dict[sys_clientcopy]:
-            if resp != '0':
-                src_clt = self.records['src_clt']
-                tgt_clt = resp
-                txt = f"Copying from {src_clt} to {tgt_clt}...."
-                txt = msgout(txt)
-                await self.sender.sendMessage(txt)
-                table_list = ['course_module' , 'iu_stages', 'mcqas_info', 'mcq_data', 'mcq_score']
-                table_list += ['module_iu' , 'playbooks', 'stages', 'stages_master', 'userdata' , 'user_master']                
-                for tbl in table_list:                    
-                    syslog(f"Duplicating data for table {tbl}....")
-                    qry =  f"select * from {tbl} WHERE client_name = '{src_clt}';"
-                    df = rds_df(qry)
-                    if df is not None:
-                        df.columns = get_columns(tbl)
-                        df['client_name'] = tgt_clt
-                        qry = f"DELETE FROM {tbl} WHERE client_name = '{tgt_clt}';"
-                        rds_update(qry)
-                        copydbtbl(df, tbl)  
-                txt = "Client copy has been completed. Pls proceed to define parameters."
-                txt = msgout(txt)
-                await self.sender.sendMessage(txt)
-            txt = "You are back in the client menu"
-            txt = msgout(txt)
-            await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(client_menu))
-            self.menu_id = keys_dict[option_client]
-            
-        elif self.menu_id == keys_dict[sys_clientdelete]:
-            bot_intance.client_name = self.client_name = resp            
-            txt = "Default client_name set to {resp}"
-            txt = msgout(txt)
-            await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(client_menu))
-            self.menu_id = keys_dict[option_client]
 
         elif self.menu_id == keys_dict[option_restful]:
             sid = self.records['sid']
@@ -3104,8 +2843,16 @@ def verify_student(cname, userdata, student_id, courseid, stagedf):
         vars['stage'] = stage
     msg += 'You are currently on stage ' + stage + "\n\n"
     
-    cohort_id = piece(piece(courseid,':',1),'+',1)
-    module_code = piece(cohort_id,'-',0)
+    #cohort_id = piece(piece(courseid,':',1),'+',1)
+    #module_code = piece(cohort_id,'-',0)
+    qry = f"select cohort_id from playbooks where client_name = '{cname}' and course_id = '{courseid}';"
+    cohort_id = rds_param(qry)
+    if cohort_id=="":
+        cohort_id = piece(piece(course_id,':',1),'+',1)    
+    qry = f"select module_code from playbooks where client_name = '{cname}' and course_id = '{courseid}';"    
+    module_code = rds_param(qry)
+    if module_code=="":
+        module_code = piece(cohort_id,'-',0)
     qry = f"select assistance_email from course_module where client_name = '{cname}' and module_code = '{module_code}';"
     asst_email = rds_param(qry)
     query = f"select mentor from playbooks where course_id='{courseid}' and client_name = '{cname}';"
@@ -3230,6 +2977,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
         return ("_soc_", "", vars)
     
     due_date_list = [x for x in df.stagedate]
+    start_date_list = [x for x in df.startdate]
     fcdt = list1[0]
     stg_date = due_date_list[0]
     mcqdate = stg_date
@@ -3257,7 +3005,6 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     aslist_max = max(asvars_list)    
     amt = vars['amt']    
 
-    #try:
     missing_dates = ['' for n in range(stglen)]
     date_list = []
     att_rate = 0.0
@@ -3265,7 +3012,6 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
         date_list = vmedxlib.sms_attendance(courseid, sid)
         missing_dates = vmedxlib.sms_missingdates(client_name, courseid, sid, bot_intance.stages_cols, date_list)
         att_rate = vmedxlib.sms_att_rate(client_name, courseid, sid, date_list)
-    #except:            
     pm_stage = vmedxlib.sms_pmstage(client_name, courseid)
     missing_stages = []
     stagebyprogress = ""
@@ -3336,7 +3082,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
         if n1 > 0 and n == n1:
             if (stagebyprogress == ""):
                 stagebyprogress = stagename
-                statusbyprogress = f"{stagename} ({stagedesc})"                
+                #statusbyprogress = f"{stagename} ({stagedesc})"
             break
 
     f2f_stage = ','.join(missing_stages)
@@ -3351,6 +3097,15 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     stagedesc = stagedesc.replace('?','')
     stage_desc = stagedesc
     stagebyprogress = stage if stagebyprogress=='' else stagebyprogress
+    
+    # multi-instance of stages same day
+    if stagebyprogress in stage_names_list:
+        n1 = stage_names_list.index(stagebyprogress)
+        start_dt = start_date_list[n1]
+        txt = ''.join([ stage_names_list[n] + ' (' + stage_desc_list[n]+')\n' for n in range(stglen) if start_date_list[n] == start_dt])
+        statusbyprogress = '\n' + txt        
+    else:
+        statusbyprogress = f"{stagename} ({stagedesc})"
     vars['stage'] =  stagebyprogress
 
     if stagecode=="":
@@ -3358,13 +3113,20 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
             n = stage_names_list.index(stagebyprogress)
             stagecode = stg_list[n]
             stage_desc = stage_desc_list[n]
-    
+            
+    if stage in stage_names_list:
+        n1 = stage_names_list.index(stage)
+        start_dt = start_date_list[n1]
+        txt = '\n'.join([ stage_names_list[n] + ' (' + stage_desc_list[n]+')' for n in range(stglen) if start_date_list[n] == start_dt])
+        stage = '\n' + txt
+        stage_desc = ""
+
     mcqlist = list(set(mcq_failed + mcq_zero))
     aslist = list(set(as_failed + as_zero))
     mcq_iu_list = '' if mcq_zero == [] else iu_reading(mcq_zero)
     as_iu_list = '' if as_zero == [] else iu_reading(as_zero)
     due_date = duedate
-    
+   
     notif3 = resp_dict['notif3']
     notif4 = resp_dict['notif4']
     notif5 = resp_dict['notif5']
@@ -3412,8 +3174,16 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     mcq_failed_iu = [x for x in iu_list if x in mcq_failed]
     eoc_gap = vmedxlib.edx_eocgap(client_name, courseid, 7)
     f2f_error = 0 if f2f_stage=="" else 1
-    cohort_id = piece(piece(courseid,':',1),'+',1)
-    module_code = piece(cohort_id,'-',0)
+    #cohort_id = piece(piece(courseid,':',1),'+',1)
+    #module_code = piece(cohort_id,'-',0)
+    qry = f"select cohort_id from playbooks where client_name = '{client_name}' and course_id = '{courseid}';"
+    cohort_id = rds_param(qry)
+    if cohort_id=="":
+        cohort_id = piece(piece(courseid,':',1),'+',1)    
+    qry = f"select module_code from playbooks where client_name = '{client_name}' and course_id = '{courseid}';"    
+    module_code = rds_param(qry)
+    if module_code=="":
+        module_code = piece(cohort_id,'-',0)
     qry = f"select enquiry_email from course_module where client_name = '{client_name}' and module_code = '{module_code}';"
     enquiry_email = rds_param(qry)
     
@@ -3501,6 +3271,8 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
         txt_hdr = txt_hdr.replace('{stagebyprogress}' , statusbyprogress)
     if '{lf}' in txt_hdr:
         txt_hdr = txt_hdr.replace('{lf}' , '\n')
+    if '()' in txt_hdr:
+        txt_hdr = txt_hdr.replace('()', '')
     
     if (pm_stage==1) and (att_rate < 0.75):
         risk_level = 3
@@ -3643,21 +3415,6 @@ def display_progress(df, sdf, sid, vars, client_name, resp_dict, pass_rate=0.7):
 
 def grad_pred_text(vars, client_name, use_neural_network = False):
     txt = ""
-    #use_neural_network = False # True or False
-    #if use_neural_network:
-        #global nn_model
-        # list_avg = lambda x : 0 if len(x)==0 else sum(x)/len(x)
-        # if (nn_model.model_name != "") and ((vars['mcnt'] + vars['acnt']) >0):
-        #    mavg = vars['mcq_avg']
-        #    mcqavgatt = list_avg( vars['mcq_attempts'] )
-        #    mcqmaxatt = max( vars['mcq_attempts'] )
-        #    aavg = vars['as_avg'] 
-        #    acnt = vars['acnt']
-        #    as_avgatt = list_avg( vars['as_attempts'] )
-        #    as_maxatt = max( vars['as_attempts'] )
-        #    grad_pred_nn = nn_model.pred(client_name,mavg,mcqavgatt,mcqmaxatt,aavg,as_avgatt,as_maxatt,acnt)
-        #    txt += "\n\nAI grading prediction : " +  "{:.2%}".format(grad_pred[0]) + "\n\n"
-    #else:
     global dt_model 
     syslog("started")
     if (dt_model.model_name != "") and ((vars['mcnt'] + vars['acnt']) >0):
@@ -3730,7 +3487,7 @@ def rds_loadcourse(client_name, stud):
             if eoc==1:
                 eoc_gap = vmedxlib.edx_eocgap(client_name, cid, 7)
                 if (eoc_gap == 1) and (rlvl > 0):
-                    logon_selection.append(cid)                    
+                    logon_selection.append(cid)               
     return (course_id_list, course_name_list, logon_selection)
 
 def analyze_cohort(course_id, userdata, bot, chat_id):
@@ -3770,7 +3527,6 @@ def analyze_cohort(course_id, userdata, bot, chat_id):
     rr = [ 1 if r>0 else 0 for r in avgsum_list ]
     rsum = sum(rr)
     idx = 0
-
     if rsum>0:
         for n in range(max_iu_cnt) :
             if rr[n]>0:
@@ -3813,6 +3569,7 @@ def analyze_cohort(course_id, userdata, bot, chat_id):
         return ([],[],[],0)
     else:        
         syslog("completed")
+
     return (result_table, summary_mcq, summary_as, cnt)
 
 async def checkjoblist():
@@ -3878,14 +3635,18 @@ async def runbotjob(job_id,chat_id,func_req,func_param):
     del bot_intance.job_items[job_id]
     return 
 
+def msgout(txt):
+    return str(txt)
+
 def stage_calendar(df):
+    m = 5
     xstr = lambda x : '   ' if x == 0 else ('  ' + str(x))[-3:]
     ystr = lambda x,y,z : y[x] if x in list(z) else '     '
-    slist = [('   '+x)[-3:] for x in df.stage]
+    zstr = lambda x : ((' *' if ',' in x else x) + ' '*m)[:m]
+    slist = [(x + ''*m)[:m] for x in df.stage]
     tlist = [datetime.datetime.strptime(dt,"%d/%m/%Y").strftime('%Y%m%d') for dt in df.startdate]    
     mlist = list(set([ int(x[4:][:2]) for x in tlist]))
     mlist = sorted(set([ int(x[4:][:2]) for x in tlist]))
-    #sdict = dict(zip(tlist, slist)) # this is for 1 events 1 day    
     sdict = dict()
     cnt=len(tlist)
     for n in range(cnt):
@@ -3897,23 +3658,30 @@ def stage_calendar(df):
         txt = sdict[dt]
         if txt == "":
             sdict[dt] = stg
-        else:            
+        else:
             sdict[dt] = txt + "," + stg
     yy = int(tlist[0][:4])
     title_list = []
     calendar.setfirstweekday(calendar.SUNDAY)
     msg = ""
+    gap = ' '*m
     for mm in mlist:
         weeklist = calendar.monthcalendar(yy,mm)
         title = datetime.datetime(yy, mm, 1).strftime('%Y %B')
         dlist = [ int(x[-2:]) for x in tlist if int(x[4:][:2])==mm]
         flist = [ sdict[x] for x in tlist if int(x[4:][:2])==mm]
         rdict = dict(zip(dlist,flist))
-        msg += title + '\nSun    Mon    Tue    Wed    Thu    Fri    Sat\n'
+        #printdict( rdict )
+        msg += title + '\nSun  Mon  Tue  Wed  Thu  Fri  Sat\n'
         for ww in weeklist:
-            msg += ''.join([ (xstr(y)+'      ')[:7] for y in ww]) + '\n'
-            msg += ''.join([ (ystr(x,rdict,dlist)+'      ')[:7] for x in ww ]) + '\n'
+            msg += ''.join([ (xstr(y)+gap)[:m] for y in ww]) + '\n'
+            msg += ''.join([ zstr(rdict[x]) if x in list(rdict) else gap for x  in ww]) + '\n'
         msg += '\n'
+        for dt in list(rdict):
+            tt = rdict[dt]
+            if "," in tt:
+                msg += str(dt) + '/' + str(mm) + ' : ' + tt + '\n'
+        msg += '\n'           
     return msg
 
 async def auto_notify(client_name, resp_dict, pass_rate, adm_chatid):
@@ -4118,8 +3886,16 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
         eoc = vmedxlib.edx_endofcourse(client_name, course_id) # ended=1 else 0
         soc = vmedxlib.edx_course_started(client_name, course_id)  # started=1 else 0
         eoc_gap = vmedxlib.edx_eocgap(client_name, course_id, 7)
-        cohort_id = piece(piece(course_id,':',1),'+',1)
-        module_code = piece(cohort_id,'-',0)
+        #cohort_id = piece(piece(course_id,':',1),'+',1)
+        #module_code = piece(cohort_id,'-',0)
+        qry = f"select cohort_id from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
+        cohort_id = rds_param(qry)
+        if cohort_id=="":
+            cohort_id = piece(piece(course_id,':',1),'+',1)    
+        qry = f"select module_code from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"    
+        module_code = rds_param(qry)
+        if module_code=="":
+            module_code = piece(cohort_id,'-',0)        
         #qry = f"select pillar from course_module where client_name = '{client_name}' and module_code = '{module_code}';"
         #pillar_code = rds_param(qry)
         qry = f"select enquiry_email from course_module where client_name = '{client_name}' and module_code = '{module_code}';"
@@ -4348,6 +4124,12 @@ if __name__ == "__main__":
         vmsvclib.rds_connstr = bot_info['omdb']
         vmsvclib.rdscon = None
         vmsvclib.rds_pool = 0
-        vmsvclib.rdsdb = None
+        vmsvclib.rds_schema = "omnimentor"
+        for n in range(1,1+max_iu_cnt):        
+            for fld in ['mcq_avg','mcq_attempts','as_avg','as_attempts']:
+                updqry = "update userdata set " + fld + str(n) + " = 0 where " + fld + str(n) + " is null;"
+                print(updqry)
+                rds_update(updqry)
+        print("table userdata updated")
     else:
         syslog("Unable to use this version of python\n", version)

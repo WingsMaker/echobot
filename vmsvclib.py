@@ -33,7 +33,6 @@ summary = """
 ║ html_report        process tabulated data into formatted telegram message   ║▒▒
 ║ html_tbl           process tabulated data into formatted html document      ║▒▒
 ║ printdict          print the item details of the given dictionary object    ║▒▒
-║ pycmd              execute python codes via eval()                          ║▒▒
 ║ querydf            output sql query on SQLite database into dataframe       ║▒▒
 ║ rds_connector      database connection to RDS database by type of client    ║▒▒
 ║ rds_df             output sql query on RDS database into dataframe          ║▒▒
@@ -307,15 +306,6 @@ def printdict(obj):
     return
     
 def sqlcmd(resp):
-    result = ""
-    try:        
-        pycode = compile(resp, 'test', 'eval')
-        result = str(eval(pycode))
-    except:
-        result = ""
-    return result
-
-def pycmd(resp):
     result = ""
     try:        
         pycode = compile(resp, 'test', 'eval')

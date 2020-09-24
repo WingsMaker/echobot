@@ -12,7 +12,7 @@ import pymysql
 import pymysql.cursors
 import json
 import datetime
-import re
+import re, sys
 import requests
 import vmsvclib
 from vmsvclib import *
@@ -196,14 +196,26 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
         att_list = []
         avgscore_list = []
         for rec in [ x for x in list(data) if 'attempts' in x['state']]  :
-            sid = int(rec['student_id'])
-            sc = rec['score']
-            pp = rec['points_possible']
+            if 'student_id' in list(rec):
+                sid = int(rec['student_id'])
+            else:
+                sid = 0
+            if 'score' in list(rec):
+                sc = rec['score']
+            else:
+                sc = 0
+            if 'points_possible' in list(rec):
+                pp = rec['points_possible']
+            else:
+                pp = 0
             if 'options_display_name' in list(rec):
                 qn = getnumstr(rec['options_display_name'])
             if 'option_display_name' in list(rec):
                 qn = getnumstr(rec['option_display_name'])
-            iu = int(rec['IU'])
+            if 'IU' in list(rec):
+                iu = int(rec['IU'])
+            else:
+                iu = 0
             state = eval(rec['state'].replace('null','""').replace('false','0').replace('true','1'))
             #attempts = state['attempts']            
             statekey = list(state['correct_map'])[0]
@@ -317,7 +329,9 @@ def sms_att_rate(client_name, course_id, student_id, date_list):
         query += "and (stage like 'FC%' OR stage like 'PM%') and STR_TO_DATE(startdate,'%d/%m/%Y') <= CURDATE();"
     cnt2 = 0
     df = rds_df(query)
-    if df is not None:
+    if df is None:
+        return []
+    else:
         df.columns = ['startdate']
     dt_list = [string2date(x,"%d/%m/%Y") for x in df.startdate]    
     cnt2 = len(dt_list)
@@ -400,8 +414,8 @@ def edx_endofcourse(client_name, course_id):
         result = rds_param(query)
         eoc = 1 if result=='' else int(result)
     except:
-        eoc = 1
-        #eoc = 0
+        #eoc = 1
+        eoc = 0
     return eoc
 
 def edx_eocgap(client_name, course_id, gap=7):
@@ -438,12 +452,19 @@ def update_schedule(course_id, client_name):
     dstr = lambda x : piece(piece(x.strip(),':',1),'+',2)
     dtype = lambda x : ('%d%b%Y' if len(dstr(x))==9 else '%d%B%Y') if dstr(x)[0].isdigit() else '%B%Y'
     cohort_date = lambda x : string2date(dstr(x),dtype(x))
-    cohort_id = piece(piece(course_id,':',1),'+',1)
+    qry = f"select cohort_id from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
+    cohort_id = rds_param(qry)
+    if cohort_id=="":
+        cohort_id = piece(piece(course_id,':',1),'+',1)    
+    qry = f"select module_code from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"    
+    module_code = rds_param(qry)
+    if module_code=="":
+        module_code = piece(cohort_id,'-',0)
     stage_list = get_google_calendar(course_id, client_name)
     if stage_list == []:
         syslog("google calendar return nothing")
     try:
-        stage_list = update_stage_table(stage_list, course_id, client_name)
+        stage_list = update_stage_table(stage_list, course_id, client_name, cohort_id, module_code)
         if stage_list == []:
             syslog(f"System calendar not match for {course_id}")
             return
@@ -480,8 +501,8 @@ def update_schedule(course_id, client_name):
         qry = qry.replace('_x_', stg)
         query = qry.replace('_y_', str(dd))
         rds_update(query)
-    cohort_id = piece(piece(course_id,':',1),'+',1)
-    module_code = piece(cohort_id,'-',0)
+    #cohort_id = piece(piece(course_id,':',1),'+',1)
+    #module_code = piece(cohort_id,'-',0)
     query = "update stages a SET IU =  IFNULL((SELECT b.IU FROM stages_master b WHERE b.client_name=a.client_name "
     query += f"AND b.module_code='{module_code}' AND b.stage=a.stage LIMIT 1) ,'0') "
     query += f"WHERE a.courseid = '{course_id}' AND a.client_name = '{client_name}';"
@@ -697,16 +718,20 @@ def update_mcq(course_id, client_name, student_id=0):
     return
 
 def edx_import(course_id, client_name):
-    # Status : Tested       
-    cohort_id = piece(piece(course_id,':',1),'+',1)
-    module_code = piece(cohort_id,'-',0)
+    qry = f"select cohort_id from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
+    cohort_id = rds_param(qry)
+    if cohort_id=="":
+        cohort_id = piece(piece(course_id,':',1),'+',1)
+    qry = f"select module_code from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"    
+    module_code = rds_param(qry)
+    if module_code=="":
+        module_code = piece(cohort_id,'-',0)
     condqry = f"client_name = '{client_name}' and courseid = '{course_id}';"
     qry = f"select pillar from course_module where client_name = '{client_name}' and module_code = '{module_code}';"
     module_id = rds_param(qry)
     if module_id=="":  # either incomplete course and just a course header
         syslog("incomplete information , edx_import stopped")
         return 
-    
     course_name = edx_coursename(course_id)  
     #eoc = edx_endofcourse(client_name, course_id)
     eoc = 0
@@ -768,20 +793,28 @@ def edx_import(course_id, client_name):
     syslog("get # of mcq and assignment tests")
     #mcqcnt = edx_mcqcnt(course_id)
     #ascnt = edx_ascnt(course_id)
-    max_iu = edx_iu_counts(course_id, client_name)
+    #max_iu = edx_iu_counts(course_id, client_name)
+    #if max_iu==0:
+    #    sysog("max_iu returns 0")
+    #    return
     #ascnt = mcqcnt
     #try:
     mlist = []
-    if max_iu > max_iu_cnt:
-        max_iu = max_iu_cnt
-    rng_iu = range( 1, max_iu + 1 )
+    #if max_iu > max_iu_cnt:
+    #    max_iu = max_iu_cnt
+    #rng_iu = range( 1, max_iu + 1 )
+    rng_iu = range( 1, max_iu_cnt + 1 )
     list1 = [ "mcq_avg"+ str(x) + " = 0" for x in rng_iu]
     list2 = [ "mcq_attempts"+ str(x) + " = 0" for x in rng_iu]
     list3 = [ "as_avg"+ str(x) + " = 0" for x in rng_iu]
     list4 = [ "as_attempts"+ str(x) + " = 0" for x in rng_iu]
     mlist += list1 + list2 + list3 + list4
     query = "update userdata set " + ','.join(mlist) + " where " + condqry
-    rds_update(query)
+    try:
+        rds_update(query)
+    except:
+        syslog("unable to initialized table userdata")      
+        return
     #if mcqcnt > 0:
     #    mlist += list1 + list2
     #if ascnt > 0:
@@ -791,6 +824,7 @@ def edx_import(course_id, client_name):
     #    return 
     
     #if (mcqcnt + ascnt) > 0:
+    max_iu = edx_iu_counts(course_id, client_name)
     if max_iu > 0:
         update_assignment(course_id, client_name)
         update_mcq(course_id, client_name)
@@ -941,16 +975,15 @@ def get_calendar_json(api_url):
     if response.status_code==200:
         result = response.content.decode('utf-8')        
         if len(result)>0:
-            data = json.loads(result)            
+            data = json.loads(result)
     return data
 
-def get_stage_list(data):
+def get_stage_list(data, module_node):
     if data == {}:
         return []
     resp = data['events']
     if len(resp)==0:
         return []
-    module_node = resp[0]['summary'].split(' : ')[0]    
     stage_list = []
     soc_date = resp[0]['startDate'][:10] 
     socd = dmy_str(soc_date)    
@@ -964,14 +997,20 @@ def get_stage_list(data):
         if 'description' not in list(x):
             syslog("description element missing")
             continue
-        x_summary = x['summary']        
-        x_desc = x['description']        
-        x_list = x_summary.split(' : ')
-        n=len(x_list)        
+        x_summary = x['summary']
+        x_desc = x['description']
+        
+        # https://sambaash.atlassian.net/browse/VMSUPPORT-17
+        # x_summary = x_summary.replace(' : ',':')
+        # x_summary = x_summary.replace('::',':')
+        # x_list = x_summary.split(':')
+        x_list = x_summary.split(' : ')        
+        n=len(x_list)
         cohort = x_list[0] if n>0 else ""
-        stage_name = x_list[1] if n>1 else ""
+        stage_name = x_list[1] if n>2 else ""
         stage_desc = x_list[2] if n>2 else stage_name
-        stage_desc = stage_desc.replace('?','')
+        stage_desc = stage_desc.replace('?','')        
+        cohort = cohort.strip()
         iu_list = "0"
         if x_desc is not None:
             if "IU " in x_desc:
@@ -1038,7 +1077,6 @@ def get_stage_list(data):
                 stg = stg + ' - ' + cohort_dict[x][y][0]
                 cohort_dict[x][y][1] = stg
             stg = cohort_dict[x][y][0]
-            #cohort_dict[x][y].append((str2date(cohort_dict[x][y][3]) - dt0).days + 1)
             cohort_dict[x][y].append((str2date(cohort_dict[x][y][3]) - dt0).days )
             sorted_stage_list.append(cohort_dict[x][y])
         cohort_dict[x] = sorted_stage_list       
@@ -1063,26 +1101,36 @@ def stage_code(txt):
     else:
         n = wlist.index(result[0])
         stg = vlist[n] + uu
-    #stg = "SA1" if stg=="SA" else stg
     return stg
 
 def get_google_calendar(course_id, client_name):
-    cohort_id = piece(piece(course_id,':',1),'+',1)
-    module_code = cohort_id.split('-')[0]
+    qry = f"select cohort_id from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
+    cohort_id = rds_param(qry)
+    if cohort_id=="":
+        cohort_id = piece(piece(course_id,':',1),'+',1)
+    qry = f"select module_code from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"    
+    module_code = rds_param(qry)
+    if module_code=="":
+        module_code = piece(cohort_id,'-',0)
     qry = f"select course_code from course_module where module_code = '{module_code}' and client_name='{client_name}' limit 1;"
     course_code = rds_param(qry)
-    api_url = f"https://realtime.sambaash.com/v1/calendar/fetch?cohortId={course_code}%20:%20{cohort_id}"    
-    data  = get_calendar_json(api_url)    
+    api_url = f"https://realtime.sambaash.com/v1/calendar/fetch?cohortId={course_code}%20:%20{cohort_id}"
+    data  = get_calendar_json(api_url)
     if data == {}:
+        # https://sambaash.atlassian.net/browse/VMSUPPORT-17
+        # api_url = f"https://realtime.sambaash.com/v1/calendar/fetch?cohortId={course_code}:{cohort_id}"
+        # data  = get_calendar_json(api_url)
+        # if data == {}:    return []
         syslog("there is no data from google calendar")
         return []
-    sorted_stage_list =  get_stage_list(data) # add cohort_id ?
+    #sorted_stage_list = get_stage_list(data) # add cohort_id ?
+    sorted_stage_list = get_stage_list(data, cohort_id)
     stage_list = []
     for cohort in list(sorted_stage_list) :
-        stage_list = sorted_stage_list[cohort]
+        stage_list = sorted_stage_list[cohort]        
     return stage_list
 
-def update_stage_table(stage_list, course_id, client_name):
+def update_stage_table(stage_list, course_id, client_name, cohort_id, module_code):
     # Status : Tested  f2f field got loss of data
     qry = " client_name = '_c_' and courseid = '_x_';"
     qry = qry.replace('_c_', client_name)
@@ -1097,8 +1145,8 @@ def update_stage_table(stage_list, course_id, client_name):
     query = "select * from stages where " + qry
     df = rds_df(query)
     if (df is None) or (len(stage_list)==0):        
-        cohort_id = piece(piece(course_id,':',1),'+',1)
-        module_code = piece(cohort_id,'-',0)
+        #cohort_id = piece(piece(course_id,':',1),'+',1)
+        #module_code = piece(cohort_id,'-',0)
         query = f"select * from stages_master where client_name = '{client_name}' and module_code = '{module_code}';"
         df = rds_df(query)
         if df is None:
@@ -1231,12 +1279,20 @@ def update_playbooklist(course_id, client_name, course_name, eoc):
         cnt = rds_param(query)
         if cnt==1:
             return
-        cohort_id = piece(piece(course_id,':',1),'+',1)
-        module_code = piece(cohort_id,'-',0)
-        if module_code.lower() == 'master':
-            module_code = piece(cohort_id,'-',1)
+        #cohort_id = piece(piece(course_id,':',1),'+',1)
+        #module_code = piece(cohort_id,'-',0)
+        #if module_code.lower() == 'master':
+        #    module_code = piece(cohort_id,'-',1)
         #qry = f"select course_code from course_module where module_code = '{module_code}' and client_name='{client_name}' limit 1;"
         #course_code = rds_param(qry)            
+        qry = f"select cohort_id from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
+        cohort_id = rds_param(qry)
+        if cohort_id=="":
+            cohort_id = piece(piece(course_id,':',1),'+',1)    
+        qry = f"select module_code from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"    
+        module_code = rds_param(qry)
+        if module_code=="":
+            module_code = piece(cohort_id,'-',0)
         query = "insert into playbooks(client_name,module_code,cohort_id,course_id,course_name,mentor,eoc) \
             values('_c_', '_w_', '_x_', '_y_', '_z_', '', _e_);"
         query = query.replace("_c_", client_name)
@@ -1419,57 +1475,74 @@ if __name__ == "__main__":
         bot_info = json.load(json_file)
     client_name = bot_info['client_name']
     #edx_api_url = "https://omnimentor.lithan.com/edx/v1"
-    #edx_api_url = "https://omnimentor.sambaash.com/edx/v1"
-    edx_api_url = "http://localhost:8080/edx/v1"
+    edx_api_url = "https://omnimentor.sambaash.com/edx/v1"
+    #edx_api_url = "http://localhost:8080/edx/v1"
     edx_api_header = {'Authorization': 'Basic ZWR4YXBpOlVzM3VhRUxJVXZENUU4azNXdG9E', 'Content-Type': 'text/plain'}
-    #client_name = "Sambaash"    
-    #client_name = "Lithan"    
-    #vmsvclib.rds_connstr = ""
     vmsvclib.rds_connstr = bot_info['omdb']
     vmsvclib.rdscon = None
     vmsvclib.rds_pool = 0
-    vmsvclib.rdsdb = None
-    vmsvclib.dbs_schema = "omnimentor"
-    #course_id = 'course-v1:Lithan+FOS-0820B+17Aug2020' # 7093, 7139, 7680 7233 
-    #course_id = 'course-v1:Lithan+FOS-0720A+08Jul2020' # 6516
-    #course_id = 'course-v1:Lithan+CPI-0320A+27Jul2020'
-    #course_id = 'course-v1:Lithan+SMI-0420A+03Jul2020' # 5418
-    #course_id = "course-v1:Lithan+ICO-0620A+24Jul2020"  # 6201
-    #course_id = "course-v1:Lithan+FOS-0820A+12Aug2020" # 7233 1830
-    #sid = 1830    
-    #print("running update_mcq")
-    #update_mcq(course_id, client_name, sid)
-    #update_mcq(course_id, client_name)
-    #df = student_course_list(sid)    
-    #print(client_name, course_id, sid)    
-    #course_id = 'course-v1:LITHAN+DQV-0920A+10Sep2020' # 6700
-    #sid = 6700
-    #course_list = search_course_list("%PMP%2020")
-    course_id = 'course-v1:Lithan+PMP-0220A+25Jul2020'
-    edx_import(course_id, client_name)
-    #test_google_calendar(course_id, client_name)
-    #update_schedule(course_id, client_name)
-    #results = edx_iu_counts(course_id, client_name)
-    #results = sms_lecturer(client_name, course_id, sid)    
-    #cols = get_columns("stages")
-    #date_list = sms_attendance(course_id, sid)
-    #print(date_list)
-    #results = sms_missingdates(client_name, course_id, sid, cols, date_list)             
-    #results = edx_eocgap(client_name, course_id, 7)
-    #results = edx_course_started(client_name, course_id)
-    #results = sms_pmstage(client_name, course_id)
-    #results = edx_eocend(client_name, course_id, 7)
-    #print(results)
-    #att_rate = sms_att_rate(client_name, course_id, sid, date_list)    
-    #print(f"Attendance rate = {att_rate}")
-    #
-    #=====================================
-    # edx_mass_import(client_name)
-    # mass_update_mcq(client_name)
-    # mass_update_assignment(client_name)
-    # mass_update_schedule(client_name)
-    # mass_update_usermaster(client_name)
-    # perform_unit_tests(client_name, course_id, sid)
-    #=====================================
-    #    
-    print("This is vmedxlib.py")
+    vmsvclib.rds_schema = "omnimentor"
+    if len(sys.argv)>2:
+        cmd = str(sys.argv[1])
+        resp = str(sys.argv[2])
+        course_list = search_course_list("%" + resp + "%" )
+        if cmd=="search":
+            for course_id in course_list:
+                print(course_id)
+        elif len(course_list)==1:
+            course_id = course_list[0]
+            print(course_id, client_name)
+            if cmd=="import":
+                edx_import(course_id, client_name)
+                print("Edx import completed")
+            elif cmd=="mcq":
+                update_mcq(course_id, client_name)
+                print("MCQ update completed")
+            elif cmd=="assignment":
+                update_assignment(course_id, client_name)
+                print("Assignment update completed")
+            elif cmd=="schedule":
+                update_schedule(course_id, client_name)
+                print("Schedule update completed")
+            elif cmd=="calendar":
+                test_google_calendar(course_id, client_name)
+                print("google calendar test completed")
+            elif cmd=="info":
+                results = edx_day0(course_id)
+                print(results)
+                eoc = edx_endofcourse(client_name, course_id)
+                results = f"End of course (1:Yes,0:No) = {eoc}"
+                print(results)
+        elif len(course_list)>0:
+            print("which course_id is the one ?")
+            for course_id in course_list:
+                print(course_id)
+        else:
+            print("Unable to find matching information")
+    else:
+        #results = edx_iu_counts(course_id, client_name)
+        #results = sms_lecturer(client_name, course_id, sid)    
+        #cols = get_columns("stages")
+        #date_list = sms_attendance(course_id, sid)
+        #print(date_list)
+        #results = sms_missingdates(client_name, course_id, sid, cols, date_list)             
+        #results = edx_eocgap(client_name, course_id, 7)
+        #results = sms_pmstage(client_name, course_id)
+        #results = edx_eocend(client_name, course_id, 7)
+        #print(results)
+        #att_rate = sms_att_rate(client_name, course_id, sid, date_list)    
+        #print(f"Attendance rate = {att_rate}")
+        #
+        #=====================================
+        # edx_mass_import(client_name)
+        # mass_update_mcq(client_name)
+        # mass_update_assignment(client_name)
+        # mass_update_schedule(client_name)
+        # mass_update_usermaster(client_name)
+        # perform_unit_tests(client_name, course_id, sid)
+        #=====================================
+        #    
+        prog = str(sys.argv[0])
+        print(f"usage :\n\tpython3 {prog} [commands] [cohort_id]")
+        print("commands:\n\timport\n\tmcq\n\tassignment\n\tschedule\n\tcalendar\n\tinfo")
+        print(f"Example:\n\tpython3 {prog} search DQV-0820")
