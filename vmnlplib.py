@@ -67,8 +67,7 @@ class NLP_Parser():
         return temp_string  
 
     def load_modelfile(self, dumpfile):
-        #try:
-        if True:
+        try:
             ok = 0
             vmsvclib.rdscon=vmsvclib.rds_connector()
             df = rds_df("select * from prompts;")
@@ -111,11 +110,10 @@ class NLP_Parser():
             TfidfVec = TfidfVectorizer(tokenizer=self.LemNormalize, stop_words=stopwords_processed, ngram_range=(1,2))
             with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
                 ft_model = fasttext.load_model(dumpfile)
-            #ft_model = fasttext.load_model(dumpfile)
             self.model = ft_model
             ok = 1
-        #except:
-            #TfidfVec = TfidfVectorizer(tokenizer=self.tokenizer, stop_words='english')            
+        except:
+            TfidfVec = TfidfVectorizer(tokenizer=self.tokenizer, stop_words='english')            
         self.TfidfVec = TfidfVec
         if ok==0:
             syslog("model is incomplete")
@@ -161,8 +159,6 @@ class NLP_Parser():
             tfidf = TfidfVec.fit_transform(prompts_sent_token)
             cosine_vals = cosine_similarity(tfidf[-1], tfidf)
             flat = cosine_vals.flatten()
-            #flat.sort()
-            #accuracy = flat[-2]
             score = 0
             matched_score = 0
             for i in range(0, len(flat)-1, 1):
@@ -181,28 +177,22 @@ class NLP_Parser():
                     df1 = df[(df['prompt'].str.contains(prompts_sent_token[index]))]
                 response += [ r for r in df1.response ][0]
                 prompts_sent_token.remove(user_input)
-        #return response
         return (response, matched_score)
 
     def predict_label(self, input_text):
-        #ft_model = self.model
         output = []
         if '\n' in input_text:
             inp_txt = ' '.join([txt.strip() for txt in input_text.split('\n')])
         else:
             inp_txt = input_text
         user_input = inp_txt.lower()        
-        #matched_label = ft_model.predict(inp_txt, k=1)[0][0]
         matched_label = self.model.predict(inp_txt, k=1)[0][0]
-        
-        #matched_score = ft_model.predict(inp_txt, k=1)[1][0]
         matched_score = self.model.predict(inp_txt, k=1)[1][0]
 
         output.append((matched_label, matched_score))
         return (matched_label , matched_score)
 
     def find_matching(self, txt):
-        # predict_label is the same function??
         accuracy = 0
         sent_tokens = self.faq_list.copy()
         try:        
@@ -237,7 +227,6 @@ class NLP_Parser():
         
         resp = user_resp.lower()
         if resp in prompts_qn:
-            #n = prompts_qn.index(user_resp)
             n = prompts_qn.index(resp)
             return prompts_resp[n]
 
@@ -262,7 +251,6 @@ class NLP_Parser():
         matched_label = self.model.predict(inp_txt, k=1)[0][0]
         mask = (self.corpus_df.label == matched_label)
         if matched_label=='__label__conversational':
-            #first_word = [x for x in user_input.split(' ') if x not in self.stopwords][0]
             wlist = [x for x in user_input.split(' ') if x not in self.stopwords]
             if wlist==[]:
                 return []
@@ -318,39 +306,49 @@ if __name__ == "__main__":
     vmsvclib.rdscon = None
     vmsvclib.rds_pool = 0
     vmsvclib.rdsdb = None
-    opts = [ 0,1,2,3,4,5 ]
+    #opts = [ 0,1,2,3,4,5 ]
+    opts = [ 0, 1, 5 , 7 ]
+    #resp = "What should I do ?"
+    #resp = "how is my mcq schedule date ?"        
+    #resp = "Can I request for an extension of fee payment?" # score 0.6355392655859758        
+    resp = "I was told it would be when my last contract began?"
+    print(resp)
     if 0 in opts :
         print("Loading model from pickle")
         ft_model.load_modelfile("ft_model.bin")
-        faq_list = ft_model.faq_list
-        print( str(faq_list[:5]))
+        #faq_list = ft_model.faq_list
+        #print( str(faq_list[:5]))
     if 1 in opts :
-        resp = "how is my mcq schedule date ?"
-        print(resp)
         (result, score) = ft_model.get_response(resp)
         #print(score, result)
         #txt = ft_model.ft_model(resp)
         print("results : ==>\n", result)
+        print(score)
     if 2 in opts :
-        resp = "how is my mcq schedule date ?"
-        print(resp)
         ( result, accuracy ) = ft_model.find_matching(resp)
         print(result, accuracy)    
     if 3 in opts :
-        resp = "how is my mcq schedule date ?"
         (result, score) = ft_model.predict_label(resp)
         print(score, result)
     if 4 in opts :
-        resp = "how is my mcq schedule date ?"
         recommendation = ft_model.recommend_list(resp)
         print(recommendation)
     if 5 in opts :
-        resp = "What should I do ?"
         result = ft_model.match_resp( resp )
-        print(result)
+        print(f"result = {result}")
     if 6 in opts :
         if ft_model.corpus_df is None:
             print("Loading corpus from database")
             ft_model.load_corpus("nlp-conf.db")
         ft_model.train_model()
+    if 7 in opts :
+        from nltk.chat.eliza import eliza_chatbot
+        result = eliza_chatbot.respond(resp)
+        print(f"result = {result}")
+    #if 8 in opts :
+    #    import wikipedia
+    #    resp = "entropy"
+    #    print(resp)
+    #    result = wikipedia.summary(resp)
+    #    print(f"result = {result}")
     print("End of unit test")

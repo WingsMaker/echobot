@@ -1,4 +1,4 @@
-#
+    #
 #
 #
 #  ______                        __ __       __                     __
@@ -39,7 +39,6 @@ from telepot.aio.delegate import pave_event_space, per_chat_id, create_open
 import vmedxlib
 import vmnlplib
 import vmaiglib
-import vmffnnlib
 import vmsvclib
 from vmsvclib import *
 
@@ -47,7 +46,6 @@ global svcbot, bot_intance, edx_api_header, edx_api_url
 
 omchat = vmnlplib.NLP_Parser()
 dt_model = vmaiglib.MLGrader()
-nn_model = vmffnnlib.NNGrader()
 option_mainmenu = 'svcbot_menu'
 option_back = "◀️"
 option_nlp = "NLP"
@@ -78,7 +76,7 @@ option_searchbyemail = "Email Search"
 option_resetuser = "Reset User"
 option_admin_users = "Admin Users"
 option_binded_users = "Binded Users"
-option_active_users = "Active Users"
+option_active_users = "Activated Users"
 option_blocked_users = "Blocked Users"
 users_menu = [[option_searchbyname, option_searchbyemail, option_resetuser, option_active_users], \
     [option_admin_users, option_binded_users, option_blocked_users, option_back]]
@@ -91,11 +89,14 @@ useraction_menu = [[opt_blockuser, opt_setadmin , opt_setlearner],[opt_resetemai
 sys_params = "Reload SysCfg"
 sys_pyt = "Python Shell 🐍"
 sys_cmd = "Commands Shell 📺"
-system_menu = [[sys_params, sys_pyt, sys_cmd, option_back]]
+sql_cmd = "SQL Query"
+sys_export = "Export 💾"
+system_menu = [[sql_cmd, sys_pyt, sys_cmd],[sys_params, sys_export, option_back]]
 sys_clientcopy = "Client Copy"
-opt_clientcopy = "Target Client"
+sys_clientdelete = "Client Delete"
+opt_tgtclt = "Target Client"
 sys_clientname = "Default Client"
-client_menu = [[sys_clientname, sys_clientcopy, option_back]]
+client_menu = [[sys_clientname, sys_clientcopy, sys_clientdelete, option_back]]
 
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
 string2date = lambda x,y : datetime.datetime.strptime(x,y).date()
@@ -132,7 +133,7 @@ class BotInstance():
         self.define_keys(useraction_menu, self.keys_dict[option_resetuser])
         self.keys_dict[option_2fa] = (self.keys_dict[option_mainmenu]*10) + 1
         self.define_keys( client_menu, self.keys_dict[option_client])
-        self.keys_dict[opt_clientcopy] = (self.keys_dict[option_client]*10) + 1
+        self.keys_dict[opt_tgtclt] = (self.keys_dict[option_client]*10) + 1        
         
         self.bot = telepot.aio.DelegatorBot(Token, [
             pave_event_space()( per_chat_id(),
@@ -261,8 +262,8 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 file_name = msg['document']['file_name']
                 fn = "https://api.telegram.org/file/bot" + bot._token + "/"  + fpath
                 fname = wget.download(fn)
-                pcmd = f"cp -f {fname} ./om/{file_name} ; rm -f {fname}"
-                shellcmd(pcmd)
+                #pcmd = f"cp -f {fname} ./om/{file_name} ; rm -f {fname}"
+                #shellcmd(pcmd)
                 await bot.sendMessage(chat_id, f"file {file_name} received.")
             except:
                 return                
@@ -431,21 +432,12 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             elif resp == ml_graph  :
                 retmsg = "Generating decision tree graph to explain the model."
                 fn = 'mcqas_info.jpg'
-                use_neural_network = False # True or False
-                if use_neural_network:                    
-                    nn_model.plot_graph(fn)
-                    status = 1
-                else:
-                    status = dt_model.tree_graph(fn)
+                status = dt_model.tree_graph(fn)
                 if status==1:
                     f = open(fn, 'rb')
                     await bot.sendPhoto(self.chatid, f)
             elif resp == ml_train :                
-                use_neural_network = False # or False
-                if use_neural_network:
-                    retmsg = nn_model.train_model(client_name, "ffnn_model.hdf5")
-                else:
-                    retmsg = dt_model.train_model(client_name, "dt_model.bin")
+                retmsg = dt_model.train_model(client_name, "dt_model.bin")
             elif (resp == option_back) or (resp == "0"):
                 txt = "You are back in the main menu"
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(self.mainmenu))
@@ -470,6 +462,28 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 txt = banner_msg("Service Console", txt)
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([[option_back]]))
                 self.menu_id = keys_dict[sys_cmd]
+            elif resp == sql_cmd :
+                txt = "You are now connected to SQL mode."
+                txt = banner_msg("Service Console", txt)
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([[option_back]]))
+                self.menu_id = keys_dict[sql_cmd]
+            elif resp == sys_export :
+                fn = "omdata.xlsx"
+                #try:
+                if True:
+                    writer = pd.ExcelWriter(fn) 
+                    for tbl in ['course_module','module_iu','playbooks']:
+                        qry = f"select * from {tbl} where client_name = '{client_name}';"
+                        df = rds_df(qry)
+                        if df is not None:
+                            df.columns = get_columns(tbl)
+                            df.to_excel(writer, sheet_name=tbl)
+                    writer.save()
+                    writer.close()
+                    await bot.sendDocument(chat_id, document=open(fn, 'rb'))
+                    retmsg = "Tables exported as "+ fn
+                #except:
+                    #retmsg = "Unable to export to excel file for some reason"
                                     
         elif self.menu_id == keys_dict[option_2fa]:
             code2FA = bot_intance.code2fa_list[chat_id]
@@ -536,12 +550,22 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 html_title = result
                 html_msglist = html_report(df, df.columns, [10,30,40,20], 25)
             elif resp == option_active_users :
-                html_title = "List of acive users"
-                body = ""
-                gap = ' '*30
-                for u in bot_intance.user_list:
-                    body += (bot_intance.user_list[u][0] + gap)[:30] + (str(u) + gap)[:15] + '\n'                
-                html_msglist = [body]
+                #html_title = "List of acive users"
+                #body = ""
+                #gap = ' '*30
+                #for u in bot_intance.user_list:
+                #    body += (bot_intance.user_list[u][0] + gap)[:30] + (str(u) + gap)[:15] + '\n'                
+                #html_msglist = [body]
+                query = f"select studentid,username,email,chat_id from user_master where client_name = '{client_name}' and usertype = 1 limit 50;"
+                html_title = "List of activated learners (top 50)\n"
+                df = rds_df(query)
+                if df is None:
+                    txt = "Sorry, no results found."
+                    await self.sender.sendMessage(txt)
+                    return
+                df.columns = ['studentid','username','email','chat_id']                
+                html_msglist = html_report(df, df.columns, [10,30,40,20], 25)
+                
         elif self.menu_id in [keys_dict[option_searchbyname],keys_dict[option_searchbyemail]] :
             if (resp == option_back) or (resp == "0"):
                 txt = "You are back to the user management menu."
@@ -633,17 +657,21 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 txt = "You are back in the main menu"
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(self.mainmenu))
                 self.menu_id = keys_dict[option_mainmenu]
-            elif resp == sys_clientcopy :
+
+            elif resp in [sys_clientcopy ,sys_clientdelete]:
                 df = rds_df("select distinct client_name from user_master order by client_name;")
                 if df is None:
                     retmsg = "Information not available"
                 else:
                     df.columns = ['client_name']
-                    #client_list = [x for x in df.client_name if x not in ['Sambaash']] + [option_back]
                     client_list = [x for x in df.client_name] + [option_back]
-                    txt = "Client copy to Sambaash client from :"
+                    if resp == sys_clientcopy :
+                        txt = "Client copy from client :"
+                    else:
+                        txt = "Select the client for deletion :"
                     await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([client_list]))
-                    self.menu_id = keys_dict[opt_clientcopy]
+                    self.menu_id = keys_dict[opt_tgtclt]
+                    self.vars['clt_opt'] = keys_dict[resp]                
             elif resp == sys_clientname :
                 df = rds_df("select distinct client_name from user_master order by client_name;")
                 if df is None:
@@ -655,16 +683,40 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([client_list]))
                     self.menu_id = keys_dict[sys_clientname]
 
-        elif self.menu_id == keys_dict[opt_clientcopy]:
+        elif self.menu_id == keys_dict[opt_tgtclt]:
             if resp == option_back:
                 txt = "You are back in the client menu"
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(client_menu))
                 self.menu_id = keys_dict[option_client]
                 return
-            self.vars['src_clt'] = resp
-            txt = "Enter the target client name (case sensitive (0 to exit):"
-            await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(client_menu))
-            self.menu_id = keys_dict[sys_clientcopy]
+            if self.vars['clt_opt'] == keys_dict[sys_clientcopy]:
+                self.vars['src_clt'] = resp
+                txt = "Enter the target client name (case sensitive (0 to exit):"
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(client_menu))
+                self.menu_id = keys_dict[sys_clientcopy]
+            if self.vars['clt_opt'] == keys_dict[sys_clientdelete]:                
+                txt = f"deleting data for client_name = {resp}...."
+                await self.sender.sendMessage(txt)
+                table_list = ['course_module' , 'iu_stages', 'mcqas_info', 'mcq_data', 'mcq_score']
+                table_list += ['module_iu' , 'playbooks', 'stages', 'stages_master', 'userdata' , 'user_master']                
+                for tbl in table_list:                    
+                    qry = f"DELETE FROM {tbl} WHERE client_name = '{resp}';"
+                    rds_update(qry)
+                txt = f"Client deletion has been completed. Pls proceed to clear parameters."
+                await self.sender.sendMessage(txt)
+                txt = "You are back in the client menu"
+                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(client_menu))
+                self.menu_id = keys_dict[option_client]
+            elif resp == sys_clientname :
+                df = rds_df("select distinct client_name from user_master order by client_name;")
+                if df is None:
+                    retmsg = "Information not available"
+                else:
+                    df.columns = ['client_name']
+                    client_list = [x for x in df.client_name] 
+                    txt = "Set the default client to :"
+                    await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([client_list]))
+                    self.menu_id = keys_dict[sys_clientname]
         
         elif self.menu_id == keys_dict[sys_clientcopy]:
             if resp != '0':
@@ -690,45 +742,44 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             
         elif self.menu_id == keys_dict[sys_clientname]:            
             bot_intance.client_name = client_name = resp            
-            txt = "Default client_name set to {resp}"
+            txt = f"Default client_name set to {resp}"
             await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(client_menu))
             self.menu_id = keys_dict[option_client]
 
-        elif self.menu_id == keys_dict[sys_pyt]:
+        elif self.menu_id in [keys_dict[sys_cmd], keys_dict[sql_cmd], keys_dict[sys_pyt]]:
             if resp == option_back :
                 txt = "You are back in the system menu"
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(system_menu))
                 self.menu_id = keys_dict[option_syscfg]
             else:
+                txt = ""
                 try:
-                    txt = pycmd(resp)
+                    if self.menu_id == keys_dict[sql_cmd]:
+                        if resp.lower().split(' ')[0] == 'select':
+                            df = rds_df(resp)
+                            if df is not None:
+                                txt = str(df)
+                        else:
+                            rds_update(resp)
+                            retmsg = "SQL commands executed"
+                    elif self.menu_id == keys_dict[sys_cmd]:
+                        try:
+                            txt = shellcmd(resp)
+                        except:
+                            txt = ""
+                    elif self.menu_id == keys_dict[pyt_cmd]:
+                        txt = pycmd(resp)
                 except:
-                    txt = ""
-                txt_list = txt.split('\n')
-                cnt = int((len(txt_list)+19)/20)
+                    txt = ""                    
+                txt_list = txt.split('\n') if len(txt)>0 else []
                 html_msglist = []
-                for n in range(cnt):
-                    m = n*20
-                    result = '\n'.join(txt_list[m:][:20])
-                    html_msglist.append(result)
-            
-        elif self.menu_id == keys_dict[sys_cmd]:
-            if resp == option_back :
-                txt = "You are back in the system menu"
-                await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(system_menu))
-                self.menu_id = keys_dict[option_syscfg]
-            else:
-                try:
-                    txt = shellcmd(resp)
-                except:
-                    txt = ""
-                txt_list = txt.split('\n')
-                cnt = int((len(txt_list)+19)/20)
-                html_msglist = []
-                for n in range(cnt):
-                    m = n*20
-                    result = '\n'.join(txt_list[m:][:20])
-                    html_msglist.append(result)
+                if txt_list!=[]:
+                    cnt = int((len(txt_list)+19)/20)
+                    html_msglist = []
+                    for n in range(cnt):
+                        m = n*20
+                        result = '\n'.join(txt_list[m:][:20])
+                        html_msglist.append(result)
 
         if html_msglist != []:
             title = "" if html_title=="" else ("<b>" + html_title + "</b>\n")
@@ -825,27 +876,24 @@ def do_main():
     vmsvclib.rdscon = None
     vmsvclib.rds_pool = 0
     vmsvclib.rdsdb = None
-    #df = rds_df("select * from params where client_name = 'System';")
-    #if df is None:
-    #    print("unable to proceed, params table not found")
-    #    return        
-    #df.columns = get_columns("params")
-    #par_val = ['' + str(x) for x in df.value]
-    #par_key = [x for x in df.key]
-    #par_dict = dict(zip(par_key, par_val))
-    #SvcBotToken = par_dict['ServiceBot']
-    SvcBotToken = '989298710:AAEi6VVxa5dFBNJHQrQgKqcqdxj0QRJ9Bx4' # OmniMentorDemoBot
-    #adminchatid = int(par_dict['adminchatid'])
-    #adminchatid = 71354936
-    #client_name = par_dict['client_name']
-    #gmt = int(par_dict['GMT'])
-    #max_duration = int(par_dict['max_duration'])
-    max_duration = 300
+    vmsvclib.rds_schema = bot_info['schema']
+    df = rds_df("select * from params where client_name = 'System';")
+    if df is None:
+        print("unable to proceed, params table not found")
+        return        
+    df.columns = get_columns("params")
+    par_val = ['' + str(x) for x in df.value]
+    par_key = [x for x in df.key]
+    par_dict = dict(zip(par_key, par_val))    
+    SvcBotToken = par_dict['ServiceBot']
+    adminchatid = int(par_dict['adminchatid'])
+    gmt = int(par_dict['GMT'])
+    max_duration = int(par_dict['max_duration'])
     omchat.load_modelfile("ft_model.bin")
     dt_model.load_model("dt_model.bin")
-    nn_model.model_loader("ffnn_model.hdf5")
     print("Running the service bot now")
     bot_intance = BotInstance(SvcBotToken) 
+    bot_intance.client_name = bot_info['client_name']
     #svcbot.sendMessage(adminchatid, "Click /start to connect the ServiceBot")    
     try:
         loop = asyncio.get_event_loop()

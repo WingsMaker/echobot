@@ -259,8 +259,6 @@ def get_columns(tablename):
         df = querydf(rds_connstr, f"PRAGMA table_info('{tablename}');")
         cols = [x for x in df.name]
         return cols
-    #query = f"SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_NAME = '{tablename}';"
-    #query = f"SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_SCHEMA = 'omnimentor' AND TABLE_NAME = '{tablename}';"
     query = f"SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_SCHEMA = '{rds_schema}' AND TABLE_NAME = '{tablename}';"
     df = rds_df(query)
     df.columns = ['COLUMN_NAME']
@@ -545,13 +543,11 @@ if __name__ == "__main__":
     #rds_connstr = "mysql+pymysql://omnimentor@db-sambaashplatform-cluster-2a:omnimentor@db-sambaashplatform-cluster-2a.mysql.database.azure.com/omnimentor?ssl_ca=BaltimoreCyberTrustRoot.crt.pem"
     rds_pool = 0
     rdsdb = None
-    rdscon = None
     rdscon = rds_connector()
     qry = "update playbooks set eoc=0 where course_id = 'course-v1:Lithan+PMP-0220A+25Jul2020';"
-    #qry = "update menu_text set text = 'การประมวลผลภาษาธรรมชาติ' where lang='th' and menu_key=1020701;"
     #rds_update(qry)
     #qry = "SELECT DISTINCT a.course_id, a.course_name FROM playbooks a INNER JOIN course_module c ON a.client_name=c.client_name and a.module_code=c.module_code where c.enabled=1 AND a.client_name='SambaashDev' ORDER BY a.course_id;"
-    #df = rds_df(qry)    
+    #df = rds_df(qry)
     #df.columns = get_columns("userdata")    
     #df.columns = ['course_id','course_name']
     #copy2omdb(df,"userdata")

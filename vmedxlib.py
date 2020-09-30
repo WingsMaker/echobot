@@ -213,14 +213,23 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
             if 'option_display_name' in list(rec):
                 qn = getnumstr(rec['option_display_name'])
             if 'IU' in list(rec):
-                iu = int(rec['IU'])
+                r = rec['IU']
+                if r is None:
+                    syslog("Invalid IU on api " + url )
+                    iu = 0
+                else:
+                    iu = int(rec['IU'])
             else:
                 iu = 0
             state = eval(rec['state'].replace('null','""').replace('false','0').replace('true','1'))
-            #attempts = state['attempts']            
-            statekey = list(state['correct_map'])[0]
-            correctness = state['correct_map'][statekey]['correctness']
-            qnscore = 1.0 if correctness=='correct' else 0
+            #attempts = state['attempts']
+            if 'correct_map' in list(state):
+                statekey = list(state['correct_map'])[0]
+                correctness = state['correct_map'][statekey]['correctness']
+                qnscore = 1.0 if correctness=='correct' else 0
+            else:
+                qnscore = 0
+                syslog('correct_map segment not found')
             grade = 1.0 if pp==0 else float(sc/pp)
             #attempts = 0 if qnscore == 0 else ( state['attempts'] if 'attempts' in list(rec) else 0)
             attempts = 0 if qnscore == 0 else ( state['attempts'] if 'attempts' in list(state) else 0)
@@ -256,7 +265,8 @@ def edx_assignment_score(course_id, student_id=0):
             student_id_list = [x['student_id'] for x in rec]
             grade_list = [x['score'] for x in rec]
             pp_list = [x['points_possible'] for x in rec]
-            iu_list = [x['IU'] for x in rec]
+            #iu_list = [x['IU'] for x in rec]
+            iu_list = [x['IU'].strip() for x in rec]
             #att_list = [x['attempts'] for x in rec]
             att_list = [ 0 if x['score']==0 else x['attempts'] for x in rec]
             data = {'student_id': student_id_list, 'score': grade_list, 'points_possible':pp_list, 'IU': iu_list ,'attempts': att_list}
@@ -266,8 +276,34 @@ def edx_assignment_score(course_id, student_id=0):
             df.drop(columns=['is_num'], inplace=True)
     return df
 
+def sms_df(course_id, student_id):
+    global edx_api_header, edx_api_url
+    if student_id==0:
+        return []
+    url = f"{edx_api_url}/user/attendance/fetch/{student_id}"
+    syslog(f"calling api {url} via requests.post")
+    response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)
+    syslog(f"completed with status code {response.status_code}")
+    if response.status_code==200:
+        data = response.content.decode('utf-8')
+        if len(data)>0:
+            df = pd.DataFrame.from_records(list(eval(str(data))))
+            if list(df.columns) != []:
+                return df
+    return None
+
+def sms_datelist(df):
+    if df is None:
+        return []
+    df0 = df[df.attendance_type_desc=='Attend']
+    dlist = [x.split(' ')[0] for x in df0.timetable_date]
+    try:
+        date_list = [string2date(x,"%m/%d/%Y") for x in dlist]
+    except:
+        date_list = [string2date(x,"%d/%m/%Y") for x in dlist]
+    return date_list
+
 def sms_attendance(course_id, student_id):
-    # Status : okay
     global edx_api_header, edx_api_url
     if student_id==0:
         return []
@@ -279,7 +315,7 @@ def sms_attendance(course_id, student_id):
     if response.status_code==200:
         data = response.content.decode('utf-8')
         if len(data)>0:
-            result  = eval(str(data))            
+            result  = eval(str(data))
             #date_list = [string2date(x['timetable_date'].split(' ')[0],"%m/%d/%Y") for x in result ]
             #for x in result:                printdict(x)
             #for x in result:
@@ -299,7 +335,6 @@ def sms_missingdates(client_name, course_id, student_id, cols, date_list):
     f2f_pass = lambda x : '' if x=='' else ('' if bypass_map[x]==1 else x)
     if (student_id==0) or (client_name==""):
         return []
-    #date_list = sms_attendance(course_id, student_id) if dtlist==[] else dtlist;
     missed_fsf = []
     df = rds_df(f"select * from stages where courseid = '{course_id}' and client_name = '{client_name}';")
     if df is not None:
@@ -317,14 +352,11 @@ def sms_missingdates(client_name, course_id, student_id, cols, date_list):
 def sms_att_rate(client_name, course_id, student_id, date_list):
     if (student_id==0) or (client_name==""):
         return []
-    # should use startdate
     if ('.db' in vmsvclib.rds_connstr):
-        #query = f"select count(*) as cnt from stages where client_name = '{client_name}' and courseid='{course_id}' "
         query = f"select startdate from stages where client_name = '{client_name}' and courseid='{course_id}' "
         query += " and strftime(substr(startdate,7,4)||'-'||substr(startdate,4,2)||'-'||substr(startdate,1,2)) "
         query += "<= strftime(date('now')) and (stage like 'FC%' OR stage like 'PM%');"
     else:
-        #query = f"select count(*) as cnt from stages where client_name = '{client_name}' and courseid='{course_id}' "
         query = f"select startdate from stages where client_name = '{client_name}' and courseid='{course_id}' "
         query += "and (stage like 'FC%' OR stage like 'PM%') and STR_TO_DATE(startdate,'%d/%m/%Y') <= CURDATE();"
     cnt2 = 0
@@ -336,8 +368,6 @@ def sms_att_rate(client_name, course_id, student_id, date_list):
     dt_list = [string2date(x,"%d/%m/%Y") for x in df.startdate]    
     cnt2 = len(dt_list)
     cnt1 = len([x for x in dt_list if x in date_list])
-    #cnt2 = rds_param(query)
-    #cnt1 = len(date_list)
     att_rate = 0 if cnt2 == 0 else (cnt1/cnt2)
     dt2 = [x for x in dt_list if x not in date_list]
     return att_rate
@@ -355,23 +385,6 @@ def sms_pmstage(client_name, course_id):
     pmcounts = rds_param(query)
     pmstage = 0 if pmcounts == 0 else 1
     return pmstage
-
-def sms_lecturer(client_name, course_id, student_id):
-    global edx_api_header, edx_api_url
-    if student_id==0:
-        return []
-    url = f"{edx_api_url}/user/attendance/fetch/{student_id}"
-    syslog(f"calling api {url} via requests.post")
-    response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)
-    syslog(f"completed with status code {response.status_code}")
-    lecturer = ""
-    if response.status_code==200:
-        data = response.content.decode('utf-8')
-        if len(data) > 0:
-            result  = eval(str(data))
-            if len(result) > 0:
-                lecturer = result[0]['account_name']
-    return lecturer
 
 def search_course_list(keyword):
     # Status : Tested
@@ -614,7 +627,7 @@ def update_mcq(course_id, client_name, student_id=0):
     syslog("edx_mcqcnt : " + course_id)
     mcqcnt = edx_mcqcnt(course_id)
     if mcqcnt<=0:
-        syslog(f"edx_mcqcnt returns {mcqcnt}")
+        syslog(f"edx_mcqcnt returns {mcqcnt}")        
         mcqcnt = edx_iu_counts(course_id, client_name)
         if mcqcnt==0:
             return 
@@ -1117,6 +1130,7 @@ def get_google_calendar(course_id, client_name):
     api_url = f"https://realtime.sambaash.com/v1/calendar/fetch?cohortId={course_code}%20:%20{cohort_id}"
     data  = get_calendar_json(api_url)
     if data == {}:
+        print("there is no data from google calendar")
         # https://sambaash.atlassian.net/browse/VMSUPPORT-17
         # api_url = f"https://realtime.sambaash.com/v1/calendar/fetch?cohortId={course_code}:{cohort_id}"
         # data  = get_calendar_json(api_url)
@@ -1309,9 +1323,11 @@ def update_playbooklist(course_id, client_name, course_name, eoc):
 def edx_mass_update(func, clt):
     # Status : Tested
     global edx_api_header, edx_api_url
+    ## Alert !! This EIT method of getting module_code, won't work anymore
     module_code = lambda x : piece(piece(piece(x,':',1),'+',1),'-',0)
     date_today = datetime.datetime.now().date()
-    keyword = date_today.strftime('%Y')
+    #keyword = date_today.strftime('%Y')
+    keyword = date_today.strftime('%Y')[-2:]
     if clt=="":
         with open("vmbot.json") as json_file:  
                 bot_info = json.load(json_file)
@@ -1332,14 +1348,30 @@ def edx_mass_update(func, clt):
     else:
         df.columns = ['module_code']
         mc_list = [x for x in df.module_code]
-        course_list = [ x for x in course_list if module_code(x) in mc_list ]    
-    for course_id in course_list:        
-        eoc = edx_endofcourse(client_name, course_id)
-        #eoc = 0
-        query = f"update playbooks set eoc = {eoc} where client_name = '{client_name}' and course_id = '{course_id}';"
-        rds_update(query)
-        if eoc == 0:            
-            func(course_id, client_name)
+        #course_list = [ x for x in course_list if module_code(x) in mc_list ]
+    qry = f"select course_id, module_code from playbooks where client_name = '{client_name}'"
+    df = rds_df(qry)
+    if df is None:
+        c_list = []
+        m_list = []
+        mc_dict = {}
+    else:
+        df.columns = ['course_list', 'module_code']
+        c_list = [x for x in df.course_list]
+        m_list = [x for x in df.module_code]
+        mc_dict = dict(zip(c_list,m_list))        
+    for course_id in course_list:
+        if course_id in c_list:
+            mcode = mc_dict[course_id]
+        else:
+            mcode = module_code(course_id)
+        if mcode in mc_list:            
+            eoc = edx_endofcourse(client_name, course_id)
+            query = f"update playbooks set eoc = {eoc} where client_name = '{client_name}' and course_id = '{course_id}';"
+            rds_update(query)
+            if eoc == 0:
+                print(course_id, mcode)
+                func(course_id, client_name)
     return
 
 def edx_mass_import(client_name):
@@ -1411,64 +1443,6 @@ def edx_alluserdata():
         df = pd.DataFrame.from_dict(data)
     return df
 
-def perform_unit_tests(client_name = 'Sambaash', course_id = "course-v1:Lithan+FOS-0620A+17Jun2020", sid = 6464):
-    #edx_api_url = "https://om.sambaash.com/edx/v1"
-    edx_api_url = "https://omnimentor.lithan.com/edx/v1"
-    edx_api_header = {'Authorization': 'Basic ZWR4YXBpOlVzM3VhRUxJVXZENUU4azNXdG9E', 'Content-Type': 'text/plain'}
-    print("====== test case 1 edx_coursename ==========")
-    coursename = edx_coursename(course_id)
-    print( coursename )
-    print("====== test case 2 edx_day0 ==========")
-    edx_daystart = edx_day0(course_id)
-    print( edx_daystart )
-    print("====== test case 3 edx_courseid ==========")
-    course_id = edx_courseid("FOS-1219A")
-    print( course_id )
-    print("====== test case 4 edx_mcqcnt ==========")
-    mcqcnt = edx_mcqcnt(course_id)
-    #mcqcnt = edx_iu_counts(course_id, client_name)
-    print( mcqcnt )
-    print("====== test case 5 edx_ascnt ==========")
-    ascnt = edx_ascnt(course_id)
-    #ascnt = edx_iu_counts(course_id, client_name)
-    print( ascnt )
-    print("====== test case 6 edx_userdata ==========")
-    df = edx_userdata(course_id)
-    print( df[:5] )
-    print("====== test case 7 student_course_list ==========")
-    df = student_course_list(sid)
-    print( df )
-    print("====== test case 8 edx_grade ==========")
-    df = edx_grade(course_id)
-    print( df[:5] )
-    print("====== test case 9 edx_mcqinfo ==========")
-    df = edx_mcqinfo(client_name, course_id)
-    print( df[:5] )
-    print("====== test case 10 edx_assignment_score ==========")
-    df = edx_assignment_score(course_id)
-    print( df[:5] )
-    print("====== test case 11 search_course_list ==========")
-    course_list = search_course_list("FOS%2020")
-    print( course_list )
-    print("====== test case 12 google calendar ==========")
-    test_google_calendar(course_id, client_name)
-    print("test_google_calendar completed")    
-    print("====== test case 13 edx_import ==========")    
-    #edx_import(course_id,  client_name)
-    print( f"edx_import {course_id},  {client_name}")
-    print("====== test case 14 generate_mcq_as ==========")
-    #generate_mcq_as(client_name)
-    print("generate_mcq_as completed")       
-    print("====== test case 15 mass_update_usermaster ==========")
-    #mass_update_usermaster(client_name)
-    print("mass_update_usermaster completed")
-    print("====== test case 16 edx_alluserdata ==========")
-    #df = edx_alluserdata()
-    print( df[:5] )
-    print("edx_alluserdata completed")
-    print("end of unit tests 1 - 12")
-    return
-
 if __name__ == "__main__":    
     global use_edxapi, edx_api_header, edx_api_url
     with open("vmbot.json") as json_file:  
@@ -1481,11 +1455,16 @@ if __name__ == "__main__":
     vmsvclib.rds_connstr = bot_info['omdb']
     vmsvclib.rdscon = None
     vmsvclib.rds_pool = 0
-    vmsvclib.rds_schema = "omnimentor"
+    #vmsvclib.rds_schema = "omnimentor"
+    vmsvclib.rds_schema = bot_info['schema']
     if len(sys.argv)>2:
         cmd = str(sys.argv[1])
         resp = str(sys.argv[2])
-        course_list = search_course_list("%" + resp + "%" )
+        if resp == '*':
+            course_id = resp
+            course_list = [resp]
+        else:
+            course_list = search_course_list("%" + resp + "%" )
         if cmd=="search":
             for course_id in course_list:
                 print(course_id)
@@ -1493,17 +1472,33 @@ if __name__ == "__main__":
             course_id = course_list[0]
             print(course_id, client_name)
             if cmd=="import":
-                edx_import(course_id, client_name)
-                print("Edx import completed")
+                if course_id=='*':
+                    edx_mass_import(client_name)
+                    print("Edx mass import completed")
+                else:
+                    edx_import(course_id, client_name)
+                    print("Edx import completed")
             elif cmd=="mcq":
-                update_mcq(course_id, client_name)
-                print("MCQ update completed")
+                if course_id=='*':
+                    mass_update_mcq(client_name)
+                    print("MCQ mass update completed")
+                else:
+                    update_mcq(course_id, client_name)
+                    print("MCQ update completed")
             elif cmd=="assignment":
-                update_assignment(course_id, client_name)
-                print("Assignment update completed")
+                if course_id=='*':
+                    mass_update_assignment(client_name)
+                    print("Assignment mass update completed")
+                else:
+                    update_assignment(course_id, client_name)
+                    print("Assignment update completed")
             elif cmd=="schedule":
-                update_schedule(course_id, client_name)
-                print("Schedule update completed")
+                if course_id=='*':
+                    mass_update_schedule(client_name)
+                    print("Schedule mass update completed")
+                else:
+                    update_schedule(course_id, client_name)
+                    print("Schedule update completed")
             elif cmd=="calendar":
                 test_google_calendar(course_id, client_name)
                 print("google calendar test completed")
@@ -1513,6 +1508,50 @@ if __name__ == "__main__":
                 eoc = edx_endofcourse(client_name, course_id)
                 results = f"End of course (1:Yes,0:No) = {eoc}"
                 print(results)
+                df = edx_userdata(course_id)
+                if df is not None:
+                    sid_list = [x for x in df.student_id]
+                    uname_list = [x for x in df.username]
+                    udict = dict(zip(sid_list,uname_list))
+                    printdict(udict)
+                else:
+                    print("No students information found.")
+            elif cmd=="attendance":                    
+                if len(sys.argv)>3:
+                    txt = str(sys.argv[3])
+                    if txt.isnumeric():
+                        sid = int(txt)
+                    else:
+                        sid = 0
+                    df = sms_df(course_id, sid)
+                    if df is not None:
+                        lecturer = df.account_name.values[0]
+                        class_code = df.class_code.values[0]
+                        cohort_code = df.class_cohort_code.values[0]
+                        remarks = df.class_remarks.values[0]
+                        txt = ""
+                        txt += f"Lecturer = {lecturer}\n" 
+                        txt += f"class_code = {class_code}\n" 
+                        txt += f"class_cohort_code = {cohort_code}\n" 
+                        txt += f"class_remarks = {remarks}\n" 
+                        date_list = sms_datelist(df)
+                        dlist = [ x.strftime('%d/%m/%Y') for x in date_list ]
+                        txt += f"List of attendance date matching to stages table:\n"
+                        txt += str(dlist) + "\n"
+                        cols = get_columns("stages")
+                        stage_list = sms_missingdates(client_name, course_id, sid, cols, date_list)
+                        results = [x for x in stage_list if x != '']
+                        txt += "Missing stages : " + str(results) + "\n"
+                        att_rate = sms_att_rate(client_name, course_id, sid, date_list)
+                        txt += f"Attendance rate = {att_rate}"
+                        df['timetable_date'] = df.apply(lambda x: str(x['timetable_date'])[:10], axis=1)
+                        cols = ['class_type_code', 'status_desc', 'attendance_type_desc', 'timetable_date', 'timetable_day' ] 
+                        df1 = df[cols]
+                        print(txt)
+                        print(df1)
+                else:
+                    print("please specify student_id.")
+                
         elif len(course_list)>0:
             print("which course_id is the one ?")
             for course_id in course_list:
@@ -1521,28 +1560,15 @@ if __name__ == "__main__":
             print("Unable to find matching information")
     else:
         #results = edx_iu_counts(course_id, client_name)
-        #results = sms_lecturer(client_name, course_id, sid)    
-        #cols = get_columns("stages")
-        #date_list = sms_attendance(course_id, sid)
-        #print(date_list)
-        #results = sms_missingdates(client_name, course_id, sid, cols, date_list)             
         #results = edx_eocgap(client_name, course_id, 7)
         #results = sms_pmstage(client_name, course_id)
         #results = edx_eocend(client_name, course_id, 7)
         #print(results)
-        #att_rate = sms_att_rate(client_name, course_id, sid, date_list)    
-        #print(f"Attendance rate = {att_rate}")
-        #
-        #=====================================
-        # edx_mass_import(client_name)
-        # mass_update_mcq(client_name)
-        # mass_update_assignment(client_name)
-        # mass_update_schedule(client_name)
-        # mass_update_usermaster(client_name)
-        # perform_unit_tests(client_name, course_id, sid)
-        #=====================================
-        #    
+        #python3 vmedxlib.py attendance course-v1:LITHAN+BADQV-0920A+14Sep2020 8044
+        # zz = """
         prog = str(sys.argv[0])
         print(f"usage :\n\tpython3 {prog} [commands] [cohort_id]")
         print("commands:\n\timport\n\tmcq\n\tassignment\n\tschedule\n\tcalendar\n\tinfo")
         print(f"Example:\n\tpython3 {prog} search DQV-0820")
+        # """
+        
