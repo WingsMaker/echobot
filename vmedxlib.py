@@ -27,7 +27,6 @@ dmy_str = lambda v : piece(v,'-',2) + '/' + piece(v,'-',1) + '/' + piece(v,'-',0
 ymd_str = lambda v : piece(v,'-',0) + '/' + piece(v,'-',1) + '/' + piece(v,'-',2)
 
 def edx_coursename(course_id):
-    # Status : Tested
     global edx_api_header, edx_api_url
     coursename = ""
     url = f"{edx_api_url}/course/fetch/name"
@@ -39,7 +38,6 @@ def edx_coursename(course_id):
     return coursename
 
 def edx_day0(course_id):
-    # Status : Tested
     global edx_api_header, edx_api_url
     start_date = ""
     url = f"{edx_api_url}/course/fetch/startdate"
@@ -51,7 +49,6 @@ def edx_day0(course_id):
     return start_date
 
 def edx_courseid(cohort_id):
-    # Status : Tested
     global edx_api_header, edx_api_url
     course_id = ""
     url = f"{edx_api_url}/course/fetch/id"
@@ -69,33 +66,29 @@ def edx_iu_counts(course_id, client_name):
     cnt = rds_param(qry)
     return cnt
 
-def edx_mcqcnt(course_id):
-    # Status : Tested
-    global edx_api_header, edx_api_url
-    mcqcnt = 0
-    url = f"{edx_api_url}/course/fetch/mcq/count"
-    response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)
-    if response.status_code==200:
-        data = response.content.decode('utf-8')
-        if len(data)>0 and data.isnumeric():
-            mcqcnt = int(str(data))
-    return mcqcnt
-
-def edx_ascnt(course_id):
-    # Status : Tested
-    global edx_api_header, edx_api_url
-    ascnt = 0
-    url = f"{edx_api_url}/course/fetch/assignment/count"
-    response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)
-    if response.status_code==200:
-        data = response.content.decode('utf-8')
-        if len(data)>0 and data.isnumeric():
-            ascnt = int(str(data))
-    return ascnt
+#def edx_mcqcnt(course_id):
+#    global edx_api_header, edx_api_url
+#    mcqcnt = 0
+#    url = f"{edx_api_url}/course/fetch/mcq/count"
+#    response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)
+#    if response.status_code==200:
+#        data = response.content.decode('utf-8')
+#        if len(data)>0 and data.isnumeric():
+#            mcqcnt = int(str(data))
+#    return mcqcnt
+#
+#def edx_ascnt(course_id):
+#    global edx_api_header, edx_api_url
+#    ascnt = 0
+#    url = f"{edx_api_url}/course/fetch/assignment/count"
+#    response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)
+#    if response.status_code==200:
+#        data = response.content.decode('utf-8')
+#        if len(data)>0 and data.isnumeric():
+#            ascnt = int(str(data))
+#    return ascnt
 
 def edx_userdata(course_id):
-    # Status : Tested
-    # url = f"{edx_api_url}/course/fetch/users"
     global edx_api_header, edx_api_url
     df = pd.DataFrame.from_dict({'student_id':[],'course_id':[],'username':[],'email':[]})
     url = f"{edx_api_url}/course/fetch/users"
@@ -123,7 +116,6 @@ def edx_userdata(course_id):
     return df
 
 def student_course_list(student_id):
-    # Status : Tested
     global edx_api_header, edx_api_url
     df = pd.DataFrame.from_dict({'course_id':[]})
     url = f"{edx_api_url}/user/fetch/{student_id}"
@@ -137,7 +129,6 @@ def student_course_list(student_id):
     return df
 
 def edx_grade(course_id, student_id=0):
-    # Status : Tested
     global edx_api_header, edx_api_url
     df = pd.DataFrame.from_dict({'student_id':[], 'grade':[]})
     if student_id==0:
@@ -151,6 +142,7 @@ def edx_grade(course_id, student_id=0):
         data = response.content.decode('utf-8')
         if len(data)==0:
             data = []
+            syslog(f"{url} returns no data")
         else:
             data = eval(data)
         stud = [x['student_id'] for x in data]
@@ -160,10 +152,11 @@ def edx_grade(course_id, student_id=0):
     return df
 
 def edx_mcqinfo(client_name, course_id, student_id=0):
-    # Status : Tested
     global edx_api_header, edx_api_url
-
     def getnumstr(qn_str):
+        if 'Question' in qn_str:
+            qn = int(qn_str[9:])
+            return qn
         if ' ' in qn_str:
             qn_str = qn_str.split(' ')[0]
         qn_numstr  = ''.join([x for x in qn_str if x in '0123456789'])
@@ -186,6 +179,7 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
         data = response.content.decode('utf-8')
         if str(data) == "":
             data = []
+            syslog(f"{url} returns no data")
         else:
             data = json.loads(data)
         course_id_list = []
@@ -196,6 +190,7 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
         att_list = []
         avgscore_list = []
         for rec in [ x for x in list(data) if 'attempts' in x['state']]  :
+            qn = 0
             if 'student_id' in list(rec):
                 sid = int(rec['student_id'])
             else:
@@ -210,7 +205,7 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
                 pp = 0
             if 'options_display_name' in list(rec):
                 qn = getnumstr(rec['options_display_name'])
-            if 'option_display_name' in list(rec):
+            if 'option_display_name' in list(rec):                
                 qn = getnumstr(rec['option_display_name'])
             if 'IU' in list(rec):
                 r = rec['IU']
@@ -223,12 +218,16 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
                 iu = 0
             state = eval(rec['state'].replace('null','""').replace('false','0').replace('true','1'))
             #attempts = state['attempts']
+            qnscore = 0
             if 'correct_map' in list(state):
-                statekey = list(state['correct_map'])[0]
-                correctness = state['correct_map'][statekey]['correctness']
-                qnscore = 1.0 if correctness=='correct' else 0
+                map_list = list(state['correct_map'])
+                if len(map_list)==0:
+                    syslog('correct_map segment was empty')
+                else:
+                    statekey = map_list[0]
+                    correctness = state['correct_map'][statekey]['correctness']
+                    qnscore = 1.0 if correctness=='correct' else 0
             else:
-                qnscore = 0
                 syslog('correct_map segment not found')
             grade = 1.0 if pp==0 else float(sc/pp)
             #attempts = 0 if qnscore == 0 else ( state['attempts'] if 'attempts' in list(rec) else 0)
@@ -244,12 +243,12 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
         client_list = [client_name for x in iu_list]
         data = {'client_name':client_list, 'course_id': course_id_list, 'student_id':student_id_list, \
             'score':grade_list ,'mcq':iu_list , 'qn':qn_list , 'attempts': att_list,  'avgscore': avgscore_list}
-        df_mcq = pd.DataFrame.from_dict(data)
+        df_mcq = pd.DataFrame.from_dict(data)        
     return df_mcq
 
 def edx_assignment_score(course_id, student_id=0):
-    # Status : Tested
     global edx_api_header, edx_api_url
+    get_iu = lambda x : (x+' ').split(' ')[0].replace('IU','').replace(':','').strip()
     if student_id==0:
         url = f"{edx_api_url}/user/fetch/assignment/scores/list"
     else:
@@ -260,20 +259,24 @@ def edx_assignment_score(course_id, student_id=0):
     df = pd.DataFrame.from_dict({'student_id':[], 'score':[], 'points_possible':[], 'IU': [], 'attempts': []})
     if response.status_code==200:
         data = response.content.decode('utf-8')
+        data = data.replace('"IU":null','"IU":"0"')
         rec = eval(data) if len(data)>0 else []
-        if rec != []:
+        if rec == []:
+            syslog(f"{url} returns no data")
+        else:
             student_id_list = [x['student_id'] for x in rec]
             grade_list = [x['score'] for x in rec]
             pp_list = [x['points_possible'] for x in rec]
             #iu_list = [x['IU'] for x in rec]
-            iu_list = [x['IU'].strip() for x in rec]
+            #iu_list = [x['IU'].strip() for x in rec]
+            iu_list = [ get_iu(x['IU']) for x in rec]
             #att_list = [x['attempts'] for x in rec]
             att_list = [ 0 if x['score']==0 else x['attempts'] for x in rec]
             data = {'student_id': student_id_list, 'score': grade_list, 'points_possible':pp_list, 'IU': iu_list ,'attempts': att_list}
             df = pd.DataFrame.from_dict(data)
             df['is_num'] = df.apply(lambda x: 1 if x['IU'].isnumeric() else 0, axis=1)
             df.drop(df[ df.is_num == 0 ].index, inplace=True)
-            df.drop(columns=['is_num'], inplace=True)
+            df.drop(columns=['is_num'], inplace=True)            
     return df
 
 def sms_df(course_id, student_id):
@@ -381,13 +384,13 @@ def sms_pmstage(client_name, course_id):
         query += "<= strftime(date('now')) and stage like 'PM%';"
     else:
         query = f"select count(*) as cnt from stages where client_name = '{client_name}' and courseid='{course_id}' "
-        query += "and stage like 'FC%' and STR_TO_DATE(startdate,'%d/%m/%Y') <= CURDATE();"
+        #query += "and stage like 'FC%' and STR_TO_DATE(startdate,'%d/%m/%Y') <= CURDATE();"
+        query += "and stage like 'PM%' and STR_TO_DATE(startdate,'%d/%m/%Y') <= CURDATE();"
     pmcounts = rds_param(query)
     pmstage = 0 if pmcounts == 0 else 1
     return pmstage
 
 def search_course_list(keyword):
-    # Status : Tested
     global edx_api_header, edx_api_url
     course_list = []
     url = f"{edx_api_url}/course/search/course/list"
@@ -431,6 +434,18 @@ def edx_endofcourse(client_name, course_id):
         eoc = 0
     return eoc
 
+def eoc_date(client_name, course_id):
+    query = f"SELECT stagedate FROM stages WHERE client_name ="
+    query += f"'{client_name}' AND courseid='{course_id}' ORDER BY id DESC LIMIT 1;"
+    result = ""
+    try:
+        result = rds_param(query)
+        result = datetime.datetime.strptime(str(result),"%d/%m/%Y").date()
+    except:
+        pass
+    return result
+
+
 def edx_eocgap(client_name, course_id, gap=7):
     query = "select COUNT(*) as cnt from stages  where stage = 'EOC' and "
     if ('.db' in vmsvclib.rds_connstr):
@@ -461,7 +476,6 @@ def edx_eocend(client_name, course_id, gap=7):
     return eoc7
 
 def update_schedule(course_id, client_name):
-    # Status : Tested
     dstr = lambda x : piece(piece(x.strip(),':',1),'+',2)
     dtype = lambda x : ('%d%b%Y' if len(dstr(x))==9 else '%d%B%Y') if dstr(x)[0].isdigit() else '%B%Y'
     cohort_date = lambda x : string2date(dstr(x),dtype(x))
@@ -469,15 +483,29 @@ def update_schedule(course_id, client_name):
     cohort_id = rds_param(qry)
     if cohort_id=="":
         cohort_id = piece(piece(course_id,':',1),'+',1)    
-    qry = f"select module_code from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"    
-    module_code = rds_param(qry)
-    if module_code=="":
+    qry = f"select * from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"    
+    df = rds_df(qry)
+    if df is None:
         module_code = piece(cohort_id,'-',0)
+        qry = f"select * from course_module where client_name = '{client_name}' and module_code = '{module_code}';"    
+        df = rds_df(qry)
+        if df is None:
+            course_code = ""
+            pillar = ""
+        else:
+            df.columns = get_columns("course_module")
+            course_code = df.course_code.values[0]
+            pillar = df.pillar.values[0]
+    else:
+        df.columns = get_columns("playbooks")
+        module_code = df.module_code.values[0]
+        course_code = df.course_code.values[0]
+        pillar = df.pillar.values[0]
     stage_list = get_google_calendar(course_id, client_name)
     if stage_list == []:
         syslog("google calendar return nothing")
     try:
-        stage_list = update_stage_table(stage_list, course_id, client_name, cohort_id, module_code)
+        stage_list = update_stage_table(stage_list,course_id,client_name,cohort_id,pillar,course_code,module_code)
         if stage_list == []:
             syslog(f"System calendar not match for {course_id}")
             return
@@ -493,7 +521,7 @@ def update_schedule(course_id, client_name):
     condqry = condqry.replace('_c_', client_name)
     condqry = condqry.replace('_x_', course_id)
     qry = "select * from stages where " + condqry
-    df = rds_df(qry)
+    df = rds_df(qry)    
     if df is None:
         stage_list = []
         days_list = []
@@ -514,11 +542,9 @@ def update_schedule(course_id, client_name):
         qry = qry.replace('_x_', stg)
         query = qry.replace('_y_', str(dd))
         rds_update(query)
-    #cohort_id = piece(piece(course_id,':',1),'+',1)
-    #module_code = piece(cohort_id,'-',0)
-    query = "update stages a SET IU =  IFNULL((SELECT b.IU FROM stages_master b WHERE b.client_name=a.client_name "
-    query += f"AND b.module_code='{module_code}' AND b.stage=a.stage LIMIT 1) ,'0') "
-    query += f"WHERE a.courseid = '{course_id}' AND a.client_name = '{client_name}';"
+    query = "update stages SET IU =  IFNULL((SELECT b.IU FROM stages_master b WHERE b.client_name=client_name "
+    query += f"AND b.module_code='{module_code}' AND b.stage=stage LIMIT 1) ,'0') "
+    query += f"WHERE courseid = '{course_id}' AND client_name = '{client_name}';"
     try:
         rds_update(query)
     except:
@@ -546,7 +572,6 @@ def update_schedule(course_id, client_name):
     return
 
 def update_assignment(course_id, client_name, student_id=0):
-    # Status : Tested
     condqry = f"client_name = '{client_name}' and courseid = '{course_id}';"
     df = edx_grade(course_id, student_id)
     if df is None:
@@ -584,22 +609,17 @@ def update_assignment(course_id, client_name, student_id=0):
             stud_list.append(sid)
             iu_score[sid] = dict()
             iu_attempts[sid] = dict()
-        #iu_score[sid][iu_num] = int(score)/100
         iu_score[sid][iu_num] = 1 if pp_num == 0 else (int(score)/pp_num)
         attempts = 0 if score==0 else attempts
         iu_attempts[sid][iu_num] = attempts
-    # Creates a list of student_ids
     for sid in list(stud_grade_dict):
         if sid not in stud_list:
             iu_score[sid] = dict()
             iu_attempts[sid] = dict()
     stud_list = list(iu_score)
-    # If student_id in stud_list is not found in stud_grade_dict, change the corresponding grade for missing student to 0
     for sid in stud_list:
         if sid not in list(stud_grade_dict):
             stud_grade_dict[sid] = 0
-    # Isnt this same as the 3 lines above?
-    # If student_id in stud list is not in stud_grade_dict, set student's grade to 0
     for n in range(len(stud_list)):
         sid = stud_list[n]
         if sid not in list(stud_grade_dict):
@@ -616,7 +636,6 @@ def update_assignment(course_id, client_name, student_id=0):
     return True
 
 def update_mcq(course_id, client_name, student_id=0):
-    # Status : Tested
     cohort_id = piece(piece(course_id,':',1),'+',1)
     if student_id==0:
         condqry = f"client_name = '{client_name}' and courseid = '{course_id}'"
@@ -625,12 +644,15 @@ def update_mcq(course_id, client_name, student_id=0):
         condqry = f"client_name = '{client_name}' and courseid = '{course_id}' and studentid  = {student_id}"
         cond_qry = f"client_name = '{client_name}' and course_id = '{course_id}' and student_id  = {student_id}"
     syslog("edx_mcqcnt : " + course_id)
-    mcqcnt = edx_mcqcnt(course_id)
+    #mcqcnt = edx_mcqcnt(course_id)
+    mcqcnt = edx_iu_counts(course_id, client_name)
     if mcqcnt<=0:
-        syslog(f"edx_mcqcnt returns {mcqcnt}")        
-        mcqcnt = edx_iu_counts(course_id, client_name)
-        if mcqcnt==0:
-            return 
+        #syslog(f"edx_mcqcnt returns {mcqcnt}")        
+        #mcqcnt = edx_iu_counts(course_id, client_name)
+        #mcqcnt = edx_mcqcnt(course_id)
+        #if mcqcnt==0:
+        syslog(f"edx_mcqcnt returns 0")        
+        return 
     syslog(f"edx_mcqinfo : {mcqcnt} IUs found on {course_id}")
     mcq_df = edx_mcqinfo(client_name, course_id, student_id)
     if len(mcq_df) > 0:
@@ -641,12 +663,6 @@ def update_mcq(course_id, client_name, student_id=0):
     df = mcq_df[['client_name', 'course_id', 'student_id', 'score', 'mcq', 'qn', 'attempts']]
     syslog(f"copydbtbl on mcq_data")
     copydbtbl(df, "mcq_data")
-
-    # save into local database with tablename mcq_score with score/max_attempts per mcq tests/students/cohorts
-    #query = "select client_name, course_id, student_id, mcq, count(*) as max, sum(score) as mcqscore, \
-    #    max(attempts) as max_attempts from mcq_data where " + cond_qry \
-    #    + " group by client_name, course_id, student_id, mcq order by client_name, course_id, student_id, mcq"
-    #query = "select client_name,course_id,student_id,mcq,avg(score) AS mcqscore,max(attempts) as max_attempts from mcq_data where " 
     query = "select client_name,course_id,student_id,mcq,count(*) as max,sum(score) as score,max(attempts) as max_attempts from mcq_data where " 
     query += cond_qry 
     query += " group by client_name,course_id,student_id,mcq"
@@ -762,8 +778,9 @@ def edx_import(course_id, client_name):
             df.columns = get_columns("stages_master")
             query = "delete from stages where " + condqry
             rds_update(query)
+            #df.drop(columns=['pillar'], inplace=True)
             #df.drop(columns=['course_code'], inplace=True)
-            df.drop(columns=['module_code'], inplace=True)
+            #df.drop(columns=['module_code'], inplace=True)
             df['stagedate'] = ''
             df['courseid'] = course_id
             df1 = df[['client_name','courseid', 'id', 'stage', 'name', 'desc', 'days', 'f2f', 'mcq', 'flipclass', 'assignment', 'IU', 'stagedate']]
@@ -774,6 +791,7 @@ def edx_import(course_id, client_name):
     nrows = len(df)
     if nrows == 0:
         syslog("no user data from edx api found")
+        print("no user data from edx api found")
         return 
     query = "delete from userdata where " + condqry
     rds_update(query)
@@ -784,7 +802,7 @@ def edx_import(course_id, client_name):
     else:
         query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{course_id}' AND "
         query += "STR_TO_DATE(startdate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
-    stage = rds_param(query)                
+    stage = rds_param(query)
     if stage=="":
         stage = "SOC Days"
     df['client_name'] = client_name
@@ -804,18 +822,7 @@ def edx_import(course_id, client_name):
     copydbtbl(df1, "userdata")    
 
     syslog("get # of mcq and assignment tests")
-    #mcqcnt = edx_mcqcnt(course_id)
-    #ascnt = edx_ascnt(course_id)
-    #max_iu = edx_iu_counts(course_id, client_name)
-    #if max_iu==0:
-    #    sysog("max_iu returns 0")
-    #    return
-    #ascnt = mcqcnt
-    #try:
     mlist = []
-    #if max_iu > max_iu_cnt:
-    #    max_iu = max_iu_cnt
-    #rng_iu = range( 1, max_iu + 1 )
     rng_iu = range( 1, max_iu_cnt + 1 )
     list1 = [ "mcq_avg"+ str(x) + " = 0" for x in rng_iu]
     list2 = [ "mcq_attempts"+ str(x) + " = 0" for x in rng_iu]
@@ -828,15 +835,7 @@ def edx_import(course_id, client_name):
     except:
         syslog("unable to initialized table userdata")      
         return
-    #if mcqcnt > 0:
-    #    mlist += list1 + list2
-    #if ascnt > 0:
-    #    mlist += list1 + list2
-    #except:
-    #    syslog(f"error reset the mcq & assignment variables")
-    #    return 
-    
-    #if (mcqcnt + ascnt) > 0:
+
     max_iu = edx_iu_counts(course_id, client_name)
     if max_iu > 0:
         update_assignment(course_id, client_name)
@@ -1144,8 +1143,8 @@ def get_google_calendar(course_id, client_name):
         stage_list = sorted_stage_list[cohort]        
     return stage_list
 
-def update_stage_table(stage_list, course_id, client_name, cohort_id, module_code):
-    # Status : Tested  f2f field got loss of data
+def update_stage_table(stage_list,course_id,client_name,cohort_id,pillar,course_code,module_code):
+    #def update_stage_table(stage_list, course_id, client_name, cohort_id, module_code):
     qry = " client_name = '_c_' and courseid = '_x_';"
     qry = qry.replace('_c_', client_name)
     qry = qry.replace('_x_', course_id)    
@@ -1161,7 +1160,9 @@ def update_stage_table(stage_list, course_id, client_name, cohort_id, module_cod
     if (df is None) or (len(stage_list)==0):        
         #cohort_id = piece(piece(course_id,':',1),'+',1)
         #module_code = piece(cohort_id,'-',0)
-        query = f"select * from stages_master where client_name = '{client_name}' and module_code = '{module_code}';"
+        query = f"select * from stages_master where client_name = '{client_name}' and module_code = '{module_code}'"
+        if (pillar != "") and (course_code != ""):
+            query += f" and course_code='{course_code}' and pillar='{pillar}';"
         df = rds_df(query)
         if df is None:
             return []
@@ -1191,8 +1192,8 @@ def update_stage_table(stage_list, course_id, client_name, cohort_id, module_cod
             m = n if (cnt == n + 1) else n+1
             fld7 = stgdays_list[n]
             dd = stgdays_list[m]
-            dt1 = dt0 + datetime.timedelta( days = (fld7-1) )
-            dt2 = dt0 + datetime.timedelta( days = (dd-1) )
+            dt1 = dt0 + datetime.timedelta( days = (int(fld7)-1) )
+            dt2 = dt0 + datetime.timedelta( days = (int(dd)-1) )
             fld4 = dt1.strftime('%d/%m/%Y')
             fld5 = dt2.strftime('%d/%m/%Y')
             fld6 = iu_list[n]            
@@ -1286,47 +1287,44 @@ def update_stage_table(stage_list, course_id, client_name, cohort_id, module_cod
     return stage_list
 
 def update_playbooklist(course_id, client_name, course_name, eoc):
-    try:
-        #query = f"delete from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
-        #rds_update(query)
-        query = f"select count(*) as cnt from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
-        cnt = rds_param(query)
-        if cnt==1:
-            return
-        #cohort_id = piece(piece(course_id,':',1),'+',1)
-        #module_code = piece(cohort_id,'-',0)
-        #if module_code.lower() == 'master':
-        #    module_code = piece(cohort_id,'-',1)
-        #qry = f"select course_code from course_module where module_code = '{module_code}' and client_name='{client_name}' limit 1;"
-        #course_code = rds_param(qry)            
-        qry = f"select cohort_id from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
-        cohort_id = rds_param(qry)
-        if cohort_id=="":
-            cohort_id = piece(piece(course_id,':',1),'+',1)    
-        qry = f"select module_code from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"    
-        module_code = rds_param(qry)
-        if module_code=="":
-            module_code = piece(cohort_id,'-',0)
-        query = "insert into playbooks(client_name,module_code,cohort_id,course_id,course_name,mentor,eoc) \
-            values('_c_', '_w_', '_x_', '_y_', '_z_', '', _e_);"
-        query = query.replace("_c_", client_name)
-        query = query.replace("_w_", module_code)
-        query = query.replace("_x_", cohort_id)
-        query = query.replace("_y_", course_id)
-        query = query.replace("_z_", course_name)
-        query = query.replace("_e_", str(eoc))
-        rds_update(query)
-    except:
-        syslog("Unable to update playbook list")
+    query = f"select count(*) as cnt from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
+    cnt = rds_param(query)
+    if cnt==1:
+        return
+    qry = f"select cohort_id from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
+    cohort_id = rds_param(qry)
+    if cohort_id=="":
+        cohort_id = piece(piece(course_id,':',1),'+',1)    
+    qry = f"select module_code from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"    
+    module_code = rds_param(qry)
+    if module_code=="":
+        module_code = piece(cohort_id,'-',0)
+    qry = f"select pillar,course_code from course_module where client_name = '{client_name}' and module_code = '{module_code}';"
+    df = rds_df(qry)
+    if df is None:
+        pillar = ""
+        course_code = ""
+    else:
+        df.columns = ['pillar','course_code']
+        pillar = df.pillar.values[0]
+        course_code = df.course_code.values[0]            
+    query = "insert into playbooks(client_name,pillar,course_code,module_code,cohort_id,course_id,course_name,mentor,eoc) \
+        values('_c_', '_p_', '_w_', '_m_', '_x_', '_y_', '_z_', '', _e_);"
+    query = query.replace("_c_", client_name)
+    query = query.replace("_p_", pillar)
+    query = query.replace("_w_", course_code)
+    query = query.replace("_m_", module_code)
+    query = query.replace("_x_", cohort_id)
+    query = query.replace("_y_", course_id)
+    query = query.replace("_z_", course_name)
+    query = query.replace("_e_", str(eoc))
+    rds_update(query)    
     return
 
 def edx_mass_update(func, clt):
-    # Status : Tested
     global edx_api_header, edx_api_url
-    ## Alert !! This EIT method of getting module_code, won't work anymore
     module_code = lambda x : piece(piece(piece(x,':',1),'+',1),'-',0)
     date_today = datetime.datetime.now().date()
-    #keyword = date_today.strftime('%Y')
     keyword = date_today.strftime('%Y')[-2:]
     if clt=="":
         with open("vmbot.json") as json_file:  
@@ -1460,6 +1458,11 @@ if __name__ == "__main__":
     if len(sys.argv)>2:
         cmd = str(sys.argv[1])
         resp = str(sys.argv[2])
+        sid = 0
+        if len(sys.argv)>3:
+            txt = str(sys.argv[3])
+            if txt.isnumeric():
+                sid = int(txt)
         if resp == '*':
             course_id = resp
             course_list = [resp]
@@ -1482,6 +1485,9 @@ if __name__ == "__main__":
                 if course_id=='*':
                     mass_update_mcq(client_name)
                     print("MCQ mass update completed")
+                elif sid > 0 :
+                    update_mcq(course_id, client_name, sid)
+                    print(f"MCQ update for studentid {sid} completed")
                 else:
                     update_mcq(course_id, client_name)
                     print("MCQ update completed")
@@ -1489,6 +1495,9 @@ if __name__ == "__main__":
                 if course_id=='*':
                     mass_update_assignment(client_name)
                     print("Assignment mass update completed")
+                elif sid > 0 :
+                    update_assignment(course_id, client_name, sid)
+                    print(f"Assignment update for studentid {sid} completed")
                 else:
                     update_assignment(course_id, client_name)
                     print("Assignment update completed")
@@ -1503,8 +1512,10 @@ if __name__ == "__main__":
                 test_google_calendar(course_id, client_name)
                 print("google calendar test completed")
             elif cmd=="info":
-                results = edx_day0(course_id)
-                print(results)
+                dt = edx_day0(course_id)
+                print(f"start date = {dt}")
+                dt = eoc_date(client_name, course_id)
+                print(f"EOC date = {dt}")
                 eoc = edx_endofcourse(client_name, course_id)
                 results = f"End of course (1:Yes,0:No) = {eoc}"
                 print(results)
@@ -1517,12 +1528,7 @@ if __name__ == "__main__":
                 else:
                     print("No students information found.")
             elif cmd=="attendance":                    
-                if len(sys.argv)>3:
-                    txt = str(sys.argv[3])
-                    if txt.isnumeric():
-                        sid = int(txt)
-                    else:
-                        sid = 0
+                if sid>0:
                     df = sms_df(course_id, sid)
                     if df is not None:
                         lecturer = df.account_name.values[0]
@@ -1559,16 +1565,16 @@ if __name__ == "__main__":
         else:
             print("Unable to find matching information")
     else:
+        #course_id = "course-v1:Lithan+IMM-0520A+29Aug2020"
         #results = edx_iu_counts(course_id, client_name)
         #results = edx_eocgap(client_name, course_id, 7)
         #results = sms_pmstage(client_name, course_id)
         #results = edx_eocend(client_name, course_id, 7)
         #print(results)
         #python3 vmedxlib.py attendance course-v1:LITHAN+BADQV-0920A+14Sep2020 8044
-        # zz = """
+        #zz = """
         prog = str(sys.argv[0])
-        print(f"usage :\n\tpython3 {prog} [commands] [cohort_id]")
+        print(f"usage :\n\tpython3 {prog} [commands] [cohort_id] [student_id]")
         print("commands:\n\timport\n\tmcq\n\tassignment\n\tschedule\n\tcalendar\n\tinfo")
-        print(f"Example:\n\tpython3 {prog} search DQV-0820")
+        print(f"Example:\n\tpython3 {prog} assignment IMM-0520A 4558")
         # """
-        

@@ -21,13 +21,7 @@ summary = """
 ║ conn_open          check database connection status (openned , closed)      ║▒▒
 ║ copydbtbl          append the dataframe into another table in RDS           ║▒▒
 ║ copy2omdb          append the dataframe into another table in SQLite        ║▒▒
-║ decrypt            to decrypt text using fernet cryptography                ║▒▒
-║ debug              to trace the arguments & return values, just add @debug  ║▒▒
-║ edit_fields        update record based on a list of (key, value) pairs      ║▒▒
-║ edit_records       list of (key, value) pairs in a string                   ║▒▒
 ║ email_lookup       email address search when the field is encrypted         ║▒▒
-║ encrypt            to encrypt text using fernet cryptography                ║▒▒
-║ encrypt_email      to encrypt email address field on a database record      ║▒▒
 ║ get_attachment     download the telegram attachement file locally           ║▒▒
 ║ get_columns        product the dataframe header into python list            ║▒▒
 ║ html_report        process tabulated data into formatted telegram message   ║▒▒
@@ -62,11 +56,6 @@ import six
 import math
 import wget
 import json
-import cryptography
-import pickle
-from cryptography.fernet import Fernet
-import telepot
-from telepot.namedtuple import ReplyKeyboardMarkup
 import pymysql
 import pymysql.cursors
 import pymysqlpool  # python3.8 -m pip install aiomysql  # https://github.com/terrycain/aiomysql/tree/sha256
@@ -132,72 +121,6 @@ def copy2omdb(df, tbl):
     conn.close()
     return
 
-def decrypt(msg):
-    key = '4jYUFl-wbMZ4NIiI2kG3LMFD5KTTKiT5ZiE6Yhoshp0='
-    cto = Fernet(key)
-    try:
-        txt = msg.encode()
-    except:
-        txt = msg
-    resp = cto.decrypt(txt)
-    return resp.decode()
-
-def edit_fields(client_name, courseid, tbl, idx, sid, resp, edit_list=[]):
-    global vmbot
-    if resp == "0":
-        txt = "Nothing to update"
-    else:
-        updqry = ''
-        try:
-            for sqlvar in resp.split('\n') :
-                if sqlvar != "":
-                    sqlcode = sqlvar.split(':') 
-                    updqry += ',' + sqlcode[0] + ' = ' + sqlcode[1] + ' '
-            updqry = 'update ' + tbl + ' set ' + updqry[1:] 
-            if edit_list == []:
-                if sid > 0:
-                    updqry += " where " + idx + " = " + str(sid)
-            else:
-                updqry += " where " + idx + " in (" + ','.join([str(x) for x in edit_list]) + ")"
-            try:
-                updqry += " and courseid = '" + courseid + "' and client_name ='" + client_name + "';"
-                rds_update(updqry)
-            except:
-                txt = "unable to update the record !"
-                return txt
-            txt = ""
-            if sid > 0:
-                txt += " for " + idx + " = " + str(sid) 
-            if txt == "":
-                txt = "Nothing to update"
-            else:
-                txt += " is now updated."
-        except:
-            txt = "unable to update the record !"
-    return txt
-
-def edit_records(client_name, courseid, tbl, idx, sid,  fld_prefix = ""):
-    txt = ""
-    if sid > 0:
-        qry = "select * from " + tbl + " where client_name = '_c_' and courseid = '_x_';"
-        qry = qry.replace('_c_', client_name)
-        qry = qry.replace('_x_', courseid)
-        df = rds_df( qry)
-        if df is None:
-            return txt
-        df.columns = get_columns(tbl)         
-        rec_match = ( df[idx] == sid ) 
-        if len(df[rec_match]) > 0:
-            vars = []
-            txt = ''
-            rec_match = df[rec_match]
-            for fld in list(rec_match):
-                fldname = fld.lower()
-                if fld_prefix in fldname :
-                    fldvar = list(rec_match[fld])[0]
-                    txt += fldname + ":" + str(fldvar) + "\n"
-    return txt
-
 def email_lookup(df, email):
     student_list = [x for x in  df.studentid]
     email_list = [x for x in  df.email]        
@@ -205,47 +128,12 @@ def email_lookup(df, email):
         n = email_list.index(email)
         sid = student_list[n]
         return str(sid)
-    #email_list = [decrypt(x) for x in  df.email]
     email_list = [x.lower() for x in  df.email]
     user_dict = dict(zip(email_list,student_list))
     if email in email_list:
         sid = user_dict[email]
         return str(sid)
     return ""
-
-def encrypt(msg):
-    key = '4jYUFl-wbMZ4NIiI2kG3LMFD5KTTKiT5ZiE6Yhoshp0='
-    cto = Fernet(key)
-    txt = cto.encrypt(msg.encode())
-    return txt
-
-def encrypt_email(clt):
-    try:
-        qry = f"select studentid, email from user_master where client_name = '{clt}' ;"
-        df = rds_df(qry)
-        if df is None:
-            return
-        student_list = [x for x in  df.studentid]
-        email_list = [x for x in  df.email]
-        user_dict = dict(zip(student_list,email_list))
-        for sid in student_list:
-            email_str = user_dict[sid]
-            if email_str[:6]=='gAAAAA':
-                enc_email = email_str
-            else:
-                enc_email = encrypt(user_dict[sid]).decode()
-            query = f"update user_master set email = '{enc_email}' where client_name = '{clt}' and studentid = {sid};"
-            try:
-                rds_update(query)
-                #email_str = decrypt(enc_email)
-                #print(sid, email_str)
-            except:                
-                #print(f"Error encrypting for #{sid}")
-                pass
-        #print("Email fields encrypted")
-    except:
-        pass
-    return
 
 def get_attachment(bot, fid):
     fpath = bot.getFile(fid)['file_path']
@@ -353,7 +241,6 @@ def rds_connector():
         rdscon = None
     return rdscon
 
-#@debug
 def rds_df(query):
     global rdscon
     df = None
@@ -408,7 +295,6 @@ def rds_param(query, retval="", dfmode=False):
         pass
     return sqlvar
 
-#@debug
 def rds_update(query):
     global rdscon
     rdscon = rds_connector()
@@ -537,21 +423,39 @@ def write2html(df, title='', filename='report.html'):
    
 if __name__ == "__main__":
     global rdscon, rds_connstr, rdsdb, rds_pool, rds_schema
-    rds_schema = "omnimentor"
-    #rds_connstr = ""
-    rds_connstr = "omdb.db"
-    #rds_connstr = "mysql+pymysql://omnimentor@db-sambaashplatform-cluster-2a:omnimentor@db-sambaashplatform-cluster-2a.mysql.database.azure.com/omnimentor?ssl_ca=BaltimoreCyberTrustRoot.crt.pem"
+    get_cols = lambda qry : [('~'+tt).replace(' as ','~').split('~')[-1] for tt in qry.lower().replace('from',':').replace('select','').replace('distinct','').split(':')[0].strip().split(',')]
+    with open("vmbot.json") as json_file:  
+        bot_info = json.load(json_file)
+    client_name = bot_info['client_name']
+    rds_schema = bot_info['schema']
+    rds_connstr = bot_info['omdb']
     rds_pool = 0
     rdsdb = None
-    rdscon = rds_connector()
-    qry = "update playbooks set eoc=0 where course_id = 'course-v1:Lithan+PMP-0220A+25Jul2020';"
-    #rds_update(qry)
-    #qry = "SELECT DISTINCT a.course_id, a.course_name FROM playbooks a INNER JOIN course_module c ON a.client_name=c.client_name and a.module_code=c.module_code where c.enabled=1 AND a.client_name='SambaashDev' ORDER BY a.course_id;"
-    #df = rds_df(qry)
-    #df.columns = get_columns("userdata")    
-    #df.columns = ['course_id','course_name']
-    #copy2omdb(df,"userdata")
-    #print(df.head(10))
-    #xls2sqldb('userdata.csv', 'omdb.db')
+    if len(sys.argv)>=2:
+        rdscon = rds_connector()
+        qry = str(sys.argv[1])
+        print(qry)
+        if qry.lower().startswith('select'):
+            try:
+                df = rds_df(qry)
+            except:
+                df = None
+            if df is None:
+                print("No information found")
+            else:
+                cols = get_cols(qry)
+                if '*' in cols:
+                    cols = df.columns
+                    df.columns = [ "#" + str(c) for c in cols ]
+                else:
+                    df.columns = cols
+                print(df)
+            print("select query processed")
+        elif qry.lower().startswith('update'):
+            rds_update(qry)
+            print("update query processed")
+        elif qry.lower().startswith('delete'):
+            rds_update(qry)
+            print("delete query processed")
     #
     print("End of vmsvclib.py")
