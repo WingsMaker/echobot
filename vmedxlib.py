@@ -153,18 +153,7 @@ def edx_grade(course_id, student_id=0):
 
 def edx_mcqinfo(client_name, course_id, student_id=0):
     global edx_api_header, edx_api_url
-    def getnumstr(qn_str):
-        if 'Question' in qn_str:
-            qn = int(qn_str[9:])
-            return qn
-        if ' ' in qn_str:
-            qn_str = qn_str.split(' ')[0]
-        qn_numstr  = ''.join([x for x in qn_str if x in '0123456789'])
-        qn_numstr = '0' if qn_numstr=='' else qn_numstr
-        qn = int(qn_numstr)
-        if (qn > max_iu_cnt) or (qn<1):
-            qn = 1
-        return qn
+    getnumstr = lambda q : int('0'+(( ''.join([x for x in q if x.isnumeric() or x==' '])).strip()).split(' ')[0])
 
     df_mcq = pd.DataFrame.from_dict( {'client_name':[],'course_id':[],'student_id':[], 'score':[], \
         'mcq':[],'qn':[],'attempts':[], 'avgscore': []} )
@@ -191,18 +180,19 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
         avgscore_list = []
         for rec in [ x for x in list(data) if 'attempts' in x['state']]  :
             qn = 0
+            pp = 0
             if 'student_id' in list(rec):
                 sid = int(rec['student_id'])
             else:
                 sid = 0
             if 'score' in list(rec):
                 sc = rec['score']
+                sc = 0 if sc is None else sc
             else:
                 sc = 0
             if 'points_possible' in list(rec):
                 pp = rec['points_possible']
-            else:
-                pp = 0
+                pp = 0 if pp is None else pp
             if 'options_display_name' in list(rec):
                 qn = getnumstr(rec['options_display_name'])
             if 'option_display_name' in list(rec):                
@@ -210,8 +200,11 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
             if 'IU' in list(rec):
                 r = rec['IU']
                 if r is None:
-                    syslog("Invalid IU on api " + url )
-                    iu = 0
+                    syslog(f"IU = None on {course_id} student_id = {sid}")
+                    if 'chapter_title' in list(rec):
+                        iu = getnumstr(rec['chapter_title'])
+                    else:
+                        iu = 0
                 else:
                     iu = int(rec['IU'])
             else:
@@ -624,8 +617,8 @@ def update_assignment(course_id, client_name, student_id=0):
         sid = stud_list[n]
         if sid not in list(stud_grade_dict):
             stud_grade_dict[sid] = 0
-        updsqlavg = ''.join([ ", as_avg" + str(x) + " = " + str(iu_score[sid][x]) for x in list(iu_score[sid]) ])
-        updsqlatt = ''.join([ ", as_attempts" + str(x) + " = " + str(iu_attempts[sid][x]) for x in list(iu_score[sid]) ])
+        updsqlavg = ''.join([ ", as_avg" + str(x) + " = " + str(iu_score[sid][x]) for x in list(iu_score[sid]) if x > 0])
+        updsqlatt = ''.join([ ", as_attempts" + str(x) + " = " + str(iu_attempts[sid][x]) for x in list(iu_score[sid]) if x > 0 ])
         updsql = "update userdata set grade = " + str(stud_grade_dict[sid]) + updsqlavg + updsqlatt
         updsql += " where studentid = " + str(sid) + " and courseid = '" + course_id + "';"
         try:
