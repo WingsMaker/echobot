@@ -1,5 +1,5 @@
 #
-#  ______                        __ __       __                     __
+#  ______                        __ __       __                     __ 
 # /      \                      |  \  \     /  \                   |  \
 #|  ▓▓▓▓▓▓\______ ____  _______  \▓▓ ▓▓\   /  ▓▓ ______  _______  _| ▓▓_    ______   ______
 #| ▓▓  | ▓▓      \    \|       \|  \ ▓▓▓\ /  ▓▓▓/      \|       \|   ▓▓ \  /      \ /      \
@@ -1975,7 +1975,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             elif resp == ps_progress:
                 if self.stagetable is None:
                     retmsg = "Learners progress information is not available"
-                else:    
+                else:
                     query = "SELECT u.studentid FROM userdata u INNER JOIN user_master m ON u.client_name=m.client_name "
                     query += f" AND u.studentid=m.studentid WHERE u.client_name='{self.client_name}' AND u.courseid = '{self.courseid}' "
                     query += ''.join([ " and lower(m.email) not like '%" + x + "'"  for x in bot_intance.efilter])
@@ -2427,7 +2427,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 txt = msgout(txt)
                 await self.sender.sendMessage(txt)
                 query = f"update user_master set usertype = 1 where client_name = '{self.client_name}' "
-                query += ''.join([ " and lower(email) not like '%" + x + "'"  for x in bot_intance.efilter])   
+                query += ''.join([ " and lower(email) not like '%" + x + "'"  for x in bot_intance.efilter])
                 query += f"AND studentid IN (select studentid FROM userdata WHERE client_name = '{self.client_name}' "
                 query += f"AND courseid = '{resp}');"
                 rds_update(query)
@@ -2519,30 +2519,30 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 playbooklist_menu = [[x] for x in self.list_courseids]
                 playbooklist_menu.append([option_back])
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(playbooklist_menu))
-                self.menu_id = keys_dict[option_cfg_playbooks]                
+                self.menu_id = keys_dict[option_cfg_playbooks]
             elif resp == option_cfg_stagesmaster:
                 txt = "View stages_master for which course ?"
                 txt = msgout(txt)
                 playbooklist_menu = [[x] for x in self.list_courseids]
                 playbooklist_menu.append([option_back])
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(playbooklist_menu))
-                self.menu_id = keys_dict[option_cfg_stagesmaster]                
+                self.menu_id = keys_dict[option_cfg_stagesmaster]
             elif resp == option_cfg_module_iu:
                 txt = "View module_iu for which course ?"
                 txt = msgout(txt)
                 playbooklist_menu = [[x] for x in self.list_courseids]
                 playbooklist_menu.append([option_back])
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(playbooklist_menu))
-                self.menu_id = keys_dict[option_cfg_module_iu]                
+                self.menu_id = keys_dict[option_cfg_module_iu]
 
         elif self.menu_id == keys_dict[option_cfg_playbooks]:
             qry = f"select * from playbooks where course_id='{resp}';"
             title = "playbooks record for " + resp
             cols = get_columns("playbooks")
-            df = rds_df(qry)                
+            df = rds_df(qry)
             if df is not None:
                 df.columns = cols
-                title = msgout(title)                
+                title = msgout(title)
                 txt=""
                 for c in cols:
                     x = list(df[c])[0]
@@ -2561,7 +2561,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             qry += f" WHERE b.client_name = '{self.client_name}' and b.course_id = '{resp}';"
             title = "stages_master record for " + resp
             cols = ['pillar','course_code','module_code']
-            df = rds_df(qry)                
+            df = rds_df(qry)
             if df is not None:
                 df.columns = get_columns('stages_master')
                 title = msgout(title)
@@ -2592,7 +2592,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             qry += f" WHERE b.client_name = '{self.client_name}' and b.course_id = '{resp}';"
             title = "stages_master record for " + resp
             cols = ['pillar','course_code','module_code','project_mentoring','project_implementation']
-            df = rds_df(qry)                
+            df = rds_df(qry)
             if df is not None:
                 df.columns = get_columns('module_iu')
                 title = msgout(title)
@@ -2828,7 +2828,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 if found==0:
                     txt = "Sorry, no results found."
                     txt = msgout(txt)
-                    await self.sender.sendMessage(txt)                        
+                    await self.sender.sendMessage(txt)
             elif resp == rest_mcq :
                 url = f"{edx_api_url}/user/fetch/mcq/scores/list/{sid}" 
                 resp = requests.post(url, data=cid, headers=edx_api_header, verify=False)
@@ -2851,13 +2851,13 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                                 od = rec['options_display_name']
                             if 'option_display_name' in list(rec):
                                 od = rec['option_display_name']
-                            if 'Question' in od:                                
+                            if 'Question' in od:
                                 od = od[9:] + "..."
                             else:
                                 od = od[:5] + "..."
                             iu = str(rec['IU'])
                             state = eval(rec['state'].replace('null','""').replace('false','0').replace('true','1'))
-                            corr = ""                            
+                            corr = ""
                             if 'correct_map' in list(state):
                                 map_list = list(state['correct_map'])
                                 if len(map_list)>0:
@@ -2877,7 +2877,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 if found==0:
                     txt = "Sorry, no results found."
                     txt = msgout(txt)
-                    await self.sender.sendMessage(txt)                        
+                    await self.sender.sendMessage(txt)
             elif resp == rest_ass :
                 url = f"{edx_api_url}/user/fetch/assignment/scores/list/{sid}"
                 resp = requests.post(url, data=cid, headers=edx_api_header, verify=False)
@@ -2927,7 +2927,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 query = f"SELECT p.course_id FROM playbooks p left JOIN course_module c ON p.client_name=c.client_name and "
                 query += f"p.module_code=c.module_code WHERE p.client_name = '{self.client_name}' and c.module_code IS NULL"
                 #query += " AND p.eoc=0"
-                result = "List of courses with pillar/course_code not registered\n"
+                result = "List of courses with pillar/course_code not registered in course_module table\n"
                 df = rds_df(query)
                 if df is None:
                     txt = "Sorry, no results found."
@@ -2939,34 +2939,38 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 html_msg_dict[title] = html_report(df, df.columns, [50], 25)
                 html_msg_trans = False
             elif resp == option_module_iu :
-                query = f"SELECT p.course_id FROM playbooks p left JOIN module_iu c ON p.client_name=c.client_name and "
-                query += f"p.module_code=c.module_code WHERE p.client_name = '{self.client_name}' and c.module_code IS NULL"
-                #query += " AND p.eoc=0"
-                result = "List of courses with IU information not registered\n"
+                query = "SELECT distinct p.pillar, p.course_code,p.module_code "
+                query += "from playbooks p left JOIN module_iu c ON p.client_name=c.client_name "
+                query += "AND p.pillar=c.pillar AND p.course_code=c.course_code AND p.module_code=c.module_code "
+                query += f"WHERE p.client_name = '{self.client_name}' and c.module_code IS NULL "
+                query += "ORDER BY p.pillar, p.course_code,p.module_code;"
+                result = "courses with IUs not registered in module_iu table\n"
                 df = rds_df(query)
                 if df is None:
                     txt = "Sorry, no results found."
                     txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     return
-                df.columns = ['course_id']
+                df.columns = ['pillar', 'course_code','module_code']
                 title = msgout(result)
-                html_msg_dict[title] = html_report(df, df.columns, [50], 25)
+                html_msg_dict[title] = html_report(df, df.columns, [10, 25, 15], 25)
                 html_msg_trans = False
             elif resp == option_stages_master :
-                query = f"SELECT p.course_id FROM playbooks p left JOIN stages_master c ON p.client_name=c.client_name and "
-                query += f"p.module_code=c.module_code WHERE p.client_name = '{self.client_name}' and c.module_code IS NULL"
-                #query += " AND p.eoc=0"
-                result = "List of courses with learning stages not registered\n"
+                query = "SELECT distinct p.pillar, p.course_code,p.module_code "
+                query += "from playbooks p left JOIN stages_master c ON p.client_name=c.client_name "
+                query += "AND p.pillar=c.pillar AND p.course_code=c.course_code AND p.module_code=c.module_code "
+                query += f"WHERE p.client_name = '{self.client_name}' and c.module_code IS NULL "
+                query += "ORDER BY p.pillar, p.course_code,p.module_code;"
+                result = "courses with learning stages not registered in stages_master table\n"
                 df = rds_df(query)
                 if df is None:
                     txt = "Sorry, no results found."
                     txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     return
-                df.columns = ['course_id']
+                df.columns = ['pillar', 'course_code','module_code']
                 title = msgout(result)
-                html_msg_dict[title] = html_report(df, df.columns, [50], 25)
+                html_msg_dict[title] = html_report(df, df.columns, [10, 25, 15], 25)
                 html_msg_trans = False
             elif resp == option_mcq_avg :
                 query = "SELECT courseid FROM ( SELECT courseid, SUM(mcq_avg1 + mcq_avg2 + mcq_avg3 + mcq_avg4 + mcq_avg5) AS mcq_avg FROM userdata where"
@@ -3040,7 +3044,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                         if self.super_admin:
                             menu_item = svcbot_menu.copy()
                         else:
-                            menu_item = mentor_menu.copy()                        
+                            menu_item = mentor_menu.copy()
                         await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
                         self.menu_id = 1
                     else:
@@ -3083,12 +3087,12 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                                 if self.super_admin:
                                     menu_item = svcbot_menu.copy()
                                 else:
-                                    menu_item = mentor_menu.copy()                                
+                                    menu_item = mentor_menu.copy()
                                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
                                 self.menu_id = 1
                             else:
                                 txt = msgout(info)
-                                await self.sender.sendMessage(txt)            
+                                await self.sender.sendMessage(txt)
 
         elif self.menu_id == keys_dict[option_chat]:
             if self.chatid in [d for d in bot_intance.chat_list]:

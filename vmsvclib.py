@@ -1,5 +1,5 @@
 #
-#  ______                        __ __       __                     __
+#  ______                        __ __       __                     __  
 # /      \                      |  \  \     /  \                   |  \
 #|  ▓▓▓▓▓▓\______ ____  _______  \▓▓ ▓▓\   /  ▓▓ ______  _______  _| ▓▓_    ______   ______
 #| ▓▓  | ▓▓      \    \|       \|  \ ▓▓▓\ /  ▓▓▓/      \|       \|   ▓▓ \  /      \ /      \
@@ -49,7 +49,7 @@ warnings.filterwarnings("ignore")
 import pandas as pd
 import pandas.io.formats.style
 import os, re, sys, time, datetime, string
-import subprocess 
+#import subprocess
 import numpy as np
 import matplotlib.pyplot as plt
 import six
@@ -58,12 +58,9 @@ import wget
 import json
 import pymysql
 import pymysql.cursors
-import pymysqlpool  # python3.8 -m pip install aiomysql  # https://github.com/terrycain/aiomysql/tree/sha256
-#from pymysql_manager import ConnectionManager
-#from pymysqlpool.pool import Pool
+import pymysqlpool  
 import sqlite3
 from sqlalchemy import create_engine
-import random
 import inspect
 
 global edxcon, rdscon, rds_connstr, rds_pool, rdsdb, rds_schema
@@ -226,10 +223,9 @@ def rds_connector():
                 host = pwhost[1]
                 dbase = conn_info[2].split('/')[1].split('?')[0]
                 ssl_pem=rds_connstr.split('=')[1]
-                rds_pool = 20
+                rds_pool = 50
                 config={'host':host, 'user':user, 'password':passwd, 'database':dbase, 'autocommit':True, 'ssl':{'ca': ssl_pem}}
                 rdsdb = pymysqlpool.ConnectionPool(size=rds_pool,name='pool', **config)            
-            #rdscon = pymysql.connect(host=host, port=3306, user=user,passwd=passwd,db=dbase,ssl={'ca': ssl_pem})            
             rdscon = rdsdb.get_connection()
             rdscon.ping(True)                
         else:
@@ -340,13 +336,13 @@ def render_table(data, col_width=3.0, row_height=0.625, font_size=14,
             cell.set_facecolor(row_colors[k[0]%len(row_colors) ])
     return ax
 
-def shellcmd(cmd):
-    try:
-        ps = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
-        output = (ps.communicate()[0]).decode("utf8")
-    except:
-        output = ''
-    return output
+#def shellcmd(cmd):
+#    try:
+#        ps = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+#        output = (ps.communicate()[0]).decode("utf8")
+#    except:
+#        output = ''
+#    return output
 
 def syslog(msg):
     s = inspect.stack()[1]
@@ -457,5 +453,4 @@ if __name__ == "__main__":
         elif qry.lower().startswith('delete'):
             rds_update(qry)
             print("delete query processed")
-    #
     print("End of vmsvclib.py")
