@@ -81,11 +81,11 @@ class MLGrader():
             #df = rds_df(qry)
             #if df is None:
             #    return ""
-            df = pd.read_csv('mlgrader.csv')    
+            df = pd.read_csv('mlgrader.csv')
             df.columns = cols
             features = ['mcq_avgscore', 'mcq_cnt', 'as_avgscore']
             #df = df[cols]
-            #df.to_csv('mlgrader.csv')            
+            #df.to_csv('mlgrader.csv')     
             Xr = df[features]
             yr = df.grade.values
             reg_scores = cross_val_score(LinearRegression(), Xr, yr, cv=4)

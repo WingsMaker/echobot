@@ -58,7 +58,7 @@ class MCQ_Diff():
         
         df.columns = ['Average Score %', 'MCQ', 'QN', 'Average Attempts', 'MCQ No. Question No.']
         #df['Average Score %'] = df['Average Score %'] * 100 
-        
+  
         # Using groupby to display top 10 questions sorted by average attempts in descending order
         # Can change the number of questions displayed by varying bracketed .head() number
         # Can change rounding significant figures by varying bracketed .roud() number

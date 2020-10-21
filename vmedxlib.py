@@ -216,7 +216,7 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
             qn_list.append(qn)
             grade_list.append(qnscore)
             att_list.append(int(attempts))
-            # actual average score
+            #actual average score
             avgscore_list.append(grade)
         client_list = [client_name for x in iu_list]
         data = {'client_name':client_list, 'course_id': course_id_list, 'student_id':student_id_list, \
@@ -245,10 +245,7 @@ def edx_assignment_score(course_id, student_id=0):
             student_id_list = [x['student_id'] for x in rec]
             grade_list = [x['score'] for x in rec]
             pp_list = [x['points_possible'] for x in rec]
-            #iu_list = [x['IU'] for x in rec]
-            #iu_list = [x['IU'].strip() for x in rec]
             iu_list = [ get_iu(x['IU']) for x in rec]
-            #att_list = [x['attempts'] for x in rec]
             att_list = [ 0 if x['score']==0 else x['attempts'] for x in rec]
             data = {'student_id': student_id_list, 'score': grade_list, 'points_possible':pp_list, 'IU': iu_list ,'attempts': att_list}
             df = pd.DataFrame.from_dict(data)
@@ -330,7 +327,7 @@ def sms_missingdates(client_name, course_id, student_id, cols, date_list):
         f2f_map = dict(zip(stage_list,f2f_list)) # value 1 for attendance taking
         arr_stgf2f = dict(zip(stage_list, fsf_dates))
         missing_fsf = [f2flag(stage_list[n],fsf_dates[n]) for n in range(len(stgid_list))]
-        #missed_fsf = [ f2f_pass(x) for x in missing_fsf ]        
+        #missed_fsf = [ f2f_pass(x) for x in missing_fsf ]
     return missing_fsf
 
 def sms_att_rate(client_name, course_id, student_id, date_list):
@@ -981,6 +978,7 @@ def get_stage_list(data, module_node):
     socdt = ymd_str(soc_date)
     s_dict = {}
     s_list = []
+    stg_id = 0
     for x in resp:
         if 'summary' not in list(x):
             syslog("summary element missing")
@@ -990,12 +988,7 @@ def get_stage_list(data, module_node):
             continue
         x_summary = x['summary']
         x_desc = x['description']
-
-        # https://sambaash.atlassian.net/browse/VMSUPPORT-17
-        # x_summary = x_summary.replace(' : ',':')
-        # x_summary = x_summary.replace('::',':')
-        # x_list = x_summary.split(':')
-        x_list = x_summary.split(' : ')
+        x_list = [x.strip() for x in x_summary.split(':')]
         n=len(x_list)
         cohort = x_list[0] if n>0 else ""
         stage_name = x_list[1] if n>2 else ""
@@ -1003,23 +996,31 @@ def get_stage_list(data, module_node):
         stage_desc = stage_desc.replace('?','')
         cohort = cohort.strip()
         iu_list = "0"
-        if x_desc is not None:
-            if "IU " in x_desc:
-                iu_list = ','.join([ x.split(':')[0].split(' ')[1] for x in x_desc.split('>') if "IU " in x])
+        #x_desc containing uncontrolled freetext, no standard way to extract iu list
+        #if x_desc is not None:
+            #if "IU " in x_desc:
+                #if '>' in x_desc:
+                #    iu_list = ','.join([ x.split(':')[0].split(' ')[1] for x in x_desc.split('>') if "IU " in x])
+                #else:
+                #   iu_list = ','.join([ w.replace('IU','').replace(':',' ').strip().split(' ')[0] for w in x_desc.split('\n')])
         stdate = ymd_str(x['startDate'][:10])
         sdate = dmy_str(x['startDate'][:10])
         edate = dmy_str(x['endDate'][:10])
         stage_name = stage_code(stage_name)
         if (stage_name != "") and (cohort==module_node) :
+            stg_id += 1
+            stg_key = str(stdate) + "_" + str(stg_id)
             stage_info = [stage_name, cohort, stage_desc, sdate, edate, iu_list]
-            s_dict[stdate] = stage_info
-            s_list.append(stdate)
+            #s_dict[stdate] = stage_info
+            s_dict[stg_key] = stage_info
+            #s_list.append(stdate)
+            s_list.append(stg_key)
     if s_list==[]:
         syslog("stages info s_list empty")
         return []
-
     s_list.sort()
-    s_list = sorted(set(s_list))
+    #s_list = sorted(set(s_list))
+    s_list = sorted(s_list)
     n = 0
     cohort_dict = {}
     index_dict = {}
@@ -1030,9 +1031,9 @@ def get_stage_list(data, module_node):
     for x in cohort_list:
         cohort_dict[x] = {}
         index_dict[x] = []
-
     for x in s_list:
         y = s_dict[x][1]
+        w = x.split('_')[0]
         cohort_dict[y][x]=s_dict[x]
         index_dict[y].append(x)
     for x in cohort_list:
@@ -1115,7 +1116,6 @@ def get_google_calendar(course_id, client_name):
         # if data == {}:    return []
         syslog("there is no data from google calendar")
         return []
-    #sorted_stage_list = get_stage_list(data) # add cohort_id ?
     sorted_stage_list = get_stage_list(data, cohort_id)
     stage_list = []
     for cohort in list(sorted_stage_list) :

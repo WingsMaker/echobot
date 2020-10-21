@@ -1,5 +1,5 @@
 #
-#  ______                        __ __       __                     __ 
+#  ______                        __ __       __                     __
 # /      \                      |  \  \     /  \                   |  \
 #|  ▓▓▓▓▓▓\______ ____  _______  \▓▓ ▓▓\   /  ▓▓ ______  _______  _| ▓▓_    ______   ______
 #| ▓▓  | ▓▓      \    \|       \|  \ ▓▓▓\ /  ▓▓▓/      \|       \|   ▓▓ \  /      \ /      \
@@ -125,7 +125,8 @@ option_cfg_stagesmaster = "stages_master"
 option_cfg_module_iu = "module_iu"
 option_datacheck = "Data Integrity"
 option_course_module = "Missing pillars"
-option_module_iu = "Missing IUs"
+#option_module_iu = "Missing IUs"
+option_module_iu = "IU inconsistency"
 option_stages_master = "Missing stages"
 option_mcq_avg = "MCQ not updated"
 option_as_avg = "Assignment not updated"
@@ -177,8 +178,6 @@ client_menu = [[sys_clientcopy, sys_clientdelete, sys_clientconfig, option_back]
 nlp_menu = [[nlp_dict, nlp_prompts, nlp_corpus, nlp_response], [nlp_train, nlp_stopwords, nlp_faq, option_back]]
 ml_menu = [[ml_data, ml_pipeline, ml_report],[ml_graph, ml_train, option_back]]
 rest_menu = [[rest_sms, rest_grad, rest_mcq, rest_ass],[rest_cal, rest_cid, rest_sid, option_back]]
-lang_menu = [['English', '简体中文','繁體中文','हिंदी', 'தமிழ்'],\
-    ['বাংলা','Filipino','Indonesian', 'Malay','မြန်မာ'],['ไทย','Việt Nam','日本語','한국어', option_back]]
 
 string2date = lambda x,y : datetime.datetime.strptime(x,y).date()
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
@@ -548,7 +547,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 bot_intance.adm_list.remove(self.student_id)
         except:
             pass
-        txt = msgout(txt)
         try:
             await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup([[btn_hellobot]]))
         except:
@@ -564,7 +562,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
     async def on_close(self, exception):
         await self.logoff()
         txt = 'session time out.\nPress /start a few times to awake this bot.'
-        txt = msgout(txt)
         await self.sender.sendMessage(txt)
         return
 
@@ -586,7 +583,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             title = f"MCQ and Assignment scores for student #{sid}"
         mcq_cnt = vmedxlib.edx_mcqcnt(self.courseid, self.client_name)
         as_cnt = vmedxlib.edx_ascnt(self.courseid, self.client_name)
-        iu_cnt = max(mcq_cnt,iu_cnt)
+        iu_cnt = max(mcq_cnt,as_cnt)
         if iu_cnt == 0:
             return (None,None)
         avg_list = dict()
@@ -823,7 +820,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             if accuracy > 0:
                 if accuracy < match_score:
                     txt = 'do you mean this ? =>\n' + result
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     user_resp = result.lower()
                 txt = ft_model.match_resp(user_resp)
@@ -853,7 +849,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 txt = txt.replace('{sos}' , '')
             if '{mcqas_chart}' in txt:
                 (df,f) = self.mcqas_chart()
-                if df is not None:
+                if f is not None:
                     await self.bot.sendPhoto(self.chatid, f)
                 txt = txt.replace('{mcqas_chart}' , '')
             if '{mcq_att_balance}' in txt:
@@ -977,8 +973,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             if txt == "":
                 txt = "Welcome back."
             self.menu_id = bot_intance.keys_dict[lrn_student]
-            txt = msgout(txt)
-            txt = msgout("Hi") + ", " + self.username + " !\n" + txt
+            txt = "Hi" + ", " + self.username + " !\n" + txt
             return (txt, self.menu_home)
         syslog("completed")
         return ('', [])
@@ -1145,7 +1140,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     self.username = username
         elif content_type != "text":
             txt = "Thanks for the " + content_type + " but I do not need it for now."
-            txt = msgout(txt)
             await self.sender.sendMessage(txt)
             return
         else:
@@ -1153,7 +1147,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
 
         if chat_id <0 :
             txt = resp + " from " + str(chat_id)
-            txt = msgout(txt)
             await self.bot.sendMessage(adminchatid, txt)
             return
 
@@ -1164,11 +1157,9 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             tid = self.endchat()
             if tid > 0:
                 txt = "Live chat session disconnected. 👋"
-                txt = msgout(txt)
                 await self.bot.sendMessage(tid, txt)
                 await self.bot.sendMessage(chat_id, txt)
             txt = "sesson closed."
-            txt = msgout(txt)
             await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([['/start']]))
             self.is_admin = (chat_id == adminchatid)
             syslog("telegram user " + str(chat_id) + " offine.")
@@ -1176,7 +1167,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
 
         elif resp=='/stop' and (chat_id in [adminchatid, developerid]):
             txt = 'System shutting down.'
-            txt = msgout(txt)
             for d in bot_intance.user_list:
                 await bot.sendMessage(d, txt)
             await self.logoff()
@@ -1198,7 +1188,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             tid = self.endchat()
             if tid > 0:
                 txt = "Live chat session disconnected. 👋"
-                txt = msgout(txt)
                 await self.bot.sendMessage(tid, txt)
                 await self.bot.sendMessage(chat_id, txt)
             syslog("system : " + "telegram user " + str(chat_id) + " online.")
@@ -1223,7 +1212,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 if (usertype == 1) and (courseid == ""):
                     binded = 0
             txt = "Please wait for a while."
-            txt = msgout(txt)
             try:
                 await self.sender.sendMessage(txt)
             except:
@@ -1236,7 +1224,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     self.courseid = courseid
                     self.load_tables()
                     msg = "You are in course:\n" + courseid
-                    msg = msgout(msg)
                     await bot.sendMessage(chat_id, msg)
                     (txt, menu_item) = self.check_student(self.student_id, self.chatid)
                     await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
@@ -1248,8 +1235,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     self.menu_id = 1
                     bot_intance.adm_list.append(sid)
                     txt = banner_msg("Welcome " + self.username,"You are now connected to Mentor mode.")
-                    txt = msgout(txt)
-                    #if is_svcbot:
                     if self.super_admin:
                         self.menu_home = svcbot_menu
                     else:
@@ -1260,7 +1245,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     return
                 else:
                     txt = "Sorry your account is blocked, please contact the admin."
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     await self.logoff()
                     return
@@ -1268,51 +1252,44 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 self.list_courseids = []
                 txt = 'My name is OmniMentor, I am your friendly learning facilitator at ' + self.client_name + '.\n'
                 txt += "\nplease enter your student id or email address :"
-                txt = msgout(txt)
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([]))
                 self.menu_id = keys_dict[option_learners]
 
         elif self.menu_id == keys_dict[option_mainmenu]:
             if resp == option_fct :
                 txt = 'You are in faculty admin mode.'
-                txt = msgout(txt)
                 menu_item = faculty_menu.copy()
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
                 menu_item = []
                 self.menu_id = keys_dict[option_fct]
             elif resp == option_pb :
                 txt = 'You are in playbooks maintainence mode.'
-                txt = msgout(txt)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(playbook_menu))
                 self.menu_id = keys_dict[option_pb]
             elif resp == option_chat :
                 (status, info) = self.livechat()
                 if status == 2:
                     txt = 'Chat with online learners 🗣'
-                    txt = msgout(txt)
                     await self.bot.sendMessage(self.chatid, txt, reply_markup = info )
                     self.menu_id = keys_dict[option_chatlist]
                 else:
-                    txt = msgout(info)
+                    txt = info
                     await self.sender.sendMessage(txt)
             elif resp == option_analysis :
                 txt = "Let's take a look on the following courses."
-                txt = msgout(txt)
                 courseid_menu = build_menu([x for x in self.list_courseids],1)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(courseid_menu))
                 self.menu_id = keys_dict[opt_analysis]
             elif resp == option_bindadm:
                 txt += "\nDo you want me to activate auto-login without entering admin id each time ?"
-                txt = msgout(txt)
-                opt_yes = "Yes, " + msgout("enable auto-login")
-                opt_no = "No, " + msgout("I would like to login manually each time")
+                opt_yes = "Yes, " + "enable auto-login"
+                opt_no = "No, " + "I would like to login manually each time"
                 yesno_menu = build_menu([opt_yes,opt_no],1,option_back)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(yesno_menu))
                 txt = ""
                 self.menu_id = keys_dict[option_bind]
             elif resp == option_usermgmt:
                 txt = 'Please enter Student-ID or Email-Address or Username to search for details :'
-                txt = msgout(txt)
                 menu_item = users_menu.copy()
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
                 menu_item = []
@@ -1320,33 +1297,28 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             elif resp == option_admin:
                 if (chat_id in [adminchatid, developerid]) :
                     txt = 'You are in system admin mode'
-                    txt = msgout(txt)
                     menu_item = admin_menu.copy()
                     await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
                     menu_item = []
                     self.menu_id = keys_dict[option_admin]
                 else:
                     txt = 'This option is strickly for Sambaash admin.'
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
             elif (resp == option_back) or (resp == "0"):
                 tid = self.endchat()
                 if tid > 0:
                     txt = "Live chat session disconnected. 👋"
-                    txt = msgout(txt)
                     await self.bot.sendMessage(tid, txt)
                     await self.bot.sendMessage(chat_id, txt)
                 syslog("system : telegram user " + str(chat_id) + " offine.")
                 await self.logoff()
                 txt = "Session closed."
-                txt = msgout(txt)
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([[btn_hellobot]]))
 
         elif self.menu_id == keys_dict[option_learners] :
             if (resp == option_back) or (resp == "0"):
                 await self.logoff()
                 txt= "End of session."
-                txt = msgout(txt)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup([[btn_hellobot]]))
                 return
             if '@' in resp :
@@ -1364,7 +1336,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     result = rds_param("SELECT email FROM user_master " + condqry)
                     if result == "":
                         txt = "Sorry your account is not found, please contact the admin."
-                        txt = msgout(txt)
                         await self.sender.sendMessage(txt)
                         await self.logoff()
                         return
@@ -1377,7 +1348,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 cnt = int("0" + str(result))
                 if cnt == 0:
                     txt = "Sorry your account is not found, please contact the admin."
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     await self.logoff()
                     return
@@ -1385,7 +1355,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 df = rds_df(query)
                 if df is None:
                     txt = "Sorry your account is not found, please contact the admin."
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     await self.logoff()
                     return
@@ -1396,13 +1365,11 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 binded =  df.binded.values[0]
                 if binded == 1:
                     txt = "Sorry your account is binded by someone else, please contact the admin."
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     await self.logoff()
                     return
                 elif usertype not in [1, 11, 21]:
                     txt = "Sorry your account is blocked, please contact the admin."
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     await self.logoff()
                     return
@@ -1419,14 +1386,12 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     else:
                         self.menu_home = mentor_menu
                     txt = banner_msg("Welcome " + self.username,"You are now connected to Mentor mode.")
-                    txt = msgout(txt)
                     (self.list_courseids, self.list_coursename,self.course_selection) = self.find_course(0)
                     menu_item = self.menu_home.copy()
                     await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                     return
                 if sid in bot_intance.user_list:
                     txt = "Sorry you can't logon using another telegram account\nPlease try again later."
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     await self.logoff()
                     return
@@ -1436,7 +1401,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 self.student_id = sid
                 if (slen == 0) :
                     txt = "Sorry, we are not unable to find your record.\nPlease contact the course admin."
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     await self.logoff()
                     return
@@ -1448,19 +1412,16 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     self.load_tables() # it takes 9 seconds
                     if self.userdata is None:
                         txt = f"we do not have any data for course id\n{self.courseid}"
-                        txt = msgout(txt)
                         await self.sender.sendMessage(txt)
                         return
                     else:
                         txt = "Please wait for a while."
-                        txt = msgout(txt)
                         await self.sender.sendMessage(txt)
                         (txt, menu_item) = self.check_student(self.student_id, chat_id) # it takes 3 secs
                         await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
                 elif slen < 20:
                     btn_course_list = build_menu(stud_courselist, 1)
                     txt = "Please select the course id from below:"
-                    txt = msgout(txt)
                     await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(btn_course_list))
                     self.menu_id = keys_dict[option_learners]
                 else:
@@ -1471,16 +1432,13 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     course_list = [x for x in stud_courselist if x[-2:]==yrnow]
                     btn_course_list = build_menu(course_list, 1)
                     txt = "Please select the course id from below:"
-                    txt = msgout(txt)
                     await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(btn_course_list))
                     self.menu_id = keys_dict[option_learners]
             else:
                 if self.load_courseinfo(resp) == 0:
                     txt = 'Your selection is not available !\n'
                     txt += 'Please select the course from below list'
-                    txt = msgout(txt)
                     date_today = datetime.datetime.now().date()
-                    #yrnow = str(date_today.strftime('%Y'))
                     course_list = [x for x in self.list_courseids if resptxt in x.lower()]
                     btn_course_list  = build_menu(course_list, 1)
                     await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(btn_course_list))
@@ -1489,7 +1447,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     if self.student_id == 0 or self.chatid == 0 :
                         txt = 'My name is OmniMentor, I am your friendly learning facilitator at ' + self.client_name + '.\n'
                         txt += "\nplease enter your student id or email address :"
-                        txt = msgout(txt)
                         await self.bot.sendMessage(self.chatid, txt, [])
                         txt = ''
                         self.menu_id = keys_dict[lrn_start]
@@ -1497,7 +1454,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                         sid = self.student_id
                         ch_id = self.chatid
                         txt = "Please wait for a while."
-                        txt = msgout(txt)
                         await self.sender.sendMessage(txt)
                         (txt, menu_item) = self.check_student(sid, ch_id)
                         await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
@@ -1512,12 +1468,10 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 usertype = rds_param(f"SELECT usertype FROM user_master WHERE studentid={resp} and client_name ='{self.client_name}';")
                 if usertype==3:
                     txt = "Sorry your account is blocked, please contact the admin."
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     await self.logoff()
                 else:
                     txt = "Please wait for a while."
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     (txt, menu_item) = self.check_student(sid, chat_id)
                     await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
@@ -1533,14 +1487,11 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 course_list = [x for x in self.list_courseids ][:20]
                 btn_course_list = build_menu(course_list, 1)
                 txt = "Please select the course id from below:"
-                txt = msgout(txt)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(btn_course_list))
                 self.menu_id = keys_dict[option_mycourse]
             elif resp == option_faq:
                 txt = 'These are the FAQs :'
-                txt = msgout(txt)
                 faq_list = ft_model.faq_list
-                faq_list = [ msgout(x) for x in faq_list]
                 faq_menu = build_menu(faq_list,1,option_back,[])
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(faq_menu))
                 self.menu_id = keys_dict[option_faq]
@@ -1556,7 +1507,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     result += '\nContact : <a href=\"tg://user?id=' + str(self.chatid) + '">@' + self.chatname + '</a>'
                     bot_intance.user_list[ self.chatid ][4] = "👋"
                     try:
-                        result = msgout(result)
                         await bot.sendMessage(mentor_id,result,parse_mode='HTML')
                         retmsg = "Please wait, our faculty admin will connect with you on a live chat"
                     except:
@@ -1565,29 +1515,26 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 (status, info) = self.livechat()
                 if status == 2:
                     txt = 'Chat with online learners 🗣'
-                    txt = msgout(txt)
                     await self.bot.sendMessage(self.chatid, txt, reply_markup = info )
                     self.menu_id = keys_dict[option_chatlist]
                 else:
-                    txt = msgout(info)
+                    txt = info
                     await self.sender.sendMessage(txt)
             elif resp == option_mychart:
                 self.menu_id = keys_dict[lrn_student]
                 if self.student_id > 0:
                     (df,f) = self.mcqas_chart()
-                    if df is None:
+                    if f is None:
                         txt = "There is no data available for the chart."
                     else:
                         await self.bot.sendPhoto(chat_id, f)
                         txt = 'You are at the main menu.'
-                    txt = msgout(txt)
                     menu_item = self.menu_home.copy()
                     await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
             elif resp == option_binduser:
                 txt += "\nDo you want me to activate auto-login without entering student id each time ?"
-                txt = msgout(txt)
-                opt_yes = "Yes, " + msgout("enable auto-login")
-                opt_no = "No, " + msgout("I would like to login manually each time")
+                opt_yes = "Yes, " + "enable auto-login"
+                opt_no = "No, " + "I would like to login manually each time"
                 yesno_menu = build_menu([opt_yes,opt_no],1,option_back)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(yesno_menu))
                 txt = ""
@@ -1604,7 +1551,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         elif self.menu_id == keys_dict[option_mycourse] :
             if (resp == option_back) or (resp == "0"):
                 txt = "You are back to this cohort : " + self.courseid
-                txt = msgout(txt)
                 menu_item = self.menu_home.copy()
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                 self.menu_id = keys_dict[lrn_student]
@@ -1615,13 +1561,11 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 self.load_tables()
                 sid = self.student_id
                 txt = "Please wait for a while."
-                txt = msgout(txt)
                 await self.sender.sendMessage(txt)
                 (txt, menu_item) = self.check_student(self.student_id, chat_id)
                 if len(txt)>0:
                     await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
                 txt = "You are now with this cohort : " + self.courseid
-                txt = msgout(txt)
                 menu_item = self.menu_home.copy()
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                 self.menu_id = keys_dict[lrn_student]
@@ -1629,7 +1573,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             else:
                 btn_course_list = build_menu(self.list_courseids, 1)
                 txt = "Please select the course id from below:"
-                txt = msgout(txt)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(btn_course_list))
                 self.menu_id = keys_dict[option_mycourse]
                 self.new_session = True
@@ -1656,9 +1599,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             elif (resp == option_back) or (resp == "0"):
                 txt = "you are back to main menu"
             syslog(str(self.chatid) + " : " + txt)
-            txt = msgout(txt)
             if self.is_admin :
-                #if is_svcbot:
                 if self.super_admin:
                     menu_item = svcbot_menu.copy()
                 else:
@@ -1673,34 +1614,29 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         elif self.menu_id == keys_dict[option_fct]:
             if (resp == option_back) or (resp == "0"):
                 txt = 'Please select the following mode:'
-                txt = msgout(txt)
                 menu_item = self.menu_home.copy()
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                 self.menu_id = 1
             elif resp == fc_edxupdate :
                 txt = "LMS Import for which course ?"
-                txt = msgout(txt)
                 playbooklist_menu = [[x] for x in self.list_courseids]
                 playbooklist_menu.append([option_back])
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(playbooklist_menu))
                 self.menu_id = keys_dict[fc_edxupdate]
             elif resp == fc_schedule :
                 txt = "Schedule update for which course ?"
-                txt = msgout(txt)
                 playbooklist_menu = [[x] for x in self.list_courseids]
                 playbooklist_menu.append([option_back])
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(playbooklist_menu))
                 self.menu_id = keys_dict[fc_schedule]
             elif resp == fc_mentor:
                 txt = "This will assign mentors based on a list of course ids.\nSend me the list for course_id,mentor_email now:"
-                txt = msgout(txt)
                 await self.sender.sendMessage(txt)
                 self.menu_id = keys_dict[fc_mentor]
 
         elif self.menu_id == keys_dict[fc_schedule]:
             if resp in self.list_courseids:
                 txt = "Updating schedule now."
-                txt = msgout(txt)
                 await self.sender.sendMessage(txt)
                 vmedxlib.update_schedule(resp, self.client_name)
                 retmsg = f"Schedule for {resp} has been updated."
@@ -1708,7 +1644,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             elif (resp == '*') and self.super_admin :
                 job_request(self.chatid,self.client_name,"mass_update_schedule",None)
             txt = 'You are in faculty admin mode.'
-            txt = msgout(txt)
             menu_item = faculty_menu.copy()
             await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
             self.menu_id = keys_dict[option_fct]
@@ -1717,7 +1652,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             course_id = ""
             if (resp == option_back) or (resp == "0"):
                 txt = 'You are in faculty admin mode.'
-                txt = msgout(txt)
                 menu_item = faculty_menu.copy()
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                 self.menu_id = keys_dict[option_fct]
@@ -1731,16 +1665,13 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     course_id = course_list[0]
                 elif course_list == []:
                     txt = "There is no matching course_id found"
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                 else:
                     txt = "Which course_id should it be ?\n"
-                    txt = msgout(txt)
                     txt += '\n'.join(course_list)
                     await self.sender.sendMessage(txt)
             if course_id != "":
                 txt = "Running LMS import now."
-                txt = msgout(txt)
                 await self.sender.sendMessage(txt)
                 vmedxlib.edx_import(course_id, self.client_name)
                 qry = f"update playbooks set eoc=0 where course_id = '{course_id}' and client_name = '{self.client_name}';"
@@ -1748,7 +1679,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 retmsg = f"LMS import for {course_id} has been completed."
                 syslog(retmsg)
             txt = "you are back to the menu"
-            txt = msgout(txt)
             menu_item = faculty_menu.copy()
             await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
             self.menu_id = keys_dict[option_fct]
@@ -1772,21 +1702,18 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 retmsg = f"Total number of active courses = {n}"
             elif resp == pb_userdata:
                 txt = "Please select from below list\nYou can type the course_id/cohort_id directly\nEnter 0 to return back"
-                txt = msgout(txt)
                 playbooklist_menu = [[x] for x in self.list_courseids]
                 playbooklist_menu.append([option_back])
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(playbooklist_menu))
                 self.menu_id = keys_dict[pb_userdata]
             elif resp == pb_riskuser:
                 txt = "Generate report for which course ?"
-                txt = msgout(txt)
                 playbooklist_menu = [[x] for x in self.list_courseids]
                 playbooklist_menu.append([option_back])
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(playbooklist_menu))
                 self.menu_id = keys_dict[pb_riskuser]
             elif (resp == option_back) or (resp == "0"):
                 txt = 'Please select the following mode:'
-                txt = msgout(txt)
                 menu_item = self.menu_home.copy()
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                 self.menu_id = 1
@@ -1812,10 +1739,8 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     #df.columns = ['courseid','studentid','username','risk_level','mcq_pending','mcq_failed','assignment_pending','assignment_failed']
                     df.columns = ['courseid','studentid','username','risk_level','mcq_pending','mcq_failed','assignment_pending','assignment_failed','absent']
                     title=f"Learners at risk - dated {dt_str}"
-                    title = msgout(title)
                     write2html(df, title=title, filename=fn)
                     await bot.sendDocument(chat_id, document=open(fn, 'rb'))
-            txt = msgout(txt)
             await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(playbook_menu))
             return
 
@@ -1836,7 +1761,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
 
         elif self.menu_id == keys_dict[pb_userdata]:
             txt = "Please wait for a moment"
-            txt = msgout(txt)
             await self.sender.sendMessage(txt)
             if self.load_courseinfo(resp) == 1:
                 self.courseid = resp
@@ -1847,7 +1771,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     self.stagetable = None
             elif (resp == option_back) or (resp == "0"):
                 txt = 'You are in playbook maintainence mode.'
-                txt = msgout(txt)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(playbook_menu))
                 self.menu_id = keys_dict[option_pb]
             else:
@@ -1855,7 +1778,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 txt = rds_param(qry)
                 if txt == "":
                     txt = 'You are in playbook maintainence mode.'
-                    txt = msgout(txt)
                     await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(playbook_menu))
                     self.menu_id = keys_dict[option_pb]
                 else:
@@ -1878,11 +1800,9 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 else:
                     df.columns = ['stud#','username','email','stage']
                     title = "List of learners from " + self.courseid
-                    title = msgout(title)
                     html_msg_dict[title] = html_report(df, df.columns, [5,20,25,9], 30)
                     n = len(df)
                     retmsg = f"Total number of active learners = {n}"
-                    retmsg = msgout(retmsg)
                     html_msg_trans = False
             elif resp == ps_schedule :
                 if (self.stagetable is None) or ( len(self.stagetable)==0):
@@ -1890,7 +1810,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 else:
                     df = self.stagetable
                     title = "Course Schedule for :\n" + self.courseid
-                    title = msgout(title)
                     msg = stage_calendar(df)
                     html_msg_dict[ title ] = [ msg ]
                     html_msg_trans = False
@@ -1899,7 +1818,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     retmsg = "The unit guides information is not available"
                 else:
                     title = "Unit guides for " + self.courseid
-                    title = msgout(title)
                     cols = ['stage', 'name', 'mcq', 'assignment']
                     df = self.stagetable[cols]
                     if len(df)==0:
@@ -1912,7 +1830,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     retmsg = "Learners information is not available"
                 else:
                     title = "Learners with MCQ test pending for " + self.courseid
-                    title = msgout(title)
                     cols = ['studentid', 'username', 'stage', 'mcq_zero']
                     df = self.userdata[cols]
                     df = df[df.mcq_zero!='[]']
@@ -1923,14 +1840,12 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                         df['mcq_zero'] = df.apply(lambda x: str(x['mcq_zero']).replace(' ',''), axis=1)
                         html_msg_dict[title] = html_report(df, cols, [10, 15, 10, 40], 8)
                         retmsg = f"Total number of learners = {n}"
-                        retmsg = msgout(retmsg)
                         html_msg_trans = False
             elif resp == ps_mcqfailed:
                 if self.userdata is None:
                     retmsg = "Learners information is not available"
                 else:
                     title = "Learners with MCQ test failed for " + self.courseid
-                    title = msgout(title)
                     cols = ['studentid', 'username', 'stage', 'mcq_failed']
                     df = self.userdata[cols]
                     df = df[df.mcq_failed!='[]']
@@ -1941,14 +1856,12 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                         df['mcq_failed'] = df.apply(lambda x: str(x['mcq_failed']).replace(' ',''), axis=1)
                         html_msg_dict[title] = html_report(df, cols,  [10, 15, 10, 40], 8)
                         retmsg = f"Total number of learners = {n}"
-                        retmsg = msgout(retmsg)
                         html_msg_trans = False
             elif resp == ps_aszero:
                 if self.userdata is None:
                     retmsg = "Learners information is not available"
                 else:
                     title = "Learners with Assignment test pending for " + self.courseid
-                    title = msgout(title)
                     cols = ['studentid', 'username', 'stage', 'as_zero']
                     df = self.userdata[cols]
                     df = df[df.as_zero!='[]']
@@ -1959,14 +1872,12 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                         df['as_zero'] = df.apply(lambda x: str(x['as_zero']).replace(' ',''), axis=1)
                         html_msg_dict[title] = html_report(df, cols,  [10, 15, 10, 40], 8)
                         retmsg = f"Total number of learners = {n}"
-                        retmsg = msgout(retmsg)
                         html_msg_trans = False
             elif resp == ps_asfailed:
                 if self.userdata is None:
                     retmsg = "Learners information is not available"
                 else:
                     title = "Learners with Assignment test failed for " + self.courseid
-                    title = msgout(title)
                     cols = ['studentid', 'username', 'stage', 'as_failed']
                     df = self.userdata[cols]
                     df = df[df.as_failed!='[]']
@@ -1977,7 +1888,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                         df['as_failed'] = df.apply(lambda x: str(x['as_failed']).replace(' ',''), axis=1)
                         html_msg_dict[title] = html_report(df, cols, [10, 15, 10, 40], 8)
                         retmsg = f"Total number of learners = {n}"
-                        retmsg = msgout(retmsg)
                         html_msg_trans = False
             elif resp == ps_progress:
                 if self.stagetable is None:
@@ -1994,19 +1904,16 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                         sid_list = sorted([str(x) for x in df.studentid])
                         btn_list = build_menu( sid_list, 6, option_back, [])
                         txt = "Select a valid student id to see the progress :"
-                        txt = msgout(txt)
                         await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(btn_list))
                         self.menu_id = keys_dict[ps_progress]
             elif (resp == option_back) or (resp == "0"):
                 txt = 'You are in playbooks maintainence mode.'
-                txt = msgout(txt)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(playbook_menu))
                 self.menu_id = keys_dict[option_pb]
 
         elif self.menu_id == keys_dict[ps_progress] :
             if (resp == option_back) or (resp == "0"):
                 txt = 'Please select the following :'
-                txt = msgout(txt)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(course_menu))
                 self.menu_id = keys_dict[opt_pbusr]
             else:
@@ -2017,24 +1924,26 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 tlist = txt.split('\n')
                 uname = self.records['username']
                 txt = '\n'.join(tlist[1:])
-                txt = msgout(txt)
-                txt = msgout("Hi") + ", " + uname + " !\n" + txt
+                txt = "Hi" + ", " + uname + " !\n" + txt
                 await self.sender.sendMessage(txt)
                 title = "Reminder (T-1) and intervention messages"
-                title = msgout(title)
                 txt = vars['reminder']
                 tlist = txt.split('\n')
                 txt1 = '\n'.join(tlist[1:])
                 txt = vars['intervention']
                 tlist = txt.split('\n')
                 txt2 = '\n'.join(tlist[1:])
-                html_msg_dict[title] = [ msgout(txt1), msgout(txt2) ]
+                mcqvars = vars['mcqvars']
+                txt = learner_progress(vars, mcqvars, bot_intance.pass_rate,"mcq","MCQ")
+                asvars = vars['asvars']
+                txt += learner_progress(vars, mcqvars, bot_intance.pass_rate,"as","Assignment")
+                html_msg_dict[title] = [ txt1, txt2 ]
                 html_msg_trans = False
+                retmsg = txt
 
         elif self.menu_id == keys_dict[opt_analysis]:
             if (resp == option_back) or (resp == "0"):
                 txt = 'Please select the following mode:'
-                txt = msgout(txt)
                 menu_item = self.menu_home.copy()
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                 self.menu_id = 1
@@ -2042,35 +1951,19 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 self.courseid = resp
                 if self.userdata is None:
                     txt = "Sorry, there is not enough data for analytics for this course"
-                    txt = msgout(txt)
                     menu_item = self.menu_home.copy()
                     await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                     self.menu_id = 1
                 else:
                     txt = 'Please select the following mode:'
-                    txt = msgout(txt)
                     menu_item = analysis_menu.copy()
                     await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
                     self.menu_id = keys_dict[option_analysis]
             else:
-                #newlist = [[x] for x in self.list_courseids if resptxt in x.lower()]
-                #if len(newlist)==0:
-                #    txt = 'Please select the following mode:'
-                #    txt = msgout(txt)
-                #    menu_item = self.menu_home.copy()
-                #    await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
-                #    self.menu_id = 1
-                #else:
-                #    txt = "Please select from the list of course id below:"
-                #    txt = msgout(txt)
-                #    btn_list = build_menu([x for x in self.list_courseids if resptxt in x.lower()],1)
-                #    await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(btn_list))
-                #    return
                 qry = f"select course_id from playbooks where client_name = '{self.client_name}' and course_id like '%{resp}%' limit 1;"
                 txt = rds_param(qry)
-                if txt == "": 
+                if txt == "":
                     txt = 'Please select the following mode:'
-                    txt = msgout(txt)
                     menu_item = self.menu_home.copy()
                     await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                     self.menu_id = 1
@@ -2078,7 +1971,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     self.courseid = txt
                     self.load_tables()
                     txt = 'Please select the following mode:'
-                    txt = msgout(txt)
                     menu_item = analysis_menu.copy()
                     await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
                     self.menu_id = keys_dict[option_analysis]
@@ -2086,7 +1978,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         elif self.menu_id == keys_dict[option_analysis]:
             if (resp == option_back) or (resp == "0"):
                 txt = 'Please select the following mode:'
-                txt = msgout(txt)
                 menu_item = self.menu_home.copy()
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                 self.menu_id = 1
@@ -2095,84 +1986,71 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 df.columns = ['Student ID#','Name', 'Prediction']
                 n = len(sid_list)
                 title = "AI Grading for " + self.courseid
-                title = msgout(title)
                 html_msg_dict[title] = html_report(df, df.columns, [10, 15, 10], 20)
                 btn_list = build_menu( sid_list, 6, option_back, [])
                 self.records['progress_sid'] = sid_list
                 n = len(sid_list)
                 txt = f"total {n} learners in the list.\nSelect the student id to see the progress :"
-                txt = msgout(txt)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(btn_list))
                 self.menu_id = keys_dict[opt_aig]
                 retmsg = f"Total number of learners = {n}"
-                retmsg = msgout(retmsg)
                 html_msg_trans = False
             elif resp == an_mcq:
                 (tbl1,tbl2,tbl3,n) = analyze_cohort(self.courseid, self.userdata, self.bot, self.chatid)
-                #if (tbl1 == []) or (tbl2 == []) or (tbl3 == []):
                 if (tbl1 == []) or (tbl2 + tbl3 == []):
                     txt = "There is no information available at the moment"
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     return
 
                 html_msg_trans = False
                 title  = "Assignment & MCQ Score Summary for\n" + self.courseid
-                title = msgout(title)
                 df =  pd.DataFrame( tbl1 )
                 df.columns = ['MCQ Test #', 'Average Score' , 'Assignment Test #', 'Average Score']
                 html_msg_dict[title] = html_report(df, df.columns, [15,15,15,15], 20)
 
                 if tbl2 != []:
                     title  = "MCQ Grouping for " + self.courseid
-                    title = msgout(title)
                     df =  pd.DataFrame( tbl2 )
                     df.columns = ['Grouping']
                     html_msg_dict[title] = html_report(df, df.columns, [120], 28)
 
                 if tbl3 != []:
                     title  = "Assignment Grouping for " + self.courseid
-                    title = msgout(title)
                     df =  pd.DataFrame( tbl3 )
                     df.columns = ['Grouping']
                     html_msg_dict[title] = html_report(df, df.columns, [120], 28)
 
                 retmsg = f"Total number of learners = {n}"
-                retmsg = msgout(retmsg)
             elif resp == an_mcqd:
                 txt = "MCQ Difficulty Analysis by:"
-                txt = msgout(txt)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(mcqdiff_menu))
                 self.menu_id = keys_dict[opt_mcqd]
             elif resp == an_chart:
                 (df,f) = self.mcqas_chart(True)
-                if df is None:
+                if f is None:
                     retmsg = "There is no data available for the chart."
-                    retmsg = msgout(retmsg)
                 else:
                     await self.bot.sendPhoto(chat_id, f)
-                    df.columns = ['Test/IU','mcq test','assignment test']
-                    cohort_id = piece(piece(self.courseid,':',1),'+',1)
-                    title = f"MCQ and Assignment scores for cohort {cohort_id}"
-                    title = msgout(title)
-                    html_msg_dict[title] = html_report(df, df.columns, [10, 10, 10], 15)
-                    html_msg_trans = False
+                    if df is not None:
+                        df.columns = ['Test/IU','mcq test','assignment test']
+                        cohort_id = piece(piece(self.courseid,':',1),'+',1)
+                        title = f"MCQ and Assignment scores for cohort {cohort_id}"
+                        html_msg_dict[title] = html_report(df, df.columns, [10, 10, 10], 15)
+                        html_msg_trans = False
 
         elif self.menu_id == keys_dict[opt_mcqd]:
             if (resp == option_back) or (resp == "0"):
                 txt = 'Please select the following mode:'
-                txt = msgout(txt)
                 menu_item = analysis_menu.copy()
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
                 self.menu_id = keys_dict[option_analysis]
-            elif resp == an_avgatt: 
+            elif resp == an_avgatt:
                 mcq_analysis.load_mcqdata(self.client_name, self.courseid)
                 df = mcq_analysis.top10attempts()
                 if df is None:
                     retmsg = 'There is no data for this course.'
                 else:
                     title = "MCQ Analysis Difficulty By MCQ Attempts"
-                    title = msgout(title)
                     cols = ['MCQ No. Question No.', 'Average Attempts']
                     df =  df[cols]
                     html_msg_dict[title] = html_report(df, cols, [25,18], 10)
@@ -2184,7 +2062,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     retmsg = 'There is no data for this course.'
                 else:
                     title = "MCQ Analysis Difficulty By MCQ Scores"
-                    title = msgout(title)
                     cols = ['MCQ No. Question No.', 'Average Score %', 'Average Attempts']
                     df = df[cols]
                     html_msg_dict[title] = html_report(df, df.columns, [25,18,18], 10)
@@ -2202,16 +2079,15 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 else:
                     df.columns = get_columns("mcq_data")
                     mcq_list = [x for x in df.mcq]
-                    sorted_list = sorted(list(set([int(x) for x in mcq_list]))) 
+                    sorted_list = sorted(list(set([int(x) for x in mcq_list])))
                     mcq_list = [str(x) for x in sorted_list ] + [option_back]
                     m = int((len(mcq_list)+4)/5)
                     mcq_menu = [  mcq_list[n*5:][:5] for n in range(m) ]
                     txt = "Please select from the list of MCQs below:"
-                    txt = msgout(txt)
                     await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(mcq_menu))
                     self.menu_id = keys_dict[opt_mcqavg]
 
-        elif self.menu_id == keys_dict[opt_mcqavg]: 
+        elif self.menu_id == keys_dict[opt_mcqavg]:
             if resp.isnumeric() :
                 mcq_analysis.load_mcqdata(self.client_name, self.courseid)
                 df = mcq_analysis.mcq_summary(int(resp))
@@ -2219,13 +2095,11 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     retmsg = 'There is no data for this course.'
                 else:
                     title = f"MCQ Analysis Difficulty By MCQ Average for MCQ Test {resp}"
-                    title = msgout(title)
                     html_msg_dict[title] = html_report(df, df.columns, [10, 18, 18], 20)
                     html_msg_trans = False
             elif (resp == option_back) or (resp == "0"):
                 self.menu_id = keys_dict[opt_mcqd]
                 txt = "MCQ Difficulty Analysis by:"
-                txt = msgout(txt)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(mcqdiff_menu))
 
         elif self.menu_id == keys_dict[opt_aig]:
@@ -2237,7 +2111,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 html_msg_trans = False
             elif (resp == option_back) or (resp == "0"):
                 txt = 'Select your option:'
-                txt = msgout(txt)
                 menu_item = analysis_menu.copy()
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
                 self.menu_id = keys_dict[option_analysis]
@@ -2246,7 +2119,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         elif self.menu_id ==  keys_dict[option_usermgmt]:
             if (resp == option_back) or (resp == "0"):
                 txt = "You are back to the main menu."
-                txt = msgout(txt)
                 menu_item = self.menu_home.copy()
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                 self.menu_id = keys_dict[option_mainmenu]
@@ -2254,22 +2126,18 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             if resp.isnumeric():
                 sid = int(resp)
                 txt = self.userinfo(sid)
-                txt = msgout(txt)
                 menu_item = useraction_menu.copy()
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
             elif resp == option_searchbyname:
                 txt = "Search Student-ID by name"
-                txt = msgout(txt)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup([[option_back]]))
                 self.menu_id = keys_dict[option_searchbyname]
             elif resp == option_searchbyemail:
                 txt = "Search Student-ID by email"
-                txt = msgout(txt)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup([[option_back]]))
                 self.menu_id = keys_dict[option_searchbyemail]
             elif resp == option_resetuser:
                 txt = "Please enter valid Student-ID :"
-                txt = msgout(txt)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup([[option_back]]))
                 self.menu_id = keys_dict[option_resetuser]
             elif resp == option_admin_users:
@@ -2278,11 +2146,10 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 df = rds_df(query)
                 if df is None:
                     txt = "Sorry, no results found."
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     return
                 df.columns = ['studentid','username','email']
-                title = msgout(result)
+                title = result
                 html_msg_dict[title] = html_report(df, df.columns, [10,30,40], 25)
                 html_msg_trans = False
             elif resp == option_blocked_users:
@@ -2291,11 +2158,10 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 df = rds_df(query)
                 if df is None:
                     txt = "Sorry, no results found."
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     return
                 df.columns = ['studentid','username','email']
-                title = msgout(result)
+                title = result
                 html_msg_dict[title] = html_report(df, df.columns, [10,30,40], 25)
                 html_msg_trans = False
             elif resp == option_binded_users :
@@ -2306,11 +2172,10 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 df = rds_df(query)
                 if df is None:
                     txt = "Sorry, no results found."
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     return
                 df.columns = ['studentid','username','email','chat_id']
-                title = msgout(result)
+                title = result
                 html_msg_dict[title] = html_report(df, df.columns, [10,30,40,20], 25)
                 html_msg_trans = False
             elif resp == option_active_users :
@@ -2319,16 +2184,14 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 df = rds_df(query)
                 if df is None:
                     txt = "Sorry, no results found."
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     return
                 df.columns = ['studentid','username','email','chat_id']
-                title = msgout(result)
+                title = result
                 html_msg_dict[title] = html_report(df, df.columns, [10,30,40,20], 25)
                 html_msg_trans = False
             elif resp == option_whitelist :
                 txt = "Let's take a look on the following courses."
-                txt = msgout(txt)
                 courseid_menu = build_menu([x for x in self.list_courseids],1)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(courseid_menu))
                 self.menu_id = keys_dict[option_whitelist]
@@ -2338,13 +2201,11 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 df = rds_df(query)
                 if df is None:
                     txt = "Search Student-ID by email"
-                    txt = msgout(txt)
                     await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup([[option_back]]))
                     self.menu_id = keys_dict[option_searchbyemail]
                     return
                 df.columns = ['studentid','username','email']
                 title = "Email search matching " + resp + "\n"
-                title = msgout(title)
                 html_msg_dict[title] = html_report(df, df.columns, [10,30,40], 20)
                 html_msg_trans = False
             else:
@@ -2352,20 +2213,17 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 df = rds_df(query)
                 if df is None:
                     txt = "Search Student-ID by email"
-                    txt = msgout(txt)
                     await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup([[option_back]]))
                     self.menu_id = keys_dict[option_searchbyemail]
                     return
                 df.columns = ['studentid','username','email']
                 title = "Name title matching " + resp + "\n"
-                title = msgout(title)
                 html_msg_dict[title] = html_report(df, df.columns, [10,30,40], 20)
                 html_msg_trans = False
 
         elif self.menu_id in [keys_dict[option_searchbyname],keys_dict[option_searchbyemail]] :
             if (resp == option_back) or (resp == "0"):
                 txt = "You are back to the user management menu."
-                txt = msgout(txt)
                 menu_item = users_menu.copy()
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
                 self.menu_id = keys_dict[option_usermgmt]
@@ -2380,19 +2238,17 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             df = rds_df(query)
             if df is None:
                 txt = "Search Student-ID by name"
-                txt = msgout(txt)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup([[option_back]]))
                 self.menu_id = keys_dict[option_searchbyname]
                 return
             df.columns = ['studentid','username','email']
-            title = msgout(result)
+            title = result
             html_msg_dict[title] = html_report(df, df.columns, [10,30,40], 20)
             html_msg_trans = False
- 
+
         elif self.menu_id == keys_dict[option_resetuser]:
             if (resp == option_back) or (resp == "0"):
                 txt = "You are back to the user management menu."
-                txt = msgout(txt)
                 menu_item = users_menu.copy()
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
                 self.menu_id = keys_dict[option_usermgmt]
@@ -2401,7 +2257,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             if resp.isnumeric():
                 sid = int(resp)
                 txt = self.userinfo(sid)
-                txt = msgout(txt)
                 menu_item = useraction_menu.copy()
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
             elif resp == opt_blockuser:
@@ -2429,23 +2284,31 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     query = f"update user_master set email = '{resp}' where client_name = '{self.client_name}' and studentid = {self.student_id};"
                     rds_update(query)
                     txt = f"Email address for Student-ID {self.student_id} has been set to "
-                    retmsg = msgout(txt) + resp
+                    retmsg = txt + resp
                 self.menu_id = bot_intance.keys_dict[option_resetuser]
 
         elif self.menu_id == keys_dict[option_whitelist]:
             if resp in self.list_courseids:
                 txt = "Please wait for a moment."
-                txt = msgout(txt)
                 await self.sender.sendMessage(txt)
-                query = f"update user_master set usertype = 1 where client_name = '{self.client_name}' "
+                query = f"select studentid FROM user_master where client_name = '{self.client_name}' "
                 query += ''.join([ " and lower(email) not like '%" + x + "'"  for x in bot_intance.efilter])
-                query += f"AND studentid IN (select studentid FROM userdata WHERE client_name = '{self.client_name}' "
-                query += f"AND courseid = '{resp}');"
-                rds_update(query)
-                txt = "Learners has been whitelisted for course_id : " + resp
+                query += f" AND studentid IN (select studentid FROM userdata WHERE client_name = '{self.client_name}' "
+                query += f" AND courseid = '{resp}');"
+                df = rds_df(query)
+                if df is not None:
+                    if len(df)>0:
+                        df.columns = ['studentid']
+                        slist = ','.join([ str(x) for x in df.studentid ])
+                        query = f"update user_master set usertype = 1 where client_name = '{self.client_name}' and studentid IN ({slist});"
+                        try:
+                            rds_update(query)
+                            txt = "Learners has been whitelisted for course_id : " + resp
+                        except:
+                            syslog("unable to whitelist users")
+                            txt = "Unable to whitelist for course_id : " + resp
             else:
                 txt = "You are back to the user management menu."
-            txt = msgout(txt)
             menu_item = users_menu.copy()
             await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
             self.menu_id = keys_dict[option_usermgmt]
@@ -2455,40 +2318,34 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 txt = "This section maintain NLP corpus and trains model.\n"
                 txt += "You can test your NLP dialog from here."
                 txt = banner_msg("NLP", txt)
-                txt = msgout(txt)
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(nlp_menu))
                 self.menu_id = keys_dict[option_nlp]
             elif resp == option_ml :
                 txt = 'You are in ML options.'
-                txt = msgout(txt)
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(ml_menu))
                 self.menu_id = keys_dict[option_ml]
             elif resp == option_restful:
                 self.records['cid'] = ""
                 self.records['sid'] = 0
                 txt = 'You are in restful api menu.'
-                txt = msgout(txt)
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(rest_menu))
                 self.menu_id = keys_dict[option_restful]
             elif resp == option_alerts:
                 txt = "You are in the system alerts menu"
-                txt = msgout(txt)
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(alerts_menu))
                 self.menu_id = keys_dict[option_alerts]
             elif resp == option_syscfg:
                 txt = "You are in the system configuration"
-                txt = msgout(txt)
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(syscfg_menu))
                 self.menu_id = keys_dict[option_syscfg]
             elif resp == option_datacheck:
                 txt = "You are in the data integrity check menu"
-                txt = msgout(txt)
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(datacheck_menu))
                 self.menu_id = keys_dict[option_datacheck]
             elif resp == option_export :
                 fn = "omdata.xlsx"
                 try:
-                    writer = pd.ExcelWriter(fn) 
+                    writer = pd.ExcelWriter(fn)
                     for tbl in ['course_module','module_iu','playbooks', 'stages_master', "stages"]:
                         qry = f"select * from {tbl} where client_name = '{self.client_name}';"
                         df = rds_df(qry)
@@ -2506,7 +2363,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     retmsg = "Unable to export to excel file for some reason"
             elif resp == option_back :
                 txt = 'Please select the following mode:'
-                txt = msgout(txt)
                 menu_item = self.menu_home.copy()
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                 self.menu_id = 1
@@ -2514,27 +2370,23 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         elif self.menu_id == keys_dict[option_syscfg]:
             if (resp == option_back) or (resp == "0"):
                 txt = "You are back in the system admin menu"
-                txt = msgout(txt)
                 menu_item = admin_menu.copy()
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                 self.menu_id = keys_dict[option_admin]
             elif resp == option_cfg_playbooks:
                 txt = "View playbook for which course ?"
-                txt = msgout(txt)
                 playbooklist_menu = [[x] for x in self.list_courseids]
                 playbooklist_menu.append([option_back])
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(playbooklist_menu))
                 self.menu_id = keys_dict[option_cfg_playbooks]
             elif resp == option_cfg_stagesmaster:
                 txt = "View stages_master for which course ?"
-                txt = msgout(txt)
                 playbooklist_menu = [[x] for x in self.list_courseids]
                 playbooklist_menu.append([option_back])
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(playbooklist_menu))
                 self.menu_id = keys_dict[option_cfg_stagesmaster]
             elif resp == option_cfg_module_iu:
                 txt = "View module_iu for which course ?"
-                txt = msgout(txt)
                 playbooklist_menu = [[x] for x in self.list_courseids]
                 playbooklist_menu.append([option_back])
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(playbooklist_menu))
@@ -2547,7 +2399,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             df = rds_df(qry)
             if df is not None:
                 df.columns = cols
-                title = msgout(title)
                 txt=""
                 for c in cols:
                     x = list(df[c])[0]
@@ -2555,7 +2406,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 html_msg_trans = False
                 html_msg_dict[title] = [txt]
             txt = "You are back in the system config menu"
-            txt = msgout(txt)
             menu_item = syscfg_menu.copy()
             await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
             self.menu_id = keys_dict[option_syscfg]
@@ -2569,7 +2419,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             df = rds_df(qry)
             if df is not None:
                 df.columns = get_columns('stages_master')
-                title = msgout(title)
                 txt=""
                 for c in cols:
                     x = list(df[c])[0]
@@ -2585,7 +2434,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 txt3 = html_report(df1, cols1, [2,5,4,30,40], 30)
                 html_msg_dict[title] = [txt] + txt1 + txt2 + txt3
             txt = "You are back in the system config menu"
-            txt = msgout(txt)
             menu_item = syscfg_menu.copy()
             await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
             self.menu_id = keys_dict[option_syscfg]
@@ -2600,7 +2448,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             df = rds_df(qry)
             if df is not None:
                 df.columns = get_columns('module_iu')
-                title = msgout(title)
                 txt=""
                 for c in cols[:4]:
                     x = list(df[c])[0]
@@ -2613,7 +2460,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 txt2 = html_report(df1, cols1, [2,3,13,10,13,18], 30)
                 html_msg_dict[title] = [txt] + txt1 + txt2
             txt = "You are back in the system config menu"
-            txt = msgout(txt)
             menu_item = syscfg_menu.copy()
             await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
             self.menu_id = keys_dict[option_syscfg]
@@ -2621,7 +2467,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
 
         elif self.menu_id == keys_dict[option_nlp]:
             txt = "Information not available"
-            txt = msgout(txt)
             if resp == nlp_dict :
                 f=html_tbl("", "dictionary", "DICTIONARY TABLE", "dictionary.html")
                 if f is None:
@@ -2665,33 +2510,28 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     retmsg = "NLP model using the corpus table was not trained properly"
             elif (resp == option_back) or (resp == "0"):
                 txt = "You are back in the main menu"
-                txt = msgout(txt)
                 menu_item = admin_menu.copy()
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                 self.menu_id = keys_dict[option_admin]
- 
+
         elif self.menu_id == keys_dict[option_ml]:
             txt = "The section handle all the machine learning related processes."
-            txt = msgout(txt)
             await self.sender.sendMessage(txt)
             if resp == ml_data :
                 f=html_tbl(self.client_name, "mcqas_info", "ML Model Data", "mcqas_info.html")
                 if f is None:
                     txt = "Information not available"
-                    txt = msgout(txt)
                     await self.bot.sendMessage( chat_id, txt )
                 else:
                     await self.bot.sendDocument(chat_id, document=f)
             elif resp == ml_pipeline :
                 txt = 'please wait for a moment.'
-                txt = msgout(txt)
                 await self.bot.sendMessage( chat_id, txt )
                 vmedxlib.generate_mcq_as(self.client_name)
                 retmsg = 'Job completed.'
             elif resp == ml_report :
                 retmsg = "Generating profiler report for quick data analysis."
                 txt = 'please wait for a moment.'
-                txt = msgout(txt)
                 await self.bot.sendMessage( chat_id, txt )
                 fn="mcqas_info.html"
                 #if profiler_report(self.client_name, fn)==1:
@@ -2705,15 +2545,12 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 await bot.sendPhoto(self.chatid, f)
             elif resp == ml_train :
                 txt = 'please wait for a moment.'
-                txt = msgout(txt)
                 await self.bot.sendMessage( chat_id, txt )
                 retmsg = dt_model.train_model(self.client_name, "dt_model.bin")
                 txt = 'model has been retrained.'
-                txt = msgout(txt)
                 await self.bot.sendMessage( chat_id, txt )
             elif (resp == option_back) or (resp == "0"):
                 txt = "You are back in the main menu"
-                txt = msgout(txt)
                 menu_item = admin_menu.copy()
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                 self.menu_id = keys_dict[option_admin]
@@ -2726,17 +2563,14 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             edx_api_header = vmedxlib.edx_api_header
             if (resp in [rest_sms, rest_grad, rest_mcq, rest_ass, rest_cal]) and (cid==""):
                 txt = "Please select the course id before calling the api."
-                txt = msgout(txt)
                 await self.bot.sendMessage(self.chatid, txt)
                 return
             if (resp in [rest_sms, rest_grad, rest_mcq, rest_ass]) and (sid==0):
                 txt = "Please select the student id for generating the student id listing."
-                txt = msgout(txt)
                 await self.bot.sendMessage(self.chatid, txt)
                 return
             if (resp == option_back) or (resp == "0"):
                 txt = 'You are in back to admin menu.'
-                txt = msgout(txt)
                 menu_item = admin_menu.copy()
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                 self.menu_id = keys_dict[option_admin]
@@ -2754,12 +2588,10 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 sid_list = sorted([str(x) for x in df.studentid])
                 btn_list = build_menu( sid_list, 6, option_back, [])
                 txt = "Select a valid student id to see the progress :"
-                txt = msgout(txt)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(btn_list))
                 self.menu_id = keys_dict[rest_sid]
             elif resp == rest_cid :
                 txt = "Let's take a look on the following courses."
-                txt = msgout(txt)
                 courseid_menu = build_menu([x for x in self.list_courseids],1)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(courseid_menu))
                 self.menu_id = keys_dict[rest_cid]
@@ -2767,7 +2599,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 stage_list = vmedxlib.get_google_calendar(cid, cname)
                 if stage_list==[]:
                     txt = "Calendar information is not available"
-                    txt = msgout(txt)
                     await self.bot.sendMessage(self.chatid, txt)
                 txt = ""
                 for x in stage_list:
@@ -2780,17 +2611,17 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 df = vmedxlib.sms_df(cid, sid)
                 if df is None:
                     txt = "The attendance api returns nothing."
-                    retmsg = msgout(txt)
+                    retmsg = txt
                 else:
                     lecturer = df.account_name.values[0]
                     class_code = df.class_code.values[0]
                     cohort_code = df.class_cohort_code.values[0]
                     remarks = df.class_remarks.values[0]
                     txt = ""
-                    txt += f"Lecturer = {lecturer}\n" 
-                    txt += f"class_code = {class_code}\n" 
-                    txt += f"class_cohort_code = {cohort_code}\n" 
-                    txt += f"class_remarks = {remarks}\n" 
+                    txt += f"Lecturer = {lecturer}\n"
+                    txt += f"class_code = {class_code}\n"
+                    txt += f"class_cohort_code = {cohort_code}\n"
+                    txt += f"class_remarks = {remarks}\n"
                     date_list = vmedxlib.sms_datelist(df)
                     dlist = [ x.strftime('%d/%m/%Y') for x in date_list ]
                     txt += f"List of attendance date matching to stages table:\n"
@@ -2806,11 +2637,10 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     df['Attended'] = df.apply(lambda x: str(x['attendance_type_desc']), axis=1)
                     df['Status'] = df.apply(lambda x: str(x['status_desc']), axis=1)
                     df['Stages'] = df.apply(lambda x: str(x['class_type_code']), axis=1)
-                    cols = ['Stages', 'Status', 'Attended', 'Date', 'timetable_day' ] 
+                    cols = ['Stages', 'Status', 'Attended', 'Date', 'timetable_day' ]
                     df1 = df[cols]
                     title = f"SMS Attendances for {cohort_code} student# {sid}"
-                    title = msgout(title)
-                    html_msg_dict[title] = [ txt ] + html_report(df1, cols, [10, 10, 10, 12, 8], 20) 
+                    html_msg_dict[title] = [ txt ] + html_report(df1, cols, [10, 10, 10, 12, 8], 20)
                     html_msg_trans = False
             elif resp == rest_grad :
                 url = f"{edx_api_url}/user/fetch/grades/list/{sid}"
@@ -2827,15 +2657,13 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                             txt += f"student_id : {stud}\ngrade : {grade}\n"
                         if txt == "":
                             txt = "No information received from the api"
-                        txt = msgout(txt)
                         await self.bot.sendMessage(self.chatid, txt)
                         found = 1
                 if found==0:
                     txt = "Sorry, no results found."
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
             elif resp == rest_mcq :
-                url = f"{edx_api_url}/user/fetch/mcq/scores/list/{sid}" 
+                url = f"{edx_api_url}/user/fetch/mcq/scores/list/{sid}"
                 resp = requests.post(url, data=cid, headers=edx_api_header, verify=False)
                 found = 0
                 if resp.status_code==200:
@@ -2844,11 +2672,10 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                         found = 1
                         result = json.loads(data)
                         title = f"MCQ Scores for {cid}"
-                        txt = msgout(txt)
                         hdr = "IU score points_possible grade attempts options_display_name correctness\n"
                         txt = hdr
                         msg_list = []
-                        for rec in [x for x in list(result)]: 
+                        for rec in [x for x in list(result)]:
                             sc = rec['score']
                             pp = rec['points_possible']
                             od = ""
@@ -2870,7 +2697,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                                     corr = state['correct_map'][statekey]['correctness']
                             qnscore = 1.0 if corr=='correct' else 0
                             grade = 1.0 if pp==0 else float(sc/pp)
-                            attempts = 0 if qnscore == 0 else ( state['attempts'] if 'attempts' in list(state) else 0) 
+                            attempts = 0 if qnscore == 0 else ( state['attempts'] if 'attempts' in list(state) else 0)
                             txt += f"{iu} {sc} {pp} {grade} {attempts} {od} {corr}\n"
                             if len(txt)>=800:
                                 msg_list.append(txt)
@@ -2881,7 +2708,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                         html_msg_trans = False
                 if found==0:
                     txt = "Sorry, no results found."
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
             elif resp == rest_ass :
                 url = f"{edx_api_url}/user/fetch/assignment/scores/list/{sid}"
@@ -2898,13 +2724,11 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                             rec = str(x)
                             txt += rec.replace('{','').replace('}','').replace("'","").replace("IU:","\nIU :") + "\n\n"
                         title = f"Assignment Scores for {cid}"
-                        title = msgout(title)
                         html_msg_dict[title] = [ txt ]
                         html_msg_trans = False
                         found = 1
                 if found==0:
                     txt = "Sorry, no results found."
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
 
         elif (self.menu_id == keys_dict[rest_cid]) or (self.menu_id == keys_dict[rest_sid]):
@@ -2917,14 +2741,12 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                         txt = 'You are in restful api menu.'
                 elif self.menu_id == keys_dict[rest_sid]:
                     self.records['sid'] = int(resp)
-            txt = msgout(txt)
             await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(rest_menu))
             self.menu_id = keys_dict[option_restful]
 
         elif self.menu_id == keys_dict[option_datacheck]:
             if (resp == option_back) or (resp == "0"):
                 txt = "You are back in the admin menu"
-                txt = msgout(txt)
                 menu_item = admin_menu.copy()
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                 self.menu_id = keys_dict[option_admin]
@@ -2936,29 +2758,42 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 df = rds_df(query)
                 if df is None:
                     txt = "Sorry, no results found."
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     return
                 df.columns = ['course_id']
-                title = msgout(result)
+                title = result
                 html_msg_dict[title] = html_report(df, df.columns, [50], 25)
                 html_msg_trans = False
             elif resp == option_module_iu :
-                query = "SELECT distinct p.pillar, p.course_code,p.module_code "
-                query += "from playbooks p left JOIN module_iu c ON p.client_name=c.client_name "
-                query += "AND p.pillar=c.pillar AND p.course_code=c.course_code AND p.module_code=c.module_code "
-                query += f"WHERE p.client_name = '{self.client_name}' and c.module_code IS NULL "
-                query += "ORDER BY p.pillar, p.course_code,p.module_code;"
-                result = "courses with IUs not registered in module_iu table\n"
+                #query = "SELECT distinct p.pillar, p.course_code,p.module_code "
+                #query += "from playbooks p left JOIN module_iu c ON p.client_name=c.client_name "
+                #query += "AND p.pillar=c.pillar AND p.course_code=c.course_code AND p.module_code=c.module_code "
+                #query += f"WHERE p.client_name = '{self.client_name}' and c.module_code IS NULL "
+                #query += "ORDER BY p.pillar, p.course_code,p.module_code;"
+                query = "SELECT aa.pillar, aa.course_code, aa.module_code, aa.mcq_cnt as iutbl_mcq,"
+                query += "bb.iu_mcq as stage_mcq,aa.as_cnt as iutbl_as,bb.iu_as as stage_as "
+                query += "FROM ( SELECT distinct m.pillar , m.course_code , m.module_code, "
+                query += "  SUM(m.mcq) AS mcq_cnt,SUM(m.assignment) AS as_cnt,sum(if(m.iu>0,1,0)) AS cnt "
+                query += "  FROM module_iu m where m.client_name = '_c_' "
+                query += " group by m.pillar , m.course_code , m.module_code ) aa INNER JOIN "
+                query += "( SELECT distinct pillar, course_code, module_code, "
+                query += "max(CAST( SUBSTRING_INDEX(mcq, ',', -1) as UNSIGNED)) AS iu_mcq, "
+                query += "max(CAST( SUBSTRING_INDEX(assignment, ',', -1) as UNSIGNED)) AS iu_as FROM stages_master "
+                query += "where client_name = '_c_' GROUP BY pillar, course_code, module_code ) bb "
+                query += "ON aa.pillar=bb.pillar AND aa.course_code=bb.course_code AND aa.module_code=bb.module_code "
+                query += "WHERE NOT( aa.mcq_cnt=bb.iu_mcq AND aa.as_cnt=bb.iu_as);"
+                query = query.replace('_c_',self.client_name)
+                #result = "courses with IUs not registered in module_iu table\n"
+                result = "# of IUs not match for MCQ or Assignment\n"
                 df = rds_df(query)
                 if df is None:
                     txt = "Sorry, no results found."
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     return
-                df.columns = ['pillar', 'course_code','module_code']
-                title = msgout(result)
-                html_msg_dict[title] = html_report(df, df.columns, [10, 25, 15], 25)
+                #df.columns = ['pillar', 'course_code','module_code']
+                df.columns = ['pillar', 'course_code','module_code', 'iutbl_mcq', 'stage_mcq', 'iutbl_as', 'stage_as']
+                title = result
+                html_msg_dict[title] = html_report(df, df.columns, [10, 15, 10, 10, 10, 10, 10], 25)
                 html_msg_trans = False
             elif resp == option_stages_master :
                 query = "SELECT distinct p.pillar, p.course_code,p.module_code "
@@ -2970,11 +2805,10 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 df = rds_df(query)
                 if df is None:
                     txt = "Sorry, no results found."
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     return
                 df.columns = ['pillar', 'course_code','module_code']
-                title = msgout(result)
+                title = result
                 html_msg_dict[title] = html_report(df, df.columns, [10, 25, 15], 25)
                 html_msg_trans = False
             elif resp == option_mcq_avg :
@@ -2984,11 +2818,10 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 df = rds_df(query)
                 if df is None:
                     txt = "Sorry, no results found."
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     return
                 df.columns = ['course_id']
-                title = msgout(result)
+                title = result
                 html_msg_dict[title] = html_report(df, df.columns, [50], 20)
                 html_msg_trans = False
             elif resp == option_as_avg :
@@ -2998,37 +2831,31 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 df = rds_df(query)
                 if df is None:
                     txt = "Sorry, no results found."
-                    txt = msgout(txt)
                     await self.sender.sendMessage(txt)
                     return
                 df.columns = ['course_id']
-                title = msgout(result)
+                title = result
                 html_msg_dict[title] = html_report(df, df.columns, [50], 20)
                 html_msg_trans = False
 
         elif self.menu_id == keys_dict[option_alerts]:
             if resp == option_back:
                 txt = "You are back in the main menu"
-                txt = msgout(txt)
                 menu_item = admin_menu.copy()
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                 self.menu_id = keys_dict[option_admin]
                 return
             elif resp == option_intervention :
                 txt = "Processing intervention check now."
-                txt = msgout(txt)
                 await self.sender.sendMessage(txt)
                 await auto_intervent(bot_intance.client_name, bot_intance.resp_dict, bot_intance.pass_rate, self.chatid)
                 txt = "Auto intervention check completed"
-                txt = msgout(txt)
                 await self.sender.sendMessage(txt)
             elif resp == option_reminder :
                 txt = "Processing reminder check now."
-                txt = msgout(txt)
                 await self.sender.sendMessage(txt)
                 await auto_notify(bot_intance.client_name, bot_intance.resp_dict, bot_intance.pass_rate, self.chatid)
                 txt = "Auto reminder check completed"
-                txt = msgout(txt)
                 await self.sender.sendMessage(txt)
 
         elif self.menu_id == keys_dict[option_chatlist]:
@@ -3036,7 +2863,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 tid = bot_intance.chat_list[ chat_id ]
                 await bot.sendMessage(tid , resp)
                 txt = "(type bye when you want to end the conversation)"
-                txt = msgout(txt)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup([['bye']]))
                 self.menu_id = bot_intance.keys_dict[option_chat]
             else:
@@ -3044,8 +2870,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 if (resp == option_back) or (resp == "0"):
                     if self.is_admin :
                         txt = "You are back in the main menu"
-                        txt = msgout(txt)
-                        #if is_svcbot:
                         if self.super_admin:
                             menu_item = svcbot_menu.copy()
                         else:
@@ -3054,7 +2878,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                         self.menu_id = 1
                     else:
                         txt = "bye"
-                        #txt = msgout(txt)
                         menu_item = self.menu_home.copy()
                         await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                         self.menu_id = keys_dict[lrn_student]
@@ -3079,7 +2902,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                                 txt = '❚█══ Live Chat ══█❚\nHi, you are in the live chat with : <a href=\"tg://user?id=' + str(tid) + '">' + info + '</a>'
                                 await self.bot.sendMessage(self.chatid, txt, parse_mode='HTML')
                                 txt = "(type bye when you want to end the conversation)"
-                                txt = msgout(txt)
                                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup([[option_back]]))
                                 self.menu_id = keys_dict[option_chat]
                             elif status == 3:
@@ -3087,8 +2909,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                                 txt += '\nContact : <a href=\"tg://user?id=' + str(self.chatid) + '">@' + self.chatname + '</a>'
                                 await self.bot.sendMessage(info[2], txt, parse_mode='HTML')
                                 txt = f"Chat request sent to {info[1]} #{info[0]}."
-                                txt = msgout(txt)
-                                #if is_svcbot:
                                 if self.super_admin:
                                     menu_item = svcbot_menu.copy()
                                 else:
@@ -3096,7 +2916,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
                                 self.menu_id = 1
                             else:
-                                txt = msgout(info)
+                                txt = info
                                 await self.sender.sendMessage(txt)
 
         elif self.menu_id == keys_dict[option_chat]:
@@ -3110,12 +2930,11 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                         await self.bot.sendMessage(chat_id, txt)
                     if self.is_admin :
                         txt = "You are back in the main menu"
-                        bot_intance.user_list[ tid ][4] = "" 
+                        bot_intance.user_list[ tid ][4] = ""
                         self.menu_id = 1
                     else:
                         txt = "bye"
                         self.menu_id = keys_dict[lrn_student]
-                    txt = msgout(txt)
                     menu_item = self.menu_home.copy()
                     await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
                 else:
@@ -3128,7 +2947,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 else:
                     txt = "Live chat has been ended."
                     self.menu_id = keys_dict[lrn_student]
-                txt = msgout(txt)
                 menu_item = self.menu_home.copy()
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
 
@@ -3148,7 +2966,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
 
         elif self.menu_id == keys_dict[option_faq] and resp in ['0', 'exit', option_back]:
             txt = "FAQ option is closed."
-            txt = msgout(txt)
             menu_item = self.menu_home.copy()
             await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
             self.menu_id = keys_dict[lrn_student]
@@ -3157,7 +2974,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             tid = bot_intance.chat_list[ chat_id ]
             await bot.sendMessage(tid , resp)
             txt = "you said : "
-            txt = msgout(txt)
             await self.bot.sendMessage(chat_id,txt + resp, reply_markup=self.reply_markup([['bye']]))
             self.menu_id = keys_dict[option_chat]
 
@@ -3165,40 +2981,33 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             syslog( str(self.student_id) + " Q:" + resp )
             (txt,recommendation) = await self.runfaq(resp)
             if (txt != ""):
-                txt = msgout(txt)
                 await self.sender.sendMessage(txt)
                 self.menu_id = keys_dict[lrn_student]
             if len(recommendation) > 0:
-                recommendation = [ msgout(x) for x in recommendation]
                 rec_menu = build_menu(recommendation,1,option_back,[])
                 txt = "You might want to ask :"
-                txt = msgout(txt)
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(rec_menu))
                 txt = ""
                 self.menu_id = bot_intance.keys_dict[option_faq]
 
-        for title in list(html_msg_dict): 
+        for title in list(html_msg_dict):
             for msg in [ x for x in html_msg_dict[title] if x != "" ]:
-                if html_msg_trans:
-                    msg = msgout(msg) 
                 txt = "<b>" + title + "</b>\n" + "<pre>" + msg +  "</pre>"
                 await bot.sendMessage(chat_id, txt, parse_mode='HTML')
 
         while retmsg != "":
             txt = retmsg[:4000]
             retmsg = retmsg[4000:]
-            if html_msg_trans:
-                txt = msgout(txt) 
             await self.sender.sendMessage(txt)
         return
- 
+
 def verify_student(cname, userdata, student_id, courseid, stagedf):
     global bot_intance
     vars = dict()
-    amt = 0 
+    amt = 0
     sid = int(student_id)
     if userdata is None:
-        query = f"select * from userdata where client_name = '{cname}' and studentid={sid} and courseid='{courseid}';" 
+        query = f"select * from userdata where client_name = '{cname}' and studentid={sid} and courseid='{courseid}';"
         df = rds_df(query)
         if df is not None:
             df.columns = bot_intance.userdata_cols
@@ -3206,7 +3015,7 @@ def verify_student(cname, userdata, student_id, courseid, stagedf):
     if userdata is None:
         return (msg, vars)
 
-    vars = load_vars(userdata, student_id) 
+    vars = load_vars(userdata, student_id)
     if vars == {}:
         return (f"Sorry there is no data for this student id {student_id}", vars)
     amt = vars['amt']
@@ -3215,10 +3024,10 @@ def verify_student(cname, userdata, student_id, courseid, stagedf):
     grade = vars['grade']
     if stagedf is None:
         condqry = f" client_name = '{cname}' and courseid = '{courseid}'"
-        query = "select * from stages where " + condqry 
+        query = "select * from stages where " + condqry
         stage_table = rds_df(query)
         if stage_table is None:
-            msg = f'Unable to load stage table for course-id {courseid}' 
+            msg = f'Unable to load stage table for course-id {courseid}'
             return (msg, vars)
         stage_table.columns = bot_intance.stages_cols
     else:
@@ -3233,14 +3042,14 @@ def verify_student(cname, userdata, student_id, courseid, stagedf):
         stage = stage_list[0]
         vars['stage'] = stage
     msg += 'You are currently on stage ' + stage + "\n\n"
- 
+
     #cohort_id = piece(piece(courseid,':',1),'+',1)
     #module_code = piece(cohort_id,'-',0)
     qry = f"select cohort_id from playbooks where client_name = '{cname}' and course_id = '{courseid}';"
     cohort_id = rds_param(qry)
     if cohort_id=="":
-        cohort_id = piece(piece(course_id,':',1),'+',1) 
-    qry = f"select module_code from playbooks where client_name = '{cname}' and course_id = '{courseid}';" 
+        cohort_id = piece(piece(course_id,':',1),'+',1)
+    qry = f"select module_code from playbooks where client_name = '{cname}' and course_id = '{courseid}';"
     module_code = rds_param(qry)
     if module_code=="":
         module_code = piece(cohort_id,'-',0)
@@ -3257,11 +3066,11 @@ def verify_student(cname, userdata, student_id, courseid, stagedf):
 
 def evaluate_progress(vars,iu_list,passingrate,var_prefix,var_title):
     avg_prefix = var_prefix + "_avg"
-    att_prefix = var_prefix + "_attempts" 
+    att_prefix = var_prefix + "_attempts"
     score_zero = [] ; iu_score = [] ; iu_attempts = [] ; score_pass = [] ; score_failed = []
     score_avg = 0 ; tt = '' ; iu_cnt = 0 ; attempts_balance = "" ; list_iu = []
     if iu_list != '0' :
-        list_iu = iu_list.split(',')[:max_iu_cnt] 
+        list_iu = iu_list.split(',')[:max_iu_cnt]
         list_iu = [ x.strip() for x in list_iu]
         iu_attempts = [ vars[x] for x in [ att_prefix + x for x in list_iu ]]
         iu_vars = sorted_numlist( str(iu_list) )[:max_iu_cnt]
@@ -3275,24 +3084,10 @@ def evaluate_progress(vars,iu_list,passingrate,var_prefix,var_title):
         iu_arr = dict(zip(iu_vars, iu_score))
         iu_attempts = [ 1 if iu_arr[x]>0 else iu_att[x] for x in iu_att ]
         score_avg = sum(iu_score)/len(iu_score) if iu_score != [] else 0
-        kiv_codes = """ # Salil requested to shorten the msg
-        tt += "\n" + var_title + " average test score : " + "{:.2%}".format(score_avg)
-        if len(score_pass) > 0:
-            tt += "\n☑ " + var_title + " test passed : " + str(score_pass)
-        if len(score_failed) > 0:
-            tt += "\n✗ " + var_title + " test failed : " + str(score_failed)
-        if len(score_zero) > 0:
-            tt += "\n▭ " + var_title + " test pending : " + str(score_zero)
-        iu_cnt = len(score_pass) + len(score_failed)
-        m = 4 if var_prefix=="mcq" else 1
-        attempts_balance = "".join([ ("\n" + var_title + ' #'+str(x) + " has " + str(m-vars[att_prefix + str(x)])+" attempts left"  ) for x in iu_vars \
-            if vars[avg_prefix + str(x)] < passingrate ])
-        #tt += attempts_balance
-        #"""
     return (tt, score_avg, score_zero, score_pass, score_failed, iu_score , iu_attempts, iu_cnt, attempts_balance)
 
 def get_stageinfo(vars, pass_rate, amt, stagecode, mcqvars, asvars):
-    ma_list = [] ; list_att = [] ; tt = "" ; t1 = '' ; t2 = '' 
+    ma_list = [] ; list_att = [] ; tt = "" ; t1 = '' ; t2 = ''
     mcnt = 0 ; mcq_avg = 0 ; mcq_zero = [] ; mcq_pass = [] ; mcq_failed = [] ; mbal = ""
     acnt = 0 ; as_avg = 0 ; as_zero = [] ; as_pass = [] ; as_failed = [] ; abal = ""
     mcq_att = [] ; as_att = []
@@ -3308,7 +3103,7 @@ def get_stageinfo(vars, pass_rate, amt, stagecode, mcqvars, asvars):
     ascore = round(ascore*100)/100
     mcqas_comp = 1 if len([n+1 for n in range(len(list_att)) if list_att[n]==0])==0 else 0
     max_att = 0 if len(list_att)==0 else max(list_att)
- 
+
     pass_stage = 0
     if stagecode.lower()=="soc" and amt == 0:
         pass_stage = 1
@@ -3345,7 +3140,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
         return ("", "", vars)
     gmt = bot_intance.gmt
     rec = df[df.studentid==student_id].iloc[0]
-    courseid = rec['courseid'] 
+    courseid = rec['courseid']
     course_id = courseid
     sid = student_id
     dt = datetime.datetime.now() + datetime.timedelta(hours=gmt)
@@ -3355,7 +3150,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     if list2==[]:
         return ("", "", vars)
     stagebyschedule = stagedf.iloc[ (len(list2) - 1) ]['name']
-    stg_list = [x for x in stagedf.stage] 
+    stg_list = [x for x in stagedf.stage]
     stglen = len(stg_list)
     if stglen==0:
         return ("", "", vars)
@@ -3364,10 +3159,10 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
         begin_date_list = ['' if x is None else x[:10] for x in df.startdate]
     except:
         return ("", "", vars)
- 
+
     if list1[0] > dtnow:
         return ("_soc_", "", vars)
- 
+
     due_date_list = [x for x in df.stagedate]
     start_date_list = [x for x in df.startdate]
     fcdt = list1[0]
@@ -3376,7 +3171,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     asdate  = stg_date
     eldate  = stg_date
     fcdate  = stg_date
-    asdt = eldt = fcdt = 0 
+    asdt = eldt = fcdt = 0
     for n in range(stglen):
         if (list1[n] >= dtnow) and (stg_list[n][0]=='A') and (asdt==0):
             asdt = 1
@@ -3387,15 +3182,15 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
         if (list1[n] >= dtnow) and (stg_list[n][:2]=='FC') and (fcdt==0):
             fcdt = 1
             mcqdate = fcdate = due_date_list[n]
- 
+
     stage_names_list = [x for x in df.name]
     stage_desc_list = [x for x in df.desc]
     stage_daysnum_list = [x for x in df.days]
-    mcqvars_list = [x for x in df.mcq] 
-    mcqlist_max = max(mcqvars_list) 
+    mcqvars_list = [x for x in df.mcq]
+    mcqlist_max = max(mcqvars_list)
     asvars_list = [x for x in df.assignment]
-    aslist_max = max(asvars_list) 
-    amt = vars['amt'] 
+    aslist_max = max(asvars_list)
+    amt = vars['amt']
 
     missing_dates = ['' for n in range(stglen)]
     date_list = []
@@ -3416,7 +3211,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     acnt = 0
     mcq_avg = 0
     as_avg = 0
-    overall_passed = 1 
+    overall_passed = 1
     missed_stage = ""
     stgcode = ""
     txt = ''
@@ -3434,7 +3229,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
         stage_missing = missing_dates[n]
         f2f_missing = 0 if stage_missing=='' else 1
         if (f2f_missing==1):
-            missing_stages.append(stagecode) 
+            missing_stages.append(stagecode)
         stg_date = due_date_list[n]
         duedate = due_date_list[n]
         stagedesc = stage_desc_list[n]
@@ -3451,13 +3246,13 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
         if (stagebyprogress == "") and (pass_stage == 0):
             stagebyprogress = stagename
             statusbyprogress = f"{stagename} ({stagedesc})"
-            overall_passed = 0 
+            overall_passed = 0
             mcq_pending = mcq_zero
             assignment_pending = as_zero
             mfail = mcq_failed
             afail = as_failed
             stgcode = stagecode
-        if stagebyschedule == stagename: 
+        if stagebyschedule == stagename:
             mcqvars = mcqvars_list[n]
             asvars = asvars_list[n],
             stagedesc = stage_desc_list[n]
@@ -3474,11 +3269,10 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
                 mfail = mcq_failed
                 afail = as_failed
                 stage_date = stg_date
-                break 
+                break
         if n1 > 0 and n == n1:
             if (stagebyprogress == ""):
                 stagebyprogress = stagename
-                #statusbyprogress = f"{stagename} ({stagedesc})"
             break
 
     f2f_stage = ','.join(missing_stages)
@@ -3493,8 +3287,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     stagedesc = stagedesc.replace('?','')
     stage_desc = stagedesc
     stagebyprogress = stage if stagebyprogress=='' else stagebyprogress
- 
-    # multi-instance of stages same day
+
     if stagebyprogress in stage_names_list:
         n1 = stage_names_list.index(stagebyprogress)
         start_dt = start_date_list[n1]
@@ -3509,7 +3302,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
             n = stage_names_list.index(stagebyprogress)
             stagecode = stg_list[n]
             stage_desc = stage_desc_list[n]
- 
+
     if stage in stage_names_list:
         n1 = stage_names_list.index(stage)
         start_dt = start_date_list[n1]
@@ -3564,7 +3357,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     if '{lf}' in txt:
         txt = txt.replace('{lf}', "\n")
     vars['reminder'] = txt
- 
+
     iu_list = [int(x) for x in str(mcqvars).split(',') if x!='0' and x.isnumeric() ]
     mcq_zero_iu = [x for x in iu_list if x in mcq_zero]
     mcq_failed_iu = [x for x in iu_list if x in mcq_failed]
@@ -3573,14 +3366,14 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     qry = f"select cohort_id from playbooks where client_name = '{client_name}' and course_id = '{courseid}';"
     cohort_id = rds_param(qry)
     if cohort_id=="":
-        cohort_id = piece(piece(courseid,':',1),'+',1) 
-    qry = f"select module_code from playbooks where client_name = '{client_name}' and course_id = '{courseid}';" 
+        cohort_id = piece(piece(courseid,':',1),'+',1)
+    qry = f"select module_code from playbooks where client_name = '{client_name}' and course_id = '{courseid}';"
     module_code = rds_param(qry)
     if module_code=="":
         module_code = piece(cohort_id,'-',0)
     qry = f"select enquiry_email from course_module where client_name = '{client_name}' and module_code = '{module_code}';"
     enquiry_email = rds_param(qry)
- 
+
     txt = ""
     if eoc_gap == 1:
         eoc7 = vmedxlib.edx_eocend(client_name, courseid, 7)
@@ -3609,7 +3402,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
                     else:
                         txt += resp_dict['notif9']
             txt += "\n"
- 
+
     if '{uname}' in txt:
         txt = txt.replace('{uname}', uname)
     if '{course_id}' in txt:
@@ -3645,8 +3438,8 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     if '{lf}' in txt:
         txt = txt.replace('{lf}', "\n")
     vars['intervention'] = txt
- 
-    txt = '' 
+
+    txt = ''
     txt_hdr = resp_dict['stg0']
     if ("eoc" in stagebyschedule.lower()) and (pass_stage == 1) and (att_rate >=0.75):
         txt = ""
@@ -3667,7 +3460,7 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
         txt_hdr = txt_hdr.replace('{lf}' , '\n')
     if '()' in txt_hdr:
         txt_hdr = txt_hdr.replace('()', '')
- 
+
     if (pm_stage==1) and (att_rate < 0.75):
         risk_level = 3
 
@@ -3679,19 +3472,53 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, stage
     except:
         pass
 
-    for vv in ['stage', 'stagecode', 'mcqdate', 'asdate', 'eldate', 'fcdate', 'avg_score', 'mcqas_complete', 'mcq_pass', 'mcq_failed', 'missed_stage', "aslist", \
+    for vv in ['stage', 'stagecode', 'mcqdate', 'asdate', 'eldate', 'fcdate', 'avg_score', 'mcqas_complete', 'mcq_pass', 'mcq_failed', 'missed_stage', "aslist", "mcqvars", "asvars", \
             'has_score', 'pass_stage', 'max_attempts', 'mcqas_list', 'mcq_zero', 'mcq_avg', 'as_pass', 'as_failed', 'risk_level', 'stg_list', 'mcqlist', 'pm_stage', 'att_rate', \
             'mcnt', 'acnt', 'as_avg', 'as_zero', 'f2f_stage', 'stagebyprogress', 'mcq_attempts',  'mcq_att_balance', 'as_att_balance', 'as_attempts', 'duedate'] :
         vars[vv] = eval(vv)
     syslog("completed")
     return (txt_hdr, txt, vars)
 
+def learner_progress(vars,iu_list,passingrate,var_prefix,var_title):
+    avg_prefix = var_prefix + "_avg"
+    att_prefix = var_prefix + "_attempts"
+    score_zero = [] ; iu_score = [] ; iu_attempts = [] ; score_pass = [] ; score_failed = []
+    score_avg = 0 ; tt = '' ; iu_cnt = 0 ; attempts_balance = "" ; list_iu = []
+    if iu_list != '0' :
+        list_iu = iu_list.split(',')[:max_iu_cnt]
+        list_iu = [ x.strip() for x in list_iu]
+        iu_attempts = [ vars[x] for x in [ att_prefix + x for x in list_iu ]]
+        iu_vars = sorted_numlist( str(iu_list) )[:max_iu_cnt]
+        iu_att = dict(zip(iu_vars, iu_attempts))
+        vlist = [ vars[avg_prefix + str(x)] for x in iu_vars ]
+        score_pass = [ x for x in iu_vars if vars[avg_prefix + str(x)]>=passingrate]
+        score_zero = [ x for x in iu_vars if vars[avg_prefix + str(x)] == 0 ]
+        score_failed = [ x for x in iu_vars if x not in (score_pass + score_zero) ]
+        iu_score = [ vars[x] for x in [ avg_prefix + x for x in list_iu ]]
+        iu_score = [ eval(str(x)) for x in iu_score]
+        iu_arr = dict(zip(iu_vars, iu_score))
+        iu_attempts = [ 1 if iu_arr[x]>0 else iu_att[x] for x in iu_att ]
+        score_avg = sum(iu_score)/len(iu_score) if iu_score != [] else 0
+        tt += "\n" + var_title + " average test score : " + "{:.2%}".format(score_avg)
+        if len(score_pass) > 0:
+            tt += "\n☑ " + var_title + " test passed : " + str(score_pass)
+        if len(score_failed) > 0:
+            tt += "\n✗ " + var_title + " test failed : " + str(score_failed)
+        if len(score_zero) > 0:
+            tt += "\n▭ " + var_title + " test pending : " + str(score_zero)
+        #iu_cnt = len(score_pass) + len(score_failed)
+        #m = 4 if var_prefix=="mcq" else 1
+        #attempts_balance = "".join([ ("\n" + var_title + ' #'+str(x) + " has " + str(m-vars[att_prefix + str(x)])+" attempts left"  ) for x in iu_vars \
+        #    if vars[avg_prefix + str(x)] < passingrate ])
+        #tt += attempts_balance
+    return tt
+
 def display_progress(df, sdf, sid, vars, client_name, resp_dict, pass_rate=0.7):
     if len(list(vars)) == 0:
         return "Your information is incomplete, please do not proceed and inform you faculty admin."
     (txt1, txt2, vars) = load_progress(df, sid, vars, client_name, resp_dict, pass_rate, sdf)
     txt = txt1 + txt2
- 
+
     vars['course_alive'] = 1
     if txt == "":
         vars['notification'] = "Your information is incomplete, please do not proceed and inform you faculty admin."
@@ -3714,10 +3541,6 @@ def display_progress(df, sdf, sid, vars, client_name, resp_dict, pass_rate=0.7):
     stg_list    = vars['stg_list']
     pass_stage  = vars['pass_stage']
     pmlist = [ x for x in stg_list if x[:2]=='PM' ]
-    #pmlaststage = ''
-    #if pmlist != []:
-        #pmlaststage = [ x for x in stg_list if x[:2]=='PM' ][-1]
-        #pmlaststage = pmlist[-1]
     f2f_stage   = vars['f2f_stage']
     f2f_error  = 0 if f2f_stage=="" else 1
     risk_level = vars['risk_level']
@@ -3726,7 +3549,7 @@ def display_progress(df, sdf, sid, vars, client_name, resp_dict, pass_rate=0.7):
     mcq_att    = vars['mcq_attempts']
     mcqlist    = vars['mcqlist']
     as_zero    = vars['as_zero']
-    as_failed  = vars['as_failed'] 
+    as_failed  = vars['as_failed']
     duedate    = vars['duedate']
     amt        = vars['amt']
     att_rate   = vars['att_rate']
@@ -3752,10 +3575,10 @@ def display_progress(df, sdf, sid, vars, client_name, resp_dict, pass_rate=0.7):
         #resp1 = resp_dict['resp1']
         resp10 = resp_dict['resp10']
         txt += resp10 + "\n\n"
- 
+
     if f2f_error == 1:
         if pm_stage==0:
-            resp11 = resp_dict['resp11'] 
+            resp11 = resp_dict['resp11']
             txt += resp11 + '\n\n'
         else:
             if att_rate >= 0.75:
@@ -3813,14 +3636,14 @@ def display_progress(df, sdf, sid, vars, client_name, resp_dict, pass_rate=0.7):
 
 def grad_pred_text(vars, client_name, use_neural_network = False):
     txt = ""
-    global dt_model 
+    global dt_model
     syslog("started")
     if (dt_model.model_name != "") and ((vars['mcnt'] + vars['acnt']) >0):
         grad_pred = dt_model.predict(vars['mcq_avg'] , vars['as_avg'], vars['iu_cnt'])
         txt += "\n\nAI grading prediction : " +  "{:.2%}".format(grad_pred[0]) + "\n\n"
     syslog("completed")
     return txt
- 
+
 def load_vars(df, sid):
     if df is None:
         return {}
@@ -3849,8 +3672,8 @@ def load_vars(df, sid):
     return vars
 
 def job_request(chat_id,client_name,func_req,func_param):
-    global bot_intance 
-    gen_job_id = lambda : (''.join(random.choice( "ABCDEFGHJKLMNPQRTUVWXY0123456789" ) for i in range(12))).upper() 
+    global bot_intance
+    gen_job_id = lambda : (''.join(random.choice( "ABCDEFGHJKLMNPQRTUVWXY0123456789" ) for i in range(12))).upper()
     job_id = gen_job_id()
     bot_intance.job_items[job_id]=[chat_id,func_req,func_param]
     syslog(f"job_request {job_id} {chat_id} {func_req} {func_param}")
@@ -3875,18 +3698,18 @@ def rds_loadcourse(client_name, stud):
         risklvl_list = [x for x in df.risk_level]
         m = len(course_id_list)
         for n in range(m):
-            cid = course_id_list[n] 
+            cid = course_id_list[n]
             rlvl = risklvl_list[n]
             try:
                 eoc = vmedxlib.edx_endofcourse(client_name, cid)
             except:
-                eoc = eoc_list[n] 
+                eoc = eoc_list[n]
             if eoc == 0:
                 logon_selection.append(cid)
             if eoc==1:
                 eoc_gap = vmedxlib.edx_eocgap(client_name, cid, 7)
                 if (eoc_gap == 1) and (rlvl > 0):
-                    logon_selection.append(cid) 
+                    logon_selection.append(cid)
     return (course_id_list, course_name_list, logon_selection)
 
 def analyze_cohort(course_id, userdata, bot, chat_id):
@@ -3902,7 +3725,7 @@ def analyze_cohort(course_id, userdata, bot, chat_id):
     between_3070 = lambda x : True if (x > 0.3 and x < 0.7) else False
     below_30 = lambda x : True if x <= 0.3 else False
     above_2 = lambda x : True if x >= 2 else False
- 
+
     def report_lines(udict, rdict, rpt_summary, title, lambda_fn, fmt = '{:.2%}'):
         rlist = [ r for r in rdict if lambda_fn(rdict[r]) ]
         if rlist!=[]:
@@ -3922,7 +3745,7 @@ def analyze_cohort(course_id, userdata, bot, chat_id):
     uname_list = [x for x in userdata.username]
     udict = dict(zip(sid_list,uname_list))
     cnt = len(sid_list)
-    avgsum_list = [ userdata[ "mcq_avg" + str(x) ].mean() for x in range( 1, max_iu_cnt + 1 ) ] 
+    avgsum_list = [ userdata[ "mcq_avg" + str(x) ].mean() for x in range( 1, max_iu_cnt + 1 ) ]
     rr = [ 1 if r>0 else 0 for r in avgsum_list ]
     rsum = sum(rr)
     idx = 0
@@ -3947,7 +3770,7 @@ def analyze_cohort(course_id, userdata, bot, chat_id):
 
     avgsum_list = [ userdata[ "as_avg" + str(x) ].mean() for x in range( 1, max_iu_cnt + 1 ) ]
     rr = [ 1 if r>0 else 0 for r in avgsum_list ]
-    rsum = sum(rr) 
+    rsum = sum(rr)
     idx = 0
     if rsum>0:
         for n in range(max_iu_cnt) :
@@ -3975,7 +3798,7 @@ async def checkjoblist():
     global bot_intance
     job_list = list(bot_intance.job_items)
     if job_list==[]:
-        return 
+        return
     job_id = job_list[0]
     jobitem = bot_intance.job_items[job_id]
     chat_id = int(jobitem[0])
@@ -3989,7 +3812,7 @@ async def checkjoblist():
 async def runbotjob(job_id,chat_id,func_req,func_param):
     global edx_api_header, edx_api_url,bot_intance
     client_name = bot_intance.client_name
-    func_svc_list = ["update_assignment" , "update_mcq" , "edx_import", "update_schedule"] 
+    func_svc_list = ["update_assignment" , "update_mcq" , "edx_import", "update_schedule"]
     txt = "job "
     if func_req == "generate_mcq_as":
         try:
@@ -4032,18 +3855,13 @@ async def runbotjob(job_id,chat_id,func_req,func_param):
             txt += " failed."
     syslog(f"completed job {job_id}\t" + txt  )
     del bot_intance.job_items[job_id]
-    return 
-
-def msgout(txt):
-    # for future use, translation to other languages
-    return str(txt)
+    return
 
 def course_status(clt, cid):
     qry = f"select module_code from playbooks where client_name = '{clt}' and course_id = '{cid}';"
     module_code = rds_param(qry)
     if module_code=="":
         txt = "module_code/cohort_id is not defined in the playbooks table\n"
-        txt = msgout(txt)
     else:
         txt = f"course_id is _w_\n"
         txt += f"module_code is _x_\n"
@@ -4067,7 +3885,6 @@ def course_status(clt, cid):
         cnt = rds_param(qry)
         txt += "✖️  not " if cnt==0 else "✔️ "
         txt += " defined in stages_master table\n"
-        txt = msgout(txt)
         txt = txt.replace('_w_', cid)
         txt = txt.replace('_x_', module_code)
         txt = txt.replace('_y_', course_code)
@@ -4080,7 +3897,7 @@ def stage_calendar(df):
     ystr = lambda x,y,z : y[x] if x in list(z) else '     '
     zstr = lambda x : ((' *' if ',' in x else x) + ' '*m)[:m]
     slist = [(x + ''*m)[:m] for x in df.stage]
-    tlist = [datetime.datetime.strptime(dt,"%d/%m/%Y").strftime('%Y%m%d') for dt in df.startdate] 
+    tlist = [datetime.datetime.strptime(dt,"%d/%m/%Y").strftime('%Y%m%d') for dt in df.startdate]
     mlist = list(set([ int(x[4:][:2]) for x in tlist]))
     mlist = sorted(set([ int(x[4:][:2]) for x in tlist]))
     sdict = dict()
@@ -4123,7 +3940,6 @@ def stage_calendar(df):
 async def auto_notify(client_name, resp_dict, pass_rate, adm_chatid):
     global bot_intance
     txt = "auto_notify started"
-    txt = msgout(txt) 
     await bot_intance.bot.sendMessage(adm_chatid, txt)
     # T -1 days currently, to be generic next time
     qry = "SELECT a.* FROM stages a INNER JOIN playbooks b ON a.client_name=b.client_name AND a.courseid=b.course_id "
@@ -4134,10 +3950,10 @@ async def auto_notify(client_name, resp_dict, pass_rate, adm_chatid):
     else:
         qry += f"STR_TO_DATE(a.startdate,'%d/%m/%Y') = DATE_ADD(CURDATE() , INTERVAL 1 DAY);"
     stagedf = rds_df(qry)
-    if stagedf is None: 
+    if stagedf is None:
         return
     mdf = rds_df(f"SELECT * FROM user_master where client_name='{client_name}';")
-    if mdf is None: 
+    if mdf is None:
         return
     s_cols = bot_intance.stages_cols
     u_cols = bot_intance.userdata_cols
@@ -4151,7 +3967,7 @@ async def auto_notify(client_name, resp_dict, pass_rate, adm_chatid):
     asvars_list = [x for x in stagedf.assignment]
     duedate_list = [x for x in stagedf.stagedate]
     count = len(course_list)
-    if count == 0: 
+    if count == 0:
         return
     syslog("auto_notify started")
     efilter = bot_intance.efilter
@@ -4187,7 +4003,7 @@ async def auto_notify(client_name, resp_dict, pass_rate, adm_chatid):
         err_list = []
         sent_list = []
         for sid in ulist:
-            uname = udict[sid] 
+            uname = udict[sid]
             df1 = udf[ udf.studentid == sid ].copy()
             (tt, vars) = verify_student(client_name, df1, sid, course_id, sdf)
             df2 = mdf[ mdf.studentid == sid ].copy()
@@ -4238,16 +4054,14 @@ async def auto_notify(client_name, resp_dict, pass_rate, adm_chatid):
                 txt = txt.replace('{lf}', "\n")
 
             tlist = txt.split('\n')
-            txt1 = msgout("Hi") + ", " + uname + " !\n"
+            txt1 = "Hi" + ", " + uname + " !\n"
             txt2 = '\n'.join(tlist[1:])
-            txt2 = msgout(txt2)
             txt = txt1 + txt2
 
             if tid <= 0:
                 err_list.append(sid)
             else:
                 try:
-                    txt = msgout(txt)
                     await bot_intance.bot.sendMessage(int(tid), txt)
                     sent_list.append(sid)
                 except:
@@ -4261,14 +4075,12 @@ async def auto_notify(client_name, resp_dict, pass_rate, adm_chatid):
             msg += f"Unable to send reminder to learners from {course_id} :\n{str(err_list)} \n"
         if len(msg) > 0:
             try:
-                msg = msgout(msg)
                 await bot_intance.bot.sendMessage(adm_chatid, msg)
             except:
                 syslog(msg)
         syslog(msg)
     syslog("auto_notify completed")
     txt = "auto_notify completed"
-    txt = msgout(txt)
     await bot_intance.bot.sendMessage(adm_chatid, txt)
     return
 
@@ -4276,16 +4088,13 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
     global bot_intance
     sub_str  = bot_intance.sub_str
     date_today = datetime.datetime.now().date()
-    #yrnow = str(date_today.strftime('%Y'))
     yrnow = str(date_today.strftime('%Y'))[-2:]
     txt = "auto_intervent started"
-    txt = msgout(txt)
     await bot_intance.bot.sendMessage(adm_chatid, txt)
     query = "SELECT DISTINCT a.courseid FROM userdata a "
     query += " INNER JOIN playbooks b ON a.client_name=b.client_name AND a.courseid=b.course_id "
     query += " INNER JOIN course_module c ON b.client_name=c.client_name AND b.module_code=c.module_code "
     query += f" WHERE c.enabled=1 and a.client_name = '{client_name}' "
-    #query += f" AND {sub_str}(courseid,-4)='{yrnow}' ORDER BY courseid;"
     query += f" AND {sub_str}(courseid,-2)='{yrnow}' ORDER BY courseid;"
     df = rds_df(query)
     if df is None:
@@ -4321,21 +4130,17 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
     eoc7_mailcnt = 0
     for course_id in course_list:
         syslog(course_id)
-        eoc = vmedxlib.edx_endofcourse(client_name, course_id) # ended=1 else 0
-        soc = vmedxlib.edx_course_started(client_name, course_id)  # started=1 else 0
+        eoc = vmedxlib.edx_endofcourse(client_name, course_id)
+        soc = vmedxlib.edx_course_started(client_name, course_id)
         eoc_gap = vmedxlib.edx_eocgap(client_name, course_id, 7)
-        #cohort_id = piece(piece(course_id,':',1),'+',1)
-        #module_code = piece(cohort_id,'-',0)
         qry = f"select cohort_id from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
         cohort_id = rds_param(qry)
         if cohort_id=="":
-            cohort_id = piece(piece(course_id,':',1),'+',1) 
-        qry = f"select module_code from playbooks where client_name = '{client_name}' and course_id = '{course_id}';" 
+            cohort_id = piece(piece(course_id,':',1),'+',1)
+        qry = f"select module_code from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
         module_code = rds_param(qry)
         if module_code=="":
             module_code = piece(cohort_id,'-',0)
-        #qry = f"select pillar from course_module where client_name = '{client_name}' and module_code = '{module_code}';"
-        #pillar_code = rds_param(qry)
         qry = f"select enquiry_email from course_module where client_name = '{client_name}' and module_code = '{module_code}';"
         enquiry_email = rds_param(qry)
         if (soc == 1) and ((eoc == 0) or (eoc_gap == 1)):
@@ -4485,9 +4290,8 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
                     txt = txt.replace('{lf}', "\n")
 
                 tlist = txt.split('\n')
-                txt1 = msgout("Hi") + ", " + uname + " !\n"
+                txt1 = "Hi" + ", " + uname + " !\n"
                 txt2 = '\n'.join(tlist[1:])
-                txt2 = msgout(txt2)
                 txt = txt1 + txt2
 
                 if eoc7==1:
@@ -4499,7 +4303,6 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
                         err_list.append(sid)
                     else:
                         try:
-                            txt = msgout(txt)
                             await bot_intance.bot.sendMessage(tid, txt)
                             sent_list.append(sid)
                         except:
@@ -4522,7 +4325,6 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
                 msg += f"Unable to send intervention to learners from {course_id} :\n{str(err_list)} \n"
             if len(msg) > 0:
                 try:
-                    msg = msgout(msg)
                     await bot_intance.bot.sendMessage(adm_chatid, msg)
                 except:
                     syslog(msg)
@@ -4544,20 +4346,19 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
         #    fout.close()
         #    txt = shellcmd('/bin/sh txt2mail')  # to be replaced with rest apis
         #else:
-        txt = msgout(txt)
+        #    pass
         await bot_intance.bot.sendMessage(adm_chatid, txt) # temporary use telegram
     """
     del mdf
     syslog("auto_intervent completed")
     txt = "auto_intervent completed"
-    txt = msgout(txt)
     await bot_intance.bot.sendMessage(adm_chatid, txt)
     return
 
 #------------------------------------------------------------------------------------------------------
 if __name__ == "__main__":
     version = sys.version_info
-    if version.major == 3 and version.minor >= 6: 
+    if version.major == 3 and version.minor >= 6:
         #do_main()
         with open("vmbot.json") as json_file:
             bot_info = json.load(json_file)
