@@ -9,7 +9,8 @@
 # \▓▓    ▓▓ ▓▓ | ▓▓ | ▓▓ ▓▓  | ▓▓ ▓▓ ▓▓  \▓ | ▓▓\▓▓     \ ▓▓  | ▓▓  \▓▓  ▓▓\▓▓    ▓▓ ▓▓
 #  \▓▓▓▓▓▓ \▓▓  \▓▓  \▓▓\▓▓   \▓▓\▓▓\▓▓      \▓▓ \▓▓▓▓▓▓▓\▓▓   \▓▓   \▓▓▓▓  \▓▓▓▓▓▓ \▓▓
 #
-# Library functions by KH
+# Library functions by KH                            
+#                                                                                                    
 #------------------------------------------------------------------------------------------------------
 summary = """
 ╔«═══════════════════════════════════════════════════════════════════════•[^]»╗
@@ -20,21 +21,16 @@ summary = """
 ║ callgraph          generate flow diagram and save into png file             ║▒▒
 ║ conn_open          check database connection status (openned , closed)      ║▒▒
 ║ copydbtbl          append the dataframe into another table in RDS           ║▒▒
-║ copy2omdb          append the dataframe into another table in SQLite        ║▒▒
 ║ email_lookup       email address search when the field is encrypted         ║▒▒
-║ get_attachment     download the telegram attachement file locally           ║▒▒
 ║ get_columns        product the dataframe header into python list            ║▒▒
 ║ html_report        process tabulated data into formatted telegram message   ║▒▒
 ║ html_tbl           process tabulated data into formatted html document      ║▒▒
 ║ printdict          print the item details of the given dictionary object    ║▒▒
-║ querydf            output sql query on SQLite database into dataframe       ║▒▒
 ║ rds_connector      database connection to RDS database by type of client    ║▒▒
 ║ rds_df             output sql query on RDS database into dataframe          ║▒▒
 ║ rds_engine         mysql engine for connecting existing RDS database        ║▒▒
 ║ rds_param          get a value from RDS parameters table with a key given   ║▒▒
 ║ rds_update         perform SQL update query for RDS database                ║▒▒
-║ render_table       output dataframe into HTML table in picture format       ║▒▒
-║ shellcmd           to execute system commands from the server shell access  ║▒▒
 ║ syslog             standard logger for working in async, this replaces it   ║▒▒
 ║ time_hhmm          local time in hhmm numeric format                        ║▒▒
 ║ time_hhmmss        local time in hhmmss numeric format                      ║▒▒
@@ -49,7 +45,6 @@ warnings.filterwarnings("ignore")
 import pandas as pd
 import pandas.io.formats.style
 import os, re, sys, time, datetime, string
-#import subprocess
 import numpy as np
 import matplotlib.pyplot as plt
 import six
@@ -58,15 +53,13 @@ import wget
 import json
 import pymysql
 import pymysql.cursors
-import pymysqlpool  
-import sqlite3
+import pymysqlpool
 from sqlalchemy import create_engine
 import inspect
 
 global edxcon, rdscon, rds_connstr, rds_pool, rdsdb, rds_schema
 
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
-#matplotlib.use('Agg')
 
 def banner_msg(banner_title, banner_msg):
     txt = "❚█══ " + banner_title + " ══█❚"
@@ -91,32 +84,19 @@ def conn_open():
     if 'ssl_ca' in rds_connstr:
         stat = rdscon.open
         return stat
-    if rds_connstr == 'omdb.db':
-        return rdscon is not None
     return rdscon.open
 
 def copydbtbl(df, tblname):
     try:
-        if '.db' in rds_connstr:
-            conn = rds_connector()
-            df.to_sql(tblname, con=conn,index=False, if_exists='append') 
-        else:
-            df.reset_index()
-            rdsEngine = rds_engine()
-            conn = rdsEngine.connect()
-            df.to_sql(tblname, con=conn, if_exists = 'append', index=False, chunksize = 1000)
-            conn.close()
+        df.reset_index()
+        rdsEngine = rds_engine()
+        conn = rdsEngine.connect()
+        df.to_sql(tblname, con=conn, if_exists = 'append', index=False, chunksize = 1000)
+        conn.close()
         ok=True
     except:
         ok=False
     return ok    
-
-def copy2omdb(df, tbl):
-    sqldb = "omdb.db"
-    conn = sqlite3.connect(sqldb)
-    df.to_sql(tbl, con=conn,index=False, if_exists='replace') 
-    conn.close()
-    return
 
 def email_lookup(df, email):
     student_list = [x for x in  df.studentid]
@@ -132,18 +112,8 @@ def email_lookup(df, email):
         return str(sid)
     return ""
 
-def get_attachment(bot, fid):
-    fpath = bot.getFile(fid)['file_path']
-    fn = "https://api.telegram.org/file/bot" + bot._token + "/"  + fpath
-    fname = wget.download(fn)
-    return fname
-    
 def get_columns(tablename):
     global rds_schema
-    if '.db' in rds_connstr:
-        df = querydf(rds_connstr, f"PRAGMA table_info('{tablename}');")
-        cols = [x for x in df.name]
-        return cols
     query = f"SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_SCHEMA = '{rds_schema}' AND TABLE_NAME = '{tablename}';"
     df = rds_df(query)
     df.columns = ['COLUMN_NAME']
@@ -188,25 +158,6 @@ def printdict(obj):
     print(*obj.items(), sep = '\n')
     return
     
-def sqlcmd(resp):
-    result = ""
-    try:        
-        pycode = compile(resp, 'test', 'eval')
-        result = str(eval(pycode))
-    except:
-        result = ""
-    return result
-
-def querydf(sqldb, query):
-    df = None    
-    try:        
-        conn = sqlite3.connect(sqldb)
-        df = pd.read_sql_query(query, conn)
-        conn.close()        
-    except:
-        pass
-    return df
-
 def rds_connector():
     global rds_connstr, rds_pool, rdsdb
     if rds_connstr=="":
@@ -231,8 +182,6 @@ def rds_connector():
         else:
             rdscon = pymysql.connect(host=host, port=3306, user=user,passwd=passwd,db=db)
             rdscon.ping(True)
-    elif '.db' in rds_connstr:
-        rdscon = sqlite3.connect(rds_connstr)
     else:
         rdscon = None
     return rdscon
@@ -240,29 +189,20 @@ def rds_connector():
 def rds_df(query):
     global rdscon
     df = None
-    #try:
     rdscon = rds_connector()
-    #if rdscon is None:
-    #if not rdscon.open:
     if not conn_open():
         rdscon = rds_connector()
-        #if rdscon is None:
-        #if not rdscon.open:
         if not conn_open():
             syslog("RDS connection unsuccessful !")
             return    
     rdscur = rdscon.cursor()
     rdscur.execute(query)
     rows = rdscur.fetchall()    
-    #rdscon.commit()
     rdscon.close()
     if len(rows) == 0:
-        #syslog("rds_df returns no data")
         return None
     else:
         df = pd.DataFrame.from_dict(rows)
-    #except:
-    #    pass
     return df
 
 def rds_engine():
@@ -284,7 +224,6 @@ def rds_param(query, retval="", dfmode=False):
             sqlvar = df.copy()
         else:            
             sqlvar = list(df.iloc[0])[0]
-            #sqlvar = df[fld].iloc[0]
             if type(retval) != type(sqlvar):                
                 sqlvar = eval( str(sqlvar) )
     except:
@@ -295,10 +234,8 @@ def rds_update(query):
     global rdscon
     rdscon = rds_connector()
     df = None
-    #if rdscon is None:
     if not conn_open():
         rdscon = rds_connector()
-        #if rdscon is None:
         if not conn_open():
             syslog("RDS connection unsuccessful !")
             return
@@ -310,39 +247,6 @@ def rds_update(query):
         pass
     rdscon.close()    
     return 
-
-def render_table(data, col_width=3.0, row_height=0.625, font_size=14,
-                    header_color='#40466e', row_colors=['#f1f1f2', 'w'], edge_color='w',
-                    bbox=[0, 0, 1, 1], header_columns=0, title_name='', ax=None, **kwargs):
-    if ax is None:
-        size = (np.array(data.shape[::-1]) + np.array([0, 1])) * np.array([col_width, row_height])
-        if size[1] < 2:
-            size[1] = 2
-        fig, ax = plt.subplots(figsize=size)
-        ax.axis('off')
-    if title_name != '':
-        plt.title(title_name)
-    mpl_table = ax.table(cellText=data.values, bbox=bbox, colLabels=data.columns, **kwargs)
-
-    mpl_table.auto_set_font_size(False)
-    mpl_table.set_fontsize(font_size)
-
-    for k, cell in six.iteritems(mpl_table._cells):
-        cell.set_edgecolor(edge_color)
-        if k[0] == 0 or k[1] < header_columns:
-            cell.set_text_props(weight='bold', color='w')
-            cell.set_facecolor(header_color)
-        else:
-            cell.set_facecolor(row_colors[k[0]%len(row_colors) ])
-    return ax
-
-#def shellcmd(cmd):
-#    try:
-#        ps = subprocess.Popen(cmd,shell=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
-#        output = (ps.communicate()[0]).decode("utf8")
-#    except:
-#        output = ''
-#    return output
 
 def syslog(msg):
     s = inspect.stack()[1]

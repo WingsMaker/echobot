@@ -1,11 +1,12 @@
-#  ___                  _ __  __            _
+#  ___                  _ __  __            _ 
 # / _ \ _ __ ___  _ __ (_)  \/  | ___ _ __ | |_ ___  _ __
 #| | | | '_ ` _ \| '_ \| | |\/| |/ _ \ '_ \| __/ _ \| '__|
 #| |_| | | | | | | | | | | |  | |  __/ | | | || (_) | |
 # \___/|_| |_| |_|_| |_|_|_|  |_|\___|_| |_|\__\___/|_|
 #
-# Library functions by KW
-# NLP module using FastText by KW
+# Library functions by                                             
+# NLP module using FastText                                                                        
+#                                                                                                    
 #------------------------------------------------------------------------------------------------------
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -121,7 +122,7 @@ class NLP_Parser():
             syslog("model loading completed")
         return        
 
-    def load_corpus(self, config):
+    def load_corpus(self):
         self.corpus_df = rds_df("select * from ft_corpus")
 
     def create_prompts_corpus(self, input_text):
@@ -339,7 +340,7 @@ if __name__ == "__main__":
     if 6 in opts :
         if ft_model.corpus_df is None:
             print("Loading corpus from database")
-            ft_model.load_corpus("nlp-conf.db")
+            ft_model.load_corpus()
         ft_model.train_model()
     if 7 in opts :
         from nltk.chat.eliza import eliza_chatbot

@@ -9,19 +9,14 @@
 # \▓▓    ▓▓ ▓▓ | ▓▓ | ▓▓ ▓▓  | ▓▓ ▓▓ ▓▓  \▓ | ▓▓\▓▓     \ ▓▓  | ▓▓  \▓▓  ▓▓\▓▓    ▓▓ ▓▓
 #  \▓▓▓▓▓▓ \▓▓  \▓▓  \▓▓\▓▓   \▓▓\▓▓\▓▓      \▓▓ \▓▓▓▓▓▓▓\▓▓   \▓▓   \▓▓▓▓  \▓▓▓▓▓▓ \▓▓
 #
-# @OmniMentorBot by KH
 #------------------------------------------------------------------------------------------------------
 #
 # # Commands
-# /sys - system admin access
-# /admin - Faculty admin & mentor access
 # /start - new student-to-bot session, same as /hellobot
 # /end   - logout from the session
 # /stop  - sysadm shutdown this server, inform all online users
-# /demo  - demo mode
-# documentation at project wiki
-#
-# 
+# documentation at project wiki                                                                        
+#                                                                           
 #------------------------------------------------------------------------------------------------------
 import sys
 import vmbotlib
