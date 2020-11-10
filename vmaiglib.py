@@ -5,8 +5,7 @@
 # \___/|_| |_| |_|_| |_|_|_|  |_|\___|_| |_|\__\___/|_|
 #
 # Library functions by KH
-# This is for AI Grading
-#                                                                                                  
+# This is for AI Grading 
 #------------------------------------------------------------------------------------------------------
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -14,7 +13,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 warnings.filterwarnings("ignore")
 
 import pandas as pd
-#from pandas_profiling import ProfileReport
+from pandas_profiling import ProfileReport
 import numpy as np
 import pydotplus
 import pickle

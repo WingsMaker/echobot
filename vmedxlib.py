@@ -6,7 +6,7 @@
 #
 # Library functions by KH
 # This is for SMS/LMS interface
-#                                                                                           
+#                                                                                      
 #------------------------------------------------------------------------------------------------------
 import pandas as pd
 import pymysql
@@ -163,7 +163,8 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
         grade_list = []
         att_list = []
         avgscore_list = []
-        for rec in [ x for x in list(data) if 'attempts' in x['state']]  :
+        #for rec in [ x for x in list(data) if 'attempts' in x['state']]  :
+        for rec in [ x for x in list(data) ]:
             qn = 0
             pp = 0
             if 'student_id' in list(rec):
@@ -183,10 +184,10 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
             if 'option_display_name' in list(rec):
                 qn = getnumstr(rec['option_display_name'])
             if 'IU' in list(rec):
-                r = rec['IU']
-                if r is None:
+                r = rec['IU']                
+                if (r is None) or (r==""):
                     syslog(f"IU = None on {course_id} student_id = {sid}")
-                    if 'chapter_title' in list(rec):
+                    if 'chapter_title' in list(rec):                        
                         iu = getnumstr(rec['chapter_title'])
                     else:
                         iu = 0
@@ -214,7 +215,6 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
             qn_list.append(qn)
             grade_list.append(qnscore)
             att_list.append(int(attempts))
-            #actual average score
             avgscore_list.append(grade)
         client_list = [client_name for x in iu_list]
         data = {'client_name':client_list, 'course_id': course_id_list, 'student_id':student_id_list, \
@@ -282,7 +282,7 @@ def sms_df(course_id, student_id):
 def sms_datelist(df):
     if df is None:
         return []
-    df0 = df[df.attendance_type_desc=='Attend']
+    df0 = df[df.attendance_type_desc.str.lower()=='attend']
     dlist = [x.split(' ')[0] for x in df0.timetable_date]
     try:
         date_list = [string2date(x,"%m/%d/%Y") for x in dlist]
@@ -325,11 +325,9 @@ def sms_missingdates(client_name, course_id, student_id, cols, date_list):
         fsf_dates = [string2date(x,"%d/%m/%Y") for x in df.startdate]
         stage_list = [x for x in df.stage]
         f2f_list = [x for x in df.f2f]
-        #bypass_map = dict(zip(stage_list,f2f_list))
         f2f_map = dict(zip(stage_list,f2f_list)) # value 1 for attendance taking
         arr_stgf2f = dict(zip(stage_list, fsf_dates))
         missing_fsf = [f2flag(stage_list[n],fsf_dates[n]) for n in range(len(stgid_list))]
-        #missed_fsf = [ f2f_pass(x) for x in missing_fsf ]
     return missing_fsf
 
 def sms_att_rate(client_name, course_id, student_id, date_list):
@@ -710,7 +708,7 @@ def edx_import(course_id, client_name):
     condqry = f"client_name = '{client_name}' and courseid = '{course_id}';"
     qry = f"select pillar from course_module where client_name = '{client_name}' and module_code = '{module_code}';"
     module_id = rds_param(qry)
-    if module_id=="":  # either incomplete course and just a course header
+    if module_id=="":
         syslog("incomplete information , edx_import stopped")
         return
     course_name = edx_coursename(course_id)
@@ -755,13 +753,14 @@ def edx_import(course_id, client_name):
     df['grade'] = 0
     df['stage'] = stage
     df['f2f'] = 0
+    df['deferred'] = 0
     df['risk_level'] = 0
     df['mcq_zero'] = '[]'
     df['mcq_failed'] = '[]'
     df['as_zero'] = '[]'
     df['as_failed'] = '[]'
     df.rename(columns={'course_id':'courseid','student_id':'studentid'} , inplace=True)
-    df1 = df[['client_name', 'module_id', 'courseid', 'studentid', 'username', 'amt', 'grade', 'stage', 'f2f', \
+    df1 = df[['client_name', 'module_id', 'courseid', 'studentid', 'username', 'amt', 'grade', 'stage', 'f2f', 'deferred', \
               'risk_level', 'mcq_zero', 'mcq_failed', 'as_zero', 'as_failed']]
     copydbtbl(df1, "userdata")
 
@@ -1460,6 +1459,7 @@ if __name__ == "__main__":
                     txt += f"class_cohort_code = {cohort_code}\n"
                     txt += f"class_remarks = {remarks}\n"
                     date_list = sms_datelist(df)
+                    #print(date_list)
                     dlist = [ x.strftime('%d/%m/%Y') for x in date_list ]
                     dlist = list(set(dlist))
                     txt += f"List of attendance date matching to stages table:\n"
@@ -1486,12 +1486,7 @@ if __name__ == "__main__":
         else:
             print("Unable to find matching information")
     else:
-        #edx_eocgap(client_name, course_id, sid, 7)
-        #sms_pmstage(client_name, course_id)
-        #edx_eocend(client_name, course_id, sid, 7)
-        #zz = """
         prog = str(sys.argv[0])
         print(f"usage :\n\tpython3 {prog} [commands] [cohort_id] [student_id]")
         print("commands:\n\timport\n\tmcq\n\tassignment\n\tschedule\n\tcalendar\n\tinfo")
         print(f"Example:\n\tpython3 {prog} assignment IMM-0520A 4558")
-        # """
