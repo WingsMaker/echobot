@@ -5,8 +5,7 @@
 # \___/|_| |_| |_|_| |_|_|_|  |_|\___|_| |_|\__\___/|_|
 #
 # Library functions by KH
-# This is for SMS/LMS interface
-#                                                                                      
+# This is for SMS/LMS interface                   
 #------------------------------------------------------------------------------------------------------
 import pandas as pd
 import pymysql
@@ -64,6 +63,7 @@ def edx_mcqcnt(course_id, client_name):
     qry += "ON aa.pillar=bb.pillar AND aa.course_code=bb.course_code AND aa.module_code=bb.module_code "
     qry += f"AND aa.client_name=bb.client_name WHERE aa.client_name='{client_name}' AND aa.course_id = '{course_id}';"
     cnt = rds_param(qry)
+    cnt = 0 if str(cnt)=='' else cnt
     return cnt
 
 def edx_ascnt(course_id, client_name):
@@ -71,6 +71,7 @@ def edx_ascnt(course_id, client_name):
     qry += "ON aa.pillar=bb.pillar AND aa.course_code=bb.course_code AND aa.module_code=bb.module_code "
     qry += f"AND aa.client_name=bb.client_name WHERE aa.client_name='{client_name}' AND aa.course_id = '{course_id}';"
     cnt = rds_param(qry)
+    cnt = 0 if str(cnt)=='' else cnt
     return cnt
 
 def edx_userdata(course_id):
@@ -146,7 +147,7 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
         url = f"{edx_api_url}/user/fetch/mcq/scores/list"
     else:
         url = f"{edx_api_url}/user/fetch/mcq/scores/list/{student_id}"
-    syslog(f"calling api {url} via requests.post")
+    syslog(f"calling api {url} via requests.post course_id = {course_id}")
     response = requests.post(url, data=course_id, headers=edx_api_header, verify=False) # it takes 3 secs
     syslog(f"completed with status code {response.status_code}")
     if response.status_code==200:
@@ -184,10 +185,10 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
             if 'option_display_name' in list(rec):
                 qn = getnumstr(rec['option_display_name'])
             if 'IU' in list(rec):
-                r = rec['IU']                
+                r = rec['IU']
                 if (r is None) or (r==""):
                     syslog(f"IU = None on {course_id} student_id = {sid}")
-                    if 'chapter_title' in list(rec):                        
+                    if 'chapter_title' in list(rec):
                         iu = getnumstr(rec['chapter_title'])
                     else:
                         iu = 0
@@ -206,7 +207,7 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
                     correctness = state['correct_map'][statekey]['correctness']
                     qnscore = 1.0 if correctness=='correct' else 0
             else:
-                syslog('correct_map segment not found')
+                syslog(f"correct_map segment not found for student_id {sid} IU {iu} Qn {qn}")
             grade = 1.0 if pp==0 else float(sc/pp)
             attempts = 0 if qnscore == 0 else ( state['attempts'] if 'attempts' in list(state) else 0)
             course_id_list.append(rec['course_id'])
@@ -521,7 +522,6 @@ def update_assignment(course_id, client_name, student_id=0):
     as_cnt = edx_ascnt(course_id, client_name)
     if as_cnt<=0:
         syslog(f"edx_ascnt returns 0")
-        print(f"edx_ascnt returns 0")
         return
     syslog(f"Found {as_cnt} IUs on {course_id}")
     df = edx_grade(course_id, student_id)
@@ -603,6 +603,9 @@ def update_mcq(course_id, client_name, student_id=0):
         return
     syslog(f"Found {mcqcnt} IUs on {course_id}")
     mcq_df = edx_mcqinfo(client_name, course_id, student_id)
+    if mcq_df is None:
+        syslog(f"edx_mcqinfo return none for {course_id}")
+        return
     if len(mcq_df) > 0:
         query = "delete from mcq_data where " + cond_qry
         rds_update(query)
@@ -738,7 +741,6 @@ def edx_import(course_id, client_name):
     nrows = len(df)
     if nrows == 0:
         syslog("no user data from edx api found")
-        print("no user data from edx api found")
         return
     query = "delete from userdata where " + condqry
     rds_update(query)
@@ -1064,7 +1066,6 @@ def get_google_calendar(course_id, client_name):
     api_url = f"https://realtime.sambaash.com/v1/calendar/fetch?cohortId={course_code}%20:%20{cohort_id}"
     data  = get_calendar_json(api_url)
     if data == {}:
-        print("there is no data from google calendar")
         syslog("there is no data from google calendar")
         return []
     sorted_stage_list = get_stage_list(data, cohort_id)
@@ -1289,7 +1290,6 @@ def edx_mass_update(func, clt):
             query = f"update playbooks set eoc = {eoc} where client_name = '{client_name}' and course_id = '{course_id}';"
             rds_update(query)
             if eoc == 0:
-                print(course_id, mcode)
                 func(course_id, client_name)
     return
 
@@ -1371,7 +1371,7 @@ if __name__ == "__main__":
     edx_api_header = {'Authorization': 'Basic ZWR4YXBpOlVzM3VhRUxJVXZENUU4azNXdG9E', 'Content-Type': 'text/plain'}
     vmsvclib.rds_connstr = bot_info['omdb']
     vmsvclib.rdscon = None
-    vmsvclib.rds_pool = 0    
+    vmsvclib.rds_pool = 0
     vmsvclib.rds_schema = bot_info['schema']
     max_iu = 20
     if len(sys.argv)>2:
@@ -1459,7 +1459,6 @@ if __name__ == "__main__":
                     txt += f"class_cohort_code = {cohort_code}\n"
                     txt += f"class_remarks = {remarks}\n"
                     date_list = sms_datelist(df)
-                    #print(date_list)
                     dlist = [ x.strftime('%d/%m/%Y') for x in date_list ]
                     dlist = list(set(dlist))
                     txt += f"List of attendance date matching to stages table:\n"
