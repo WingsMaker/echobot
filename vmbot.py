@@ -10,13 +10,8 @@
 #  \▓▓▓▓▓▓ \▓▓  \▓▓  \▓▓\▓▓   \▓▓\▓▓\▓▓      \▓▓ \▓▓▓▓▓▓▓\▓▓   \▓▓   \▓▓▓▓  \▓▓▓▓▓▓ \▓▓
 #
 #------------------------------------------------------------------------------------------------------
-#
-# # Commands
-# /start - new student-to-bot session, same as /hellobot
-# /end   - logout from the session
-# /stop  - sysadm shutdown this server, inform all online users
-# documentation at project wiki                                                                        
-#                                                                           
+# KH
+# https://sambaash.atlassian.net/wiki/spaces/OM/pages/666861630/Technical+Documentation
 #------------------------------------------------------------------------------------------------------
 import sys
 import vmbotlib
@@ -33,7 +28,6 @@ if __name__ == "__main__":
     matplotlib.use('Agg')
     version = sys.version_info    
     if version.major == 3 and version.minor >= 6:
-        #asyncio.run(vmbotlib.do_main())
         vmbotlib.do_main()
     else:
         print("Unable to use this version of python\n", version)

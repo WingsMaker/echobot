@@ -4,8 +4,8 @@
 #| |_| | | | | | | | | | | |  | |  __/ | | | || (_) | |
 # \___/|_| |_| |_|_| |_|_|_|  |_|\___|_| |_|\__\___/|_|
 #
-# Library functions by KH
-# This is for SMS/LMS interface                   
+# Library functions by KH                                                              
+# This is for SMS/LMS interface                                                                        
 #------------------------------------------------------------------------------------------------------
 import pandas as pd
 import pymysql
@@ -26,7 +26,7 @@ dmy_str = lambda v : piece(v,'-',2) + '/' + piece(v,'-',1) + '/' + piece(v,'-',0
 ymd_str = lambda v : piece(v,'-',0) + '/' + piece(v,'-',1) + '/' + piece(v,'-',2)
 
 def edx_coursename(course_id):
-    global edx_api_header, edx_api_url
+    global edx_api_header,edx_api_url
     coursename = ""
     url = f"{edx_api_url}/course/fetch/name"
     response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)
@@ -37,7 +37,7 @@ def edx_coursename(course_id):
     return coursename
 
 def edx_day0(course_id):
-    global edx_api_header, edx_api_url
+    global edx_api_header,edx_api_url
     start_date = ""
     url = f"{edx_api_url}/course/fetch/startdate"
     response = requests.post(url, data=course_id, headers=edx_api_header, verify=False)
@@ -206,8 +206,8 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
                     statekey = map_list[0]
                     correctness = state['correct_map'][statekey]['correctness']
                     qnscore = 1.0 if correctness=='correct' else 0
-            else:
-                syslog(f"correct_map segment not found for student_id {sid} IU {iu} Qn {qn}")
+            #else:
+                #syslog(f"correct_map segment not found for student_id {sid} IU {iu} Qn {qn}")
             grade = 1.0 if pp==0 else float(sc/pp)
             attempts = 0 if qnscore == 0 else ( state['attempts'] if 'attempts' in list(state) else 0)
             course_id_list.append(rec['course_id'])
@@ -493,16 +493,14 @@ def update_schedule(course_id, client_name):
         qry = qry.replace('_x_', stg)
         query = qry.replace('_y_', str(dd))
         rds_update(query)
-    query = "update stages SET IU =  IFNULL((SELECT b.IU FROM stages_master b WHERE b.client_name=client_name "
+    query = "update stages SET IU=IFNULL((SELECT b.IU FROM stages_master b WHERE b.client_name=client_name "
     query += f"AND b.module_code='{module_code}' AND b.stage=stage LIMIT 1) ,'0') "
     query += f"WHERE courseid = '{course_id}' AND client_name = '{client_name}';"
-    try:
-        rds_update(query)
-    except:
-        pass
+    rds_update(query)
     query = f"SELECT `name` FROM stages WHERE client_name = '{client_name}' AND courseid='{course_id}' AND "
     query += "STR_TO_DATE(startdate,'%d/%m/%Y') <= CURDATE() ORDER BY id DESC LIMIT 1;"
     current_stage = rds_param(query)
+    current_stage = current_stage.replace("\r\n","")
     query = f"update userdata set stage = '{current_stage}' where " + condqry
     rds_update(query)
     query = f"update stages set stagedate = '' where (stagedate is null) and "
@@ -511,9 +509,54 @@ def update_schedule(course_id, client_name):
     query = f"update stages set startdate = '' where (startdate is null) and "
     query += condqry
     rds_update(query)
-    query = "UPDATE userdata SET mcq_zero = '[]',mcq_failed = '[]',as_zero = '[]',as_failed = '[]' "
-    query += " WHERE mcq_zero IS NULL AND client_name='{client_name}' and courseid='{course_id}';"
+    query = "UPDATE userdata SET mcq_zero = '[]',mcq_failed = '[]',as_zero = '[]',as_failed = '[]',risk_level=0 "
+    query += f" WHERE client_name='{client_name}' and courseid='{course_id}';"
     rds_update(query)
+    qry = "SELECT max(SUBSTRING_INDEX(mcq, ',', -1)) AS max_mcq, "
+    qry += "max(SUBSTRING_INDEX(assignment, ',', -1)) AS max_as "
+    qry += f"FROM stages WHERE courseid = '{course_id}' AND client_name = '{client_name}';"
+    df = rds_df(qry)
+    pass_rate = rds_param("SELECT value from params where client_name = 'System' AND `KEY` = 'pass_rate';")
+    pass_rate = float(pass_rate)
+    if df is not None:
+        df.columns = ['max_mcq', 'max_as']
+        max_mcq = int(df.max_mcq.values[0])
+        max_as = int(df.max_as.values[0])
+        list_cond = [ f"(a.mcq_avg{n}>=0 AND a.mcq_avg{n} <{pass_rate} AND concat(s.mcq , ',') LIKE '%{n},%')" for n in range(1,max_mcq+1)]
+        list_cond += [ f"(a.as_avg{n}>=0 AND a.as_avg{n} <{pass_rate} AND concat(s.assignment , ',') LIKE '%{n},%')" for n in range(1,max_as+1)]
+        if len(list_cond)>0:
+            mcq_cond = ' OR '.join(list_cond)
+            qry = "UPDATE userdata a SET stage = IFNULL((SELECT s.name FROM stages s WHERE ( "
+            qry += mcq_cond
+            qry += f") AND a.courseid=s.courseid LIMIT 1),'{current_stage}') WHERE a.courseid = '{course_id}' AND a.client_name = '{client_name}';"
+            rds_update(qry)
+        qry = "UPDATE stages s INNER JOIN userdata a ON a.client_name=s.client_name AND a.courseid=s.courseid SET a.mcq_zero = Replace(CONCAT('[',"
+        list_cond = [ f"if(a.mcq_avg{n}=0 AND CONCAT(s.mcq,',') LIKE '%{n},%','{n},','')," for n in range(1,max_mcq+1) ]
+        if len(list_cond)>0:
+            qry += ''.join(list_cond)
+            qry += f"']'),',]',']') WHERE s.name = '{current_stage}' AND s.client_name = '{client_name}' AND s.courseid = '{course_id}';"
+            rds_update(qry)
+        qry = "UPDATE stages s INNER JOIN userdata a ON a.client_name=s.client_name AND a.courseid=s.courseid SET a.mcq_failed = Replace(CONCAT('[',"
+        list_cond = [ f"if(a.mcq_avg{n}>0 AND a.mcq_avg{n}<{pass_rate} AND CONCAT(s.mcq,',') LIKE '%{n},%','{n},','')," for n in range(1,max_mcq+1) ]
+        if len(list_cond)>0:
+            qry += ''.join(list_cond)
+            qry += f"']'),',]',']') WHERE s.name = '{current_stage}' AND s.client_name = '{client_name}' AND s.courseid = '{course_id}';"
+            rds_update(qry)
+        qry = "UPDATE stages s INNER JOIN userdata a ON a.client_name=s.client_name AND a.courseid=s.courseid SET a.as_zero = Replace(CONCAT('[',"
+        list_cond = [ f"if(a.as_avg{n}=0 AND CONCAT(s.assignment,',') LIKE '%{n},%','{n},','')," for n in range(1,max_as+1) ]
+        if len(list_cond)>0:
+            qry += ''.join(list_cond)
+            qry += f"']'),',]',']') WHERE s.name = '{current_stage}' AND s.client_name = '{client_name}' AND s.courseid = '{course_id}';"
+            rds_update(qry)
+        qry = "UPDATE stages s INNER JOIN userdata a ON a.client_name=s.client_name AND a.courseid=s.courseid SET a.as_failed = Replace(CONCAT('[',"
+        list_cond = [ f"if(a.as_avg{n}>0 AND a.as_avg{n}<{pass_rate} AND CONCAT(s.assignment,',') LIKE '%{n},%','{n},','')," for n in range(1,max_as+1) ]
+        if len(list_cond)>0:
+            qry += ''.join(list_cond)
+            qry += f"']'),',]',']') WHERE s.name = '{current_stage}' AND s.client_name = '{client_name}' AND s.courseid = '{course_id}';"
+            rds_update(qry)
+        qry = f"UPDATE userdata SET risk_level = 1 WHERE client_name = '{client_name}' AND courseid = '{course_id}' "
+        qry += " AND NOT (mcq_zero='[]' AND mcq_failed='[]' AND as_zero='[]' AND as_failed='[]');"
+        rds_update(qry)
     syslog(f"completed on {course_id}")
     return
 
@@ -805,7 +848,7 @@ def gen_mcqas_df(colsum, client_name, course_id):
         return None
     query = "select client_name, courseid as course_id, studentid, grade, 0 as mcq_sumscore, 0 as as_sumscore"
     xopts = ["mcq" , "as"]
-    cols = ['client_name','courseid', 'studentid', 'grade', 'mcq_sumscore', 'as_sumscore', 'mcq_maxattempts']
+    cols = ['client_name','course_id', 'studentid', 'grade', 'mcq_sumscore', 'as_sumscore']
     for xvar in xopts:
         n = xopts.index(xvar)
         rsum = colsum[n]
@@ -841,22 +884,22 @@ def gen_mcqas_df(colsum, client_name, course_id):
             else:
                 xavg = xvar + "_avg"
                 xatt = xvar + "_attempts"
-                cols = [ xavg + str(x) for x in range( 1, rsum + 1 )]
-                df[ xvar + "_sumscore" ] = df[cols].sum(axis=1)
+                cols1 = [ xavg + str(x) for x in range( 1, rsum + 1 )]
+                df[ xvar + "_sumscore" ] = df[cols1].sum(axis=1)
                 cols = [ xatt + str(x) for x in range( 1, rsum + 1 )]
-                updqry2 = '+ '.join(cols)
                 df[ xvar + "_sumattempts" ] = df[cols].sum(axis=1)
                 for n in range(1, rsum + 1):
                     attflag = xatt + str(n)
                 df[attflag] = df[attflag].apply(lambda x: 1 if x>0 else 0)
-                df[xvar + '_cnt'] = df.eval(updqry2)
-                df[xvar + "_avgattempts"] = df.apply(lambda x: (x[xvar + "_sumattempts"] / x[xvar + "_cnt"]) if x[xvar + "_cnt"] > 0 else 0, axis=1)
-                df[xvar + '_avgscore'] = df.apply(lambda x: ( x[xvar + "_sumscore"] / x[xvar + "_cnt"]) if x[xvar + "_cnt"] > 0 else 0, axis=1)
+                df[xvar + '_cnt'] = df.apply(lambda x: sum([ 1 if x[c]>0 else 0 for c in cols1 ]), axis=1)
+                df[xvar + "_avgattempts"] = df.apply(lambda x: int(x[xvar + "_sumattempts"]*100/ x[xvar + "_cnt"])/100 if x[xvar + "_cnt"] > 0 else 0, axis=1)
+                df[xvar + '_avgscore'] = df.apply(lambda x: int(x[xvar + "_sumscore"]*100/ x[xvar + "_cnt"])/100 if x[xvar + "_cnt"] > 0 else 0, axis=1)
         except:
             syslog(f"error updating {xvar}")
 
     try:
-        df1 = df[["client_name", "course_id","studentid","grade","mcq_avgscore","mcq_avgattempts", \
+        df1 = df[ (df.mcq_cnt + df.as_cnt) > 0 ]
+        df1 = df1[["client_name", "course_id","studentid","grade","mcq_avgscore","mcq_avgattempts", \
                   "mcq_maxattempts","mcq_cnt","as_avgscore","as_avgattempts","as_maxattempts","as_cnt"]]
         return df1
     except:
@@ -955,12 +998,18 @@ def get_stage_list(data, module_node):
             continue
         x_summary = x['summary']
         x_desc = x['description']
-        x_list = [x.strip() for x in x_summary.split(':')]
-        n=len(x_list)
-        cohort = x_list[0] if n>0 else ""
-        stage_name = x_list[1] if n>2 else ""
-        stage_desc = x_list[2] if n>2 else stage_name
-        stage_desc = stage_desc.replace('?','')
+        if x_summary is None:
+            x_list=[]
+            cohort = ""
+            stage_name = ""
+            stage_desc = ""
+        else:
+            x_list = [x.strip() for x in x_summary.split(':')]
+            n=len(x_list)
+            cohort = x_list[0] if n>0 else ""
+            stage_name = x_list[1] if n>2 else ""
+            stage_desc = x_list[2] if n>2 else stage_name
+            stage_desc = stage_desc.replace('?','')
         cohort = cohort.strip()
         iu_list = "0"
         stdate = ymd_str(x['startDate'][:10])
@@ -1332,7 +1381,6 @@ def test_google_calendar(course_id, client_name):
     return stage_list
 
 def edx_alluserdata():
-    # Status : open
     global edx_api_header, edx_api_url
     df = pd.DataFrame.from_dict({'student_id':[],'course_id':[],'username':[],'email':[]})
     url = f"{edx_api_url}/user/fetch/all"
@@ -1374,8 +1422,10 @@ if __name__ == "__main__":
     vmsvclib.rds_pool = 0
     vmsvclib.rds_schema = bot_info['schema']
     max_iu = 20
-    if len(sys.argv)>2:
+    cmd = ""
+    if len(sys.argv)>=2:
         cmd = str(sys.argv[1])
+    if len(sys.argv)>2:
         resp = str(sys.argv[2])
         sid = 0
         if len(sys.argv)>3:
@@ -1465,7 +1515,7 @@ if __name__ == "__main__":
                     txt += str(dlist) + "\n"
                     df['timetable_date'] = df.apply(lambda x: str(x['timetable_date'])[:10], axis=1)
                     if sid==0:
-                        cols = ['class_type_code', 'status_desc', 'attendance_type_desc', 'timetable_date', 'timetable_day', 'email']
+                        cols = ['class_type_code','status_desc','attendance_type_desc','timetable_date','timetable_day', 'email']
                     else:
                         cols = get_columns("stages")
                         stage_list = sms_missingdates(client_name, course_id, sid, cols, date_list)
@@ -1477,15 +1527,17 @@ if __name__ == "__main__":
                     df1 = df[cols]
                     print(txt)
                     print(df1)
-
         elif len(course_list)>0:
             print("which course_id is the one ?")
             for course_id in course_list:
                 print(course_id)
         else:
             print("Unable to find matching information")
+    elif cmd=="pipeline":
+        generate_mcq_as(client_name)
+        print("pipeline data generated")
     else:
         prog = str(sys.argv[0])
         print(f"usage :\n\tpython3 {prog} [commands] [cohort_id] [student_id]")
-        print("commands:\n\timport\n\tmcq\n\tassignment\n\tschedule\n\tcalendar\n\tinfo")
+        print("commands:\n\timport\n\tmcq\n\tassignment\n\tschedule\n\tcalendar\n\tinfo\n\tpipeline")
         print(f"Example:\n\tpython3 {prog} assignment IMM-0520A 4558")

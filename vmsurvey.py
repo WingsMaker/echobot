@@ -5,18 +5,6 @@ import pyodbc
 import pyodbc 
 global azcon, azcursor
 
-def html_msg(bot, chat_id, title = "", body=""):
-    if (title == "") and (body==""):
-        return
-    if title == "":
-        result = "<pre>" + body +  "</pre>"
-    elif body == "":
-        result = "<b>" + title + "</b>"
-    else:
-        result = "<b>" + title + "</b>\n<pre>" + body +  "</pre>"
-    bot.sendMessage(chat_id,result,parse_mode='HTML')
-    return
-
 def connect_azuredb():
     # https://docs.microsoft.com/en-us/sql/connect/python/pyodbc/step-3-proof-of-concept-connecting-to-sql-using-pyodbc?view=sql-server-ver15
     # https://dataedo.com/kb/query/sql-server/list-table-columns-in-database
@@ -172,19 +160,7 @@ def test_surveydatapoint():
 
 if __name__ == "__main__":
     version = sys.version_info    
-    if version.major == 3 and version.minor >= 7:
+    if version.major == 3 and version.minor >= 6:
         test_surveydatapoint()
-        #opt_surveylist = "Survey Data"
-        #analysis_menu = [[ml_grading, an_mcq, an_mcqd, an_chart, option_back]]
-        #analysis_menu = [[ml_grading, an_mcq, an_mcqd], [an_chart, opt_surveylist, option_back]]        
-        #
-        #(title, msg ) = surveyresults(vmbot.client_name, self.courseid)
-        #html_msg(self.bot, self.chatid, title, msg)   
-        #        
-        #elif self.menu_id == keys_dict[option_analysis]:
-            #elif resp == opt_surveylist:
-                #(title, msg ) = surveyresults(vmbot.client_name, self.courseid)
-                #html_msg(self.bot, self.chatid, title, msg)
-        
     else:
         print("Unable to use this version of python\n", version)

@@ -1,0 +1,1 @@
+{"BotToken": "", "client_name": "Lithan", "omdb": "mysql+pymysql://omnimentor@db-sambaashplatform-cluster-2a:omnimentor@db-sambaashplatform-cluster-2a.mysql.database.azure.com/omnimentor_prod?ssl_ca=BaltimoreCyberTrustRoot.crt.pem","schema":"omnimentor_test","debug":"0"}

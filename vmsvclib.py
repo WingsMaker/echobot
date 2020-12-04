@@ -9,8 +9,8 @@
 # \▓▓    ▓▓ ▓▓ | ▓▓ | ▓▓ ▓▓  | ▓▓ ▓▓ ▓▓  \▓ | ▓▓\▓▓     \ ▓▓  | ▓▓  \▓▓  ▓▓\▓▓    ▓▓ ▓▓
 #  \▓▓▓▓▓▓ \▓▓  \▓▓  \▓▓\▓▓   \▓▓\▓▓\▓▓      \▓▓ \▓▓▓▓▓▓▓\▓▓   \▓▓   \▓▓▓▓  \▓▓▓▓▓▓ \▓▓
 #
-# Library functions by KH                            
-#                                                                                                    
+# Library functions by KH                                              
+#                                                                                                      
 #------------------------------------------------------------------------------------------------------
 summary = """
 ╔«═══════════════════════════════════════════════════════════════════════•[^]»╗
@@ -19,7 +19,6 @@ summary = """
 ║ banner_msg         create a string of text banner in a line                 ║▒▒
 ║ build_menu         build telegram reply-to menu buttons with a list         ║▒▒
 ║ callgraph          generate flow diagram and save into png file             ║▒▒
-║ conn_open          check database connection status (openned , closed)      ║▒▒
 ║ copydbtbl          append the dataframe into another table in RDS           ║▒▒
 ║ email_lookup       email address search when the field is encrypted         ║▒▒
 ║ get_columns        product the dataframe header into python list            ║▒▒
@@ -54,10 +53,11 @@ import json
 import pymysql
 import pymysql.cursors
 import pymysqlpool
+import mysql.connector
 from sqlalchemy import create_engine
 import inspect
 
-global edxcon, rdscon, rds_connstr, rds_pool, rdsdb, rds_schema
+global rdscon, rds_connstr, rds_pool, rdsdb, rds_schema
 
 piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
 
@@ -79,14 +79,8 @@ def build_menu(btn_list, btns_rows = 3, extra_btn='',toadd_btn=[]):
     results = [  btn_list[n*btns_rows:][:btns_rows] for n in range(rr) ]
     return results
 
-def conn_open():
-    global rds_connstr, rdscon
-    if 'ssl_ca' in rds_connstr:
-        stat = rdscon.open
-        return stat
-    return rdscon.open
-
 def copydbtbl(df, tblname):
+    global rdscon
     try:
         df.reset_index()
         rdsEngine = rds_engine()
@@ -96,11 +90,11 @@ def copydbtbl(df, tblname):
         ok=True
     except:
         ok=False
-    return ok    
+    return ok
 
 def email_lookup(df, email):
     student_list = [x for x in  df.studentid]
-    email_list = [x for x in  df.email]        
+    email_list = [x for x in  df.email]
     if email in email_list:
         n = email_list.index(email)
         sid = student_list[n]
@@ -157,31 +151,37 @@ def html_tbl(clt, tblname, titlename, fn):
 def printdict(obj):
     print(*obj.items(), sep = '\n')
     return
-    
+
 def rds_connector():
     global rds_connstr, rds_pool, rdsdb
+    port = 3306
     if rds_connstr=="":
-        with open("vmbot.json") as json_file:  
+        with open("vmbot.json") as json_file:
             bot_info = json.load(json_file)
         rds_connstr = bot_info['omdb']
     if ':' in rds_connstr:
+        conn_info = rds_connstr.split(":")
+        user = conn_info[1].replace('/','')
+        pwhost = conn_info[2].split('/')[0].split('@')
+        passwd = pwhost[0]
+        host = pwhost[1]
+        if len(conn_info)<4:
+            dbase = conn_info[2].split('/')[1].split('?')[0]
+        else:
+            port = conn_info[3].split('/')[0]
+            dbase = conn_info[3].split('/')[1]
         if 'ssl_ca' in rds_connstr:
             if rds_pool == 0:
-                conn_info = rds_connstr.split(":")    
-                user = conn_info[1].replace('/','')    
-                pwhost = conn_info[2].split('/')[0].split('@')
-                passwd = pwhost[0]
-                host = pwhost[1]
-                dbase = conn_info[2].split('/')[1].split('?')[0]
                 ssl_pem=rds_connstr.split('=')[1]
                 rds_pool = 50
                 config={'host':host, 'user':user, 'password':passwd, 'database':dbase, 'autocommit':True, 'ssl':{'ca': ssl_pem}}
-                rdsdb = pymysqlpool.ConnectionPool(size=rds_pool,name='pool', **config)            
+                rdsdb = pymysqlpool.ConnectionPool(size=rds_pool,name='pool', **config)
             rdscon = rdsdb.get_connection()
-            rdscon.ping(True)                
         else:
-            rdscon = pymysql.connect(host=host, port=3306, user=user,passwd=passwd,db=db)
-            rdscon.ping(True)
+            #rdscon = pymysql.connect(host=host, port=port, user=user, passwd=passwd, db=dbase)
+            #rdscon.ping(True)
+            rdsdb = None
+            rdscon = mysql.connector.connect(host=host, port=port,user=user,password=passwd,db=dbase)
     else:
         rdscon = None
     return rdscon
@@ -189,16 +189,15 @@ def rds_connector():
 def rds_df(query):
     global rdscon
     df = None
-    rdscon = rds_connector()
-    if not conn_open():
+    if rdscon is None:
         rdscon = rds_connector()
-        if not conn_open():
-            syslog("RDS connection unsuccessful !")
-            return    
+    if 'open' in dir(rdscon):
+        rdscon.open
     rdscur = rdscon.cursor()
     rdscur.execute(query)
-    rows = rdscur.fetchall()    
-    rdscon.close()
+    rows = rdscur.fetchall()
+    if rdsdb is not None:
+        rdscon.close()
     if len(rows) == 0:
         return None
     else:
@@ -208,7 +207,7 @@ def rds_df(query):
 def rds_engine():
     global rds_connstr
     if rds_connstr=="":
-        with open("vmbot.json") as json_file:  
+        with open("vmbot.json") as json_file:
             bot_info = json.load(json_file)
         rds_connstr = bot_info['omdb']
     rdsEngine = create_engine(rds_connstr, pool_recycle=3600)
@@ -222,9 +221,9 @@ def rds_param(query, retval="", dfmode=False):
             return retval
         if dfmode :
             sqlvar = df.copy()
-        else:            
+        else:
             sqlvar = list(df.iloc[0])[0]
-            if type(retval) != type(sqlvar):                
+            if type(retval) != type(sqlvar):
                 sqlvar = eval( str(sqlvar) )
     except:
         pass
@@ -232,21 +231,20 @@ def rds_param(query, retval="", dfmode=False):
 
 def rds_update(query):
     global rdscon
-    rdscon = rds_connector()
-    df = None
-    if not conn_open():
+    if rdscon is None:
         rdscon = rds_connector()
-        if not conn_open():
-            syslog("RDS connection unsuccessful !")
-            return
-    rdscur = rdscon.cursor()
-    rdscur.execute(query)
+    df = None
+    if 'open' in dir(rdscon):
+        rdscon.open
     try:
+        rdscur = rdscon.cursor()
+        rdscur.execute(query)
         rdscon.commit()
     except:
         pass
-    rdscon.close()    
-    return 
+    if rdsdb is not None:
+        rdscon.close()
+    return
 
 def syslog(msg):
     s = inspect.stack()[1]
@@ -273,7 +271,7 @@ def time_hhmmss(gmt):
     tt = (hrs*100+mm)*100+ss
     return tt
 
-def write2html(df, title='', filename='report.html'):    
+def write2html(df, title='', filename='report.html'):
     if df is None:
         return
     result = '''
@@ -324,13 +322,24 @@ def write2html(df, title='', filename='report.html'):
 if __name__ == "__main__":
     global rdscon, rds_connstr, rdsdb, rds_pool, rds_schema
     get_cols = lambda qry : [('~'+tt).replace(' as ','~').split('~')[-1] for tt in qry.lower().replace('from',':').replace('select','').replace('distinct','').split(':')[0].strip().split(',')]
-    with open("vmbot.json") as json_file:  
-        bot_info = json.load(json_file)
-    client_name = bot_info['client_name']
-    rds_schema = bot_info['schema']
-    rds_connstr = bot_info['omdb']
+    client_name = 'dev'
+    rds_schema = "omnimentor"
+    #rds_connstr = "mysql://omnimentor@db-sambaashplatform-cluster-2a:omnimentor@localhost:33327/omnimentor"
+    rds_connstr = ""
+    try:
+        with open("vmbot.json") as json_file:
+            bot_info = json.load(json_file)
+        if 'client_name' in list(bot_info):
+            client_name = bot_info['client_name']
+        if 'schema' in list(bot_info):
+            rds_schema = bot_info['schema']
+        if 'omdb' in list(bot_info):
+            rds_connstr = bot_info['omdb']
+    except:
+        bot_info = dict()
     rds_pool = 0
     rdsdb = None
+    rdscon = None
     if len(sys.argv)>=2:
         rdscon = rds_connector()
         qry = str(sys.argv[1])
@@ -343,11 +352,12 @@ if __name__ == "__main__":
             if df is None:
                 print("No information found")
             else:
-                cols = get_cols(qry)
-                if '*' in cols:
-                    cols = df.columns
-                    df.columns = [ "#" + str(c) for c in cols ]
+                if '*' in qry:
+                    tbl= [w for w in qry.split('from')[1].split(' ') if w !=  ''][0]
+                    cols = get_columns(tbl)
+                    df.columns = cols
                 else:
+                    cols = get_cols(qry)
                     df.columns = cols
                 print(df)
             print("select query processed")
