@@ -9,7 +9,7 @@
 # \▓▓    ▓▓ ▓▓ | ▓▓ | ▓▓ ▓▓  | ▓▓ ▓▓ ▓▓  \▓ | ▓▓\▓▓     \ ▓▓  | ▓▓  \▓▓  ▓▓\▓▓    ▓▓ ▓▓
 #  \▓▓▓▓▓▓ \▓▓  \▓▓  \▓▓\▓▓   \▓▓\▓▓\▓▓      \▓▓ \▓▓▓▓▓▓▓\▓▓   \▓▓   \▓▓▓▓  \▓▓▓▓▓▓ \▓▓
 #
-# Library functions by KH                                              
+# Library functions by KH                                    
 #                                                                                                      
 #------------------------------------------------------------------------------------------------------
 summary = """
@@ -18,7 +18,6 @@ summary = """
 ╟─────────────────────────────────────────────────────────────────────────────╢▒▒
 ║ banner_msg         create a string of text banner in a line                 ║▒▒
 ║ build_menu         build telegram reply-to menu buttons with a list         ║▒▒
-║ callgraph          generate flow diagram and save into png file             ║▒▒
 ║ copydbtbl          append the dataframe into another table in RDS           ║▒▒
 ║ email_lookup       email address search when the field is encrypted         ║▒▒
 ║ get_columns        product the dataframe header into python list            ║▒▒
@@ -110,8 +109,9 @@ def get_columns(tablename):
     global rds_schema
     query = f"SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_SCHEMA = '{rds_schema}' AND TABLE_NAME = '{tablename}';"
     df = rds_df(query)
-    df.columns = ['COLUMN_NAME']
-    cols = [ x for x in df.COLUMN_NAME ]
+    #df.columns = ['COLUMN_NAME']
+    #cols = [ x for x in df.COLUMN_NAME ]
+    cols =[x for x in df[0]]
     del df
     return cols
 
@@ -128,7 +128,6 @@ def html_report(df, fld_list, gaps,  maxrow=20):
             msglist.append(msg)
             cnt = 0
             msg = ' '.join([(str(fld_list[x])+spacing)[:gaps[x]] for x in range(m)]) + '\n'
-            #result += msg
     if cnt > 0:
         msglist.append(msg)
     return msglist
@@ -171,15 +170,21 @@ def rds_connector():
             port = conn_info[3].split('/')[0]
             dbase = conn_info[3].split('/')[1]
         if 'ssl_ca' in rds_connstr:
+            if rdsdb is None:
+                rds_pool = 0
+            else:
+                rds_pool = rdsdb.size()
             if rds_pool == 0:
                 ssl_pem=rds_connstr.split('=')[1]
-                rds_pool = 50
+                rds_pool = 20
                 config={'host':host, 'user':user, 'password':passwd, 'database':dbase, 'autocommit':True, 'ssl':{'ca': ssl_pem}}
                 rdsdb = pymysqlpool.ConnectionPool(size=rds_pool,name='pool', **config)
+                rds_pool = rdsdb.size()
             rdscon = rdsdb.get_connection()
         else:
             #rdscon = pymysql.connect(host=host, port=port, user=user, passwd=passwd, db=dbase)
             #rdscon.ping(True)
+            rds_pool = 1
             rdsdb = None
             rdscon = mysql.connector.connect(host=host, port=port,user=user,password=passwd,db=dbase)
     else:
@@ -187,17 +192,21 @@ def rds_connector():
     return rdscon
 
 def rds_df(query):
-    global rdscon
+    global rdscon, rdsdb
     df = None
-    if rdscon is None:
+    if rdsdb is None:
+        rds_pool = 0
+    else:
+        rds_pool = rdsdb.size()
+    if rds_pool==0:
         rdscon = rds_connector()
     if 'open' in dir(rdscon):
         rdscon.open
     rdscur = rdscon.cursor()
     rdscur.execute(query)
     rows = rdscur.fetchall()
-    if rdsdb is not None:
-        rdscon.close()
+    #if rdsdb is not None:
+    #    rdscon.close()
     if len(rows) == 0:
         return None
     else:
@@ -230,8 +239,15 @@ def rds_param(query, retval="", dfmode=False):
     return sqlvar
 
 def rds_update(query):
-    global rdscon
+    global rdscon, rds_pool
     if rdscon is None:
+        rds_pool = 0
+    else:
+        try:
+            rds_pool = rdsdb.size()
+        except:
+            pass
+    if rds_pool==0:
         rdscon = rds_connector()
     df = None
     if 'open' in dir(rdscon):
@@ -242,8 +258,8 @@ def rds_update(query):
         rdscon.commit()
     except:
         pass
-    if rdsdb is not None:
-        rdscon.close()
+    #if rdsdb is not None:
+    #    rdscon.close()
     return
 
 def syslog(msg):
@@ -324,8 +340,7 @@ if __name__ == "__main__":
     get_cols = lambda qry : [('~'+tt).replace(' as ','~').split('~')[-1] for tt in qry.lower().replace('from',':').replace('select','').replace('distinct','').split(':')[0].strip().split(',')]
     client_name = 'dev'
     rds_schema = "omnimentor"
-    #rds_connstr = "mysql://omnimentor@db-sambaashplatform-cluster-2a:omnimentor@localhost:33327/omnimentor"
-    rds_connstr = ""
+    rds_connstr = "mysql://omnimentor@db-sambaashplatform-cluster-2a:omnimentor@localhost:33327/omnimentor"
     try:
         with open("vmbot.json") as json_file:
             bot_info = json.load(json_file)

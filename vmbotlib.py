@@ -1,4 +1,4 @@
-4#
+#
 #  ______                        __ __       __                     __
 # /      \                      |  \  \     /  \                   |  \
 #|  ▓▓▓▓▓▓\______ ____  _______  \▓▓ ▓▓\   /  ▓▓ ______  _______  _| ▓▓_    ______   ______
@@ -9,7 +9,7 @@
 # \▓▓    ▓▓ ▓▓ | ▓▓ | ▓▓ ▓▓  | ▓▓ ▓▓ ▓▓  \▓ | ▓▓\▓▓     \ ▓▓  | ▓▓  \▓▓  ▓▓\▓▓    ▓▓ ▓▓
 #  \▓▓▓▓▓▓ \▓▓  \▓▓  \▓▓\▓▓   \▓▓\▓▓\▓▓      \▓▓ \▓▓▓▓▓▓▓\▓▓   \▓▓   \▓▓▓▓  \▓▓▓▓▓▓ \▓▓
 #
-# Library functions by KH                                        
+# Async task scheduler                              
 #------------------------------------------------------------------------------------------------------
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -50,6 +50,7 @@ piece = lambda txtstr,seperator,pos : txtstr.split(seperator)[pos]
 sorted_numlist = lambda y : list(set([int(x) for x in ''.join([z for z in y if z.isnumeric() or z==',']).split(',') if x!='']))
 iu_reading = lambda z: ','.join([ str(x+1) for x in range(max(z))])
 getnumstr = lambda q : int('0'+(( ''.join([x for x in q if x.isnumeric() or x==' '])).strip()).split(' ')[0])
+getcohort = lambda x : '-'.join(x.split(':')[1].replace('+','-').split('-')[:-1][1:])
 
 def do_main():
     global bot_intance, dt_model
@@ -71,6 +72,7 @@ def do_main():
     vmbot = bot_intance.bot
     try:
         loop = asyncio.get_event_loop()
+        asyncio.set_event_loop(loop)
         loop.create_task(getbotinfo())
         loop.create_task(MessageLoop(vmbot).run_forever())
         loop.create_task(job_scheduler())
@@ -128,7 +130,7 @@ async def job_scheduler():
         if (edx_time > 0) and (timenow==edx_time) and (edx_cnt==0) :
             edx_cnt = 1
             syslog(f"running load_edxdata, edx_time={edx_time}")
-            await load_edxdata()
+            vmedxlib.load_edx(client_name)
             syslog("completed with load_edxdata")
             await asyncio.sleep(60)
         if (edx_time > 0) and (timenow > edx_time) and (edx_cnt==1):
@@ -141,54 +143,6 @@ async def job_scheduler():
         else:
             await checkjoblist()
         await asyncio.sleep(1)
-    return
-
-async def load_edxdata():
-    global bot_intance
-    client_name = bot_intance.client_name
-    syslog("load_edxdata started")
-    date_today = datetime.datetime.now().date()
-    yr_str = str(date_today.strftime('%Y'))
-    yrnow = yr_str[-2:]
-    query = f"SELECT DISTINCT u.courseid FROM userdata u INNER JOIN playbooks p "
-    query += f" ON u.client_name=p.client_name AND u.courseid=p.course_id "
-    query += f"WHERE u.client_name = '{client_name}' AND p.eoc=0 AND SUBSTRING(u.courseid,-2)='{yrnow}';"
-    df = rds_df(query)
-    if df is None:
-        course_list = []
-    else:
-        df.columns = ['courseid']
-        course_list= [x for x in df.courseid]
-
-    updated_courses = []
-    vars = dict()
-    txt =  ""
-    efilter = bot_intance.efilter
-    for course_id in course_list:
-        eoc = vmedxlib.edx_endofcourse(client_name, course_id)
-        eoc_gap = vmedxlib.edx_eocgap(client_name, course_id, 7)
-        if (eoc == 0) or (eoc_gap==1):
-            vmedxlib.update_mcq(course_id, client_name)
-            await asyncio.sleep(0.1)
-            vmedxlib.update_assignment(course_id, client_name)
-            await asyncio.sleep(0.1)
-            vmedxlib.update_schedule(course_id, client_name)
-            await asyncio.sleep(0.1)
-            updated_courses.append(course_id)
-        if eoc == 1:
-            query = f"update playbooks set eoc=1 where client_name='{client_name}' AND course_id='{course_id}';"
-            rds_update(query)
-
-    course_list = vmedxlib.search_course_list(yrnow)
-    course_list = [x for x in course_list if (x[-3].isnumeric()==False and x[-2:]==yrnow) or x[-4:]==yr_str ]
-    for course_id in [ x for x in course_list if x not in updated_courses]:
-        vmedxlib.edx_import(course_id, client_name)
-        await asyncio.sleep(0.1)
-        updated_courses.append(course_id)
-
-    syslog("mass_update_usermaster")
-    vmedxlib.mass_update_usermaster(client_name)
-    syslog("load_edxdata completed")
     return
 
 def loadconfig():
@@ -445,7 +399,8 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             return (None,None)
         avg_list = dict()
         if groupcht:
-            cohort_id = piece(piece(self.courseid,':',1),'+',1)
+            #cohort_id = piece(piece(self.courseid,':',1),'+',1)
+            cohort_id = getcohort(self.courseid)
             fn = 'chart_' + cohort_id + '.png'
             title = f"MCQ and Assignment scores for cohort {cohort_id}"
             df = self.userdata
@@ -1597,7 +1552,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             if course_id != "":
                 txt = "Running LMS import now."
                 await self.sender.sendMessage(txt)
-                vmedxlib.edx_import(course_id, self.client_name)
+                vmedxlib.edx_import(course_id, self.client_name, True)
                 qry = f"update playbooks set eoc=0 where course_id = '{course_id}' and client_name = '{self.client_name}';"
                 rds_update(qry)
                 retmsg = f"LMS import for {course_id} has been completed."
@@ -1851,6 +1806,9 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 else:
                     vars = display_progress(self.userdata, self.stagetable, self.student_id, self.records, self.client_name, bot_intance.resp_dict, bot_intance.pass_rate, bot_intance.att_rate)
                     txt  = vars['notification']
+                    if vars['course_alive'] == 0:
+                        await self.sender.sendMessage(txt)
+                        return
                     tlist = txt.split('\n')
                     uname = self.records['username']
                     txt = '\n'.join(tlist[1:])
@@ -1963,7 +1921,8 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     await self.bot.sendPhoto(chat_id, f)
                     if df is not None:
                         df.columns = ['Test/IU','mcq test','assignment test']
-                        cohort_id = piece(piece(self.courseid,':',1),'+',1)
+                        #cohort_id = piece(piece(self.courseid,':',1),'+',1)
+                        cohort_id = getcohort(self.courseid)
                         title = f"MCQ and Assignment scores for cohort {cohort_id}"
                         html_msg_dict[title] = html_report(df, df.columns, [10, 10, 10], 15)
 
@@ -2771,11 +2730,13 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                             sc = rec['score']
                             pp = rec['points_possible']
                             od = ""
+                            qn = 99
                             if 'options_display_name' in list(rec):
                                 od = rec['options_display_name']
                             if 'option_display_name' in list(rec):
                                 od = rec['option_display_name']
-                            qn = getnumstr(od)
+                            if od.startswith('Q'):
+                                qn = getnumstr(od)
                             iu = str(rec['IU'])
                             state = eval(rec['state'].replace('null','""').replace('false','0').replace('true','1'))
                             corr = ""
@@ -2900,37 +2861,40 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 df.columns = ['pillar', 'course_code','module_code']
                 title = result
                 html_msg_dict[title] = html_report(df, df.columns, [10, 25, 15], 25)
-            elif resp == menu_txt['option_mcq_avg']:
-                query = "SELECT courseid FROM ( SELECT u.courseid, SUM(u.mcq_avg1 + u.mcq_avg2 "
-                query += "+ u.mcq_avg3 + u.mcq_avg4 + u.mcq_avg5) AS mcq_avg "
-                query += "FROM userdata u INNER JOIN playbooks p ON u.client_name=p.client_name "
-                query += f"and u.courseid=p.course_id where u.client_name = '{self.client_name}' "
-                query += "AND p.eoc=0 GROUP BY u.courseid ) zz WHERE mcq_avg = 0 order by courseid;"
-                result = "List of active courses with mcq scores not updated.\n"
+            elif resp == menu_txt['option_module_code']:
+                query = "select pillar, course_code, module_code, module_name "
+                query += f" from course_module a where a.client_name = '{self.client_name}' "
+                query += " AND a.module_code IN ( select module_code "
+                query += " from (select module_code, count(*) "
+                query += f" as cnt from course_module where client_name = '{self.client_name}' "
+                query += " group by module_code ) b where cnt>1 ) order by module_code; "                
+                result = "module code is not unique in course_module table.\n"
                 df = rds_df(query)
                 if df is None:
                     txt = "Sorry, no results found."
                     await self.sender.sendMessage(txt)
                     return
-                df.columns = ['course_id']
+                df.columns = ['pillar', 'course_code', 'module_code', 'module_name']
                 title = result
-                html_msg_dict[title] = html_report(df, df.columns, [50], 20)
-            elif resp == menu_txt['option_as_avg']:
-                query = "SELECT courseid FROM ( SELECT u.courseid, SUM(u.as_avg1 + u.as_avg2 "
-                query += "+ u.as_avg3 + u.as_avg4 + u.as_avg5) AS as_avg "
-                query += "FROM userdata u INNER JOIN playbooks p ON u.client_name=p.client_name "
-                query += f"and u.courseid=p.course_id where u.client_name = '{self.client_name}' "
-                query += "AND p.eoc=0 GROUP BY u.courseid ) zz WHERE as_avg = 0 order by courseid;"
-                result = "List of active courses with assignment scores not updated.\n"
+                html_msg_dict[title] = html_report(df, df.columns, [7, 17, 12, 48], 30)
+            elif resp == menu_txt['option_stages_count']:
+                query = "SELECT pillar , course_code, module_code, course_id, defined, actual FROM ( "
+                query += "SELECT a.pillar , a.course_code, a.module_code, a.course_id, "
+                query += "(SELECT COUNT(stage) FROM stages_master WHERE client_name=a.client_name AND pillar=a.pillar "
+                query += "AND course_code=a.course_code AND module_code=a.module_code) AS defined, "
+                query += "(SELECT COUNT(stage) FROM stages WHERE client_name=a.client_name AND courseid=a.course_id) AS actual "
+                query += f"FROM playbooks a WHERE a.client_name = '{self.client_name}') zz WHERE defined <> actual AND defined >0 "
+                query += "ORDER BY pillar , course_code, module_code, course_id;"
+                result = "Actual # of stages not matched.\n"
                 df = rds_df(query)
                 if df is None:
                     txt = "Sorry, no results found."
                     await self.sender.sendMessage(txt)
                     return
-                df.columns = ['course_id']
+                df.columns = ['pillar', 'course_code', 'module_code', 'course_id', 'defined', 'actual']
                 title = result
-                html_msg_dict[title] = html_report(df, df.columns, [50], 20)
-
+                html_msg_dict[title] = html_report(df, df.columns, [7, 17, 12, 48, 8, 10], 25)
+                
         elif self.menu_id == keys_dict[menu_txt['option_alerts']]:
             if resp == option_back:
                 txt = "You are back in the main menu"
@@ -3167,7 +3131,8 @@ def verify_student(cname, userdata, student_id, courseid, stagedf):
     qry = f"select cohort_id from playbooks where client_name = '{cname}' and course_id = '{courseid}';"
     cohort_id = rds_param(qry)
     if cohort_id=="":
-        cohort_id = piece(piece(course_id,':',1),'+',1)
+        #cohort_id = piece(piece(course_id,':',1),'+',1)
+        cohort_id = getcohort(course_id)
     qry = f"select module_code from playbooks where client_name = '{cname}' and course_id = '{courseid}';"
     module_code = rds_param(qry)
     if module_code=="":
@@ -3254,6 +3219,12 @@ def get_stageinfo(vars, pass_rate, amt, stagecode, mcqvars, asvars):
 def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, att_pass_rate, stagedf):
     vars['reminder'] = ""
     vars['intervention'] = ""
+    vars['mcqvars'] = ""
+    vars['mcq_attempts'] = ""
+    vars['mcq_avg'] = 0
+    vars['asvars'] = ""
+    vars['as_attempts'] = ""
+    vars['as_avg'] = 0
     if (df is None) or (vars == {}) or (stagedf is None):
         return ("", "", vars)
     if len(stagedf)==0:
@@ -3498,7 +3469,8 @@ def load_progress(df, student_id, vars, client_name, resp_dict, pass_rate, att_p
     qry = f"select cohort_id from playbooks where client_name = '{client_name}' and course_id = '{courseid}';"
     cohort_id = rds_param(qry)
     if cohort_id=="":
-        cohort_id = piece(piece(courseid,':',1),'+',1)
+        #cohort_id = piece(piece(courseid,':',1),'+',1)
+        cohort_id = getcohort(courseid)
     qry = f"select module_code from playbooks where client_name = '{client_name}' and course_id = '{courseid}';"
     module_code = rds_param(qry)
     if module_code=="":
@@ -3654,7 +3626,6 @@ def display_progress(df, sdf, sid, vars, client_name, resp_dict, pass_rate=0.7, 
         return "Your information is incomplete, please do not proceed and inform you faculty admin."
     (txt1, txt2, vars) = load_progress(df, sid, vars, client_name, resp_dict, pass_rate, att_pass_rate, sdf)
     txt = txt1 + txt2
-
     vars['course_alive'] = 1
     if txt == "":
         vars['notification'] = "Your information is incomplete, please do not proceed and inform you faculty admin."
@@ -4043,8 +4014,10 @@ def stage_calendar(df):
     zstr = lambda x : ((' *' if ',' in x else x) + ' '*m)[:m]
     slist = [(x + ''*m)[:m] for x in df.stage]
     tlist = [datetime.datetime.strptime(dt,"%d/%m/%Y").strftime('%Y%m%d') for dt in df.startdate]
-    mlist = list(set([ int(x[4:][:2]) for x in tlist]))
-    mlist = sorted(set([ int(x[4:][:2]) for x in tlist]))
+    ylist = list(set([int(t[:4]) for t in tlist]))
+    mlist = dict()
+    for yy in ylist:
+        mlist[yy] = sorted(set([ int(x[4:][:2]) for x in tlist if int(x[:4])==yy]))
     sdict = dict()
     cnt=len(tlist)
     for n in range(cnt):
@@ -4058,27 +4031,27 @@ def stage_calendar(df):
             sdict[dt] = stg
         else:
             sdict[dt] = txt + "," + stg
-    yy = int(tlist[0][:4])
     title_list = []
     calendar.setfirstweekday(calendar.SUNDAY)
     msg = ""
     gap = ' '*m
-    for mm in mlist:
-        weeklist = calendar.monthcalendar(yy,mm)
-        title = datetime.datetime(yy, mm, 1).strftime('%Y %B')
-        dlist = [ int(x[-2:]) for x in tlist if int(x[4:][:2])==mm]
-        flist = [ sdict[x] for x in tlist if int(x[4:][:2])==mm]
-        rdict = dict(zip(dlist,flist))
-        msg += title + '\nSun  Mon  Tue  Wed  Thu  Fri  Sat\n'
-        for ww in weeklist:
-            msg += ''.join([ (xstr(y)+gap)[:m] for y in ww]) + '\n'
-            msg += ''.join([ zstr(rdict[x]) if x in list(rdict) else gap for x  in ww]) + '\n'
-        msg += '\n'
-        for dt in list(rdict):
-            tt = rdict[dt]
-            if "," in tt:
-                msg += str(dt) + '/' + str(mm) + ' : ' + tt + '\n'
-        msg += '\n'
+    for yy in ylist:
+        for mm in mlist[yy]:
+            weeklist = calendar.monthcalendar(yy,mm)
+            title = datetime.datetime(yy, mm, 1).strftime('%Y %B')
+            dlist = [ int(x[-2:]) for x in tlist if int(x[4:][:2])==mm and int(x[:4])==yy]
+            flist = [ sdict[x] for x in tlist if int(x[4:][:2])==mm and int(x[:4])==yy]
+            rdict = dict(zip(dlist,flist))
+            msg += title + '\nSun  Mon  Tue  Wed  Thu  Fri  Sat\n'
+            for ww in weeklist:
+                msg += ''.join([ (xstr(y)+gap)[:m] for y in ww]) + '\n'
+                msg += ''.join([ zstr(rdict[x]) if x in list(rdict) else gap for x  in ww]) + '\n'
+            msg += '\n'
+            for dt in list(rdict):
+                tt = rdict[dt]
+                if "," in tt:
+                    msg += str(dt) + '/' + str(mm) + ' : ' + tt + '\n'
+            msg += '\n'
     return msg
 
 async def auto_notify(client_name, resp_dict, pass_rate, adm_chatid):
@@ -4280,7 +4253,8 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
         qry = f"select cohort_id from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
         cohort_id = rds_param(qry)
         if cohort_id=="":
-            cohort_id = piece(piece(course_id,':',1),'+',1)
+            #cohort_id = piece(piece(course_id,':',1),'+',1)
+            cohort_id = getcohort(course_id)
         qry = f"select module_code from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
         module_code = rds_param(qry)
         if module_code=="":
@@ -4449,14 +4423,6 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
                             sent_list.append(sid)
                         except:
                             err_list.append(sid)
-                #should not update the following since above is for T-1 day but below is for current day
-                #query = f"update userdata set risk_level = {risk_level}, mcq_zero = '{mcq_zero}' "
-                #query += f" ,mcq_failed = '{mcq_failed}', as_zero = '{as_zero}', as_failed = '{as_failed}', f2f = {f2f_error} "
-                #query += f" where client_name='{client_name}' and courseid='{course_id}' and studentid={sid};"
-                #try:
-                #    rds_update(query)
-                #except:
-                #    pass
                 del df1, df2
             del udf
             msg = ""
@@ -4472,25 +4438,6 @@ async def auto_intervent(client_name, resp_dict, pass_rate, adm_chatid):
                     pass
             syslog(msg)
         await asyncio.sleep(1)
-    # mess email to pillar owner, pending email api from Gaurav with Change request
-    kiv_codes = """
-    ulist = ''
-    for enquiry_email in list(eoc7_maildict):
-        # ulist = list of username(s) ??
-        ulist = eoc7_userdict[enquiry_email]
-        txt = f"From: ombot@lithan.com\nTo: {enquiry_email}\nSubject : List of learners who reached EOC grace period.\n\n"
-        txt += eoc7_maildict[enquiry_email]
-        txt += "\nRegards,\nOmniMentorBot"
-        #if use_mailapi:
-        #    fout = open("mail.txt", "wt")
-        #    fout.write(txt)
-        #    fout.close()
-        #    txt = shellcmd('/bin/sh txt2mail')  # to be replaced with rest apis
-        #else:
-        #    pass
-        #if adm_chatid > 0:
-        #    await bot_intance.bot.sendMessage(adm_chatid, txt) # temporary use telegram
-    """
     del mdf
     syslog("auto_intervent completed")
     if adm_chatid > 0:
@@ -4506,16 +4453,24 @@ if __name__ == "__main__":
         with open("vmbot.json") as json_file:
             bot_info = json.load(json_file)
         client_name = bot_info['client_name']
+        vmedxlib.edx_api_url = "https://omnimentor.sambaash.com/edx/v1"
+        vmedxlib.edx_api_header = {'Authorization': 'Basic ZWR4YXBpOlVzM3VhRUxJVXZENUU4azNXdG9E', 'Content-Type': 'text/plain'}
         vmsvclib.rds_connstr = bot_info['omdb']
+        vmsvclib.rdsdb = None
         vmsvclib.rdscon = None
         vmsvclib.rds_pool = 0
-        vmsvclib.rds_schema = "omnimentor"
-        max_iu_cnt = 20
-        for n in range(1,1+max_iu_cnt):
-            for fld in ['mcq_avg','mcq_attempts','as_avg','as_attempts']:
-                updqry = "update userdata set " + fld + str(n) + " = 0 where " + fld + str(n) + " is null;"
-                print(updqry)
-                rds_update(updqry)
-        print("table userdata updated")
+        vmsvclib.rds_schema = bot_info['schema']
+        vmedxlib.max_iu = 20
+        vmsvclib.rdscon = vmsvclib.rds_connector()
+        course_id = ""
+        if len(sys.argv)>=2:
+            course_id = str(sys.argv[1])
+        if course_id != "":
+            qry = f"select * from stages where client_name = '{client_name}' and courseid = '{course_id}';"
+            df = rds_df(qry)
+            if df is not None:
+                df.columns = get_columns("stages")
+                msg = stage_calendar(df)
+                print(msg)
     else:
         syslog("Unable to use this version of python\n", version)

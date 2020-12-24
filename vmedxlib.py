@@ -3,17 +3,20 @@
 #| | | | '_ ` _ \| '_ \| | |\/| |/ _ \ '_ \| __/ _ \| '__|
 #| |_| | | | | | | | | | | |  | |  __/ | | | || (_) | |
 # \___/|_| |_| |_|_| |_|_|_|  |_|\___|_| |_|\__\___/|_|
-#
-# Library functions by KH                                                              
+#        
 # This is for SMS/LMS interface                                                                        
 #------------------------------------------------------------------------------------------------------
+import warnings
+warnings.filterwarnings("ignore", category=FutureWarning)
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore")
 import pandas as pd
-import pymysql
+import pymysql # pip install PyMySQL==0.10.1
 import pymysql.cursors
 import json
 import datetime
 import re, sys
-import requests
+import requests # pip install requests==2.25.0
 import vmsvclib
 from vmsvclib import *
 
@@ -24,6 +27,7 @@ string2date = lambda x,y : datetime.datetime.strptime(x,y).date()
 str2date = lambda x : string2date(x,"%d/%m/%Y")
 dmy_str = lambda v : piece(v,'-',2) + '/' + piece(v,'-',1) + '/' + piece(v,'-',0)
 ymd_str = lambda v : piece(v,'-',0) + '/' + piece(v,'-',1) + '/' + piece(v,'-',2)
+getcohort = lambda x : '-'.join(x.split(':')[1].replace('+','-').split('-')[:-1][1:])
 
 def edx_coursename(course_id):
     global edx_api_header,edx_api_url
@@ -166,8 +170,9 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
         avgscore_list = []
         #for rec in [ x for x in list(data) if 'attempts' in x['state']]  :
         for rec in [ x for x in list(data) ]:
-            qn = 0
+            qn = 99
             pp = 0
+            qtitle = ""
             if 'student_id' in list(rec):
                 sid = int(rec['student_id'])
             else:
@@ -181,9 +186,11 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
                 pp = rec['points_possible']
                 pp = 0 if pp is None else pp
             if 'options_display_name' in list(rec):
-                qn = getnumstr(rec['options_display_name'])
+                qtitle = rec['options_display_name']
             if 'option_display_name' in list(rec):
-                qn = getnumstr(rec['option_display_name'])
+                qtitle = rec['option_display_name']
+            if qtitle.startswith('Q'):
+                qn = getnumstr(qtitle)
             if 'IU' in list(rec):
                 r = rec['IU']
                 if (r is None) or (r==""):
@@ -433,7 +440,8 @@ def update_schedule(course_id, client_name):
     qry = f"select cohort_id from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
     cohort_id = rds_param(qry)
     if cohort_id=="":
-        cohort_id = piece(piece(course_id,':',1),'+',1)
+        #cohort_id = piece(piece(course_id,':',1),'+',1)
+        cohort_id = getcohort(course_id)
     qry = f"select * from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
     df = rds_df(qry)
     if df is None:
@@ -632,7 +640,8 @@ def update_assignment(course_id, client_name, student_id=0):
 
 def update_mcq(course_id, client_name, student_id=0):
     global max_iu
-    cohort_id = piece(piece(course_id,':',1),'+',1)
+    #cohort_id = piece(piece(course_id,':',1),'+',1)
+    cohort_id = getcohort(course_id)
     if student_id==0:
         condqry = f"client_name = '{client_name}' and courseid = '{course_id}'"
         cond_qry = f"client_name = '{client_name}' and course_id = '{course_id}'"
@@ -741,28 +750,36 @@ def update_mcq(course_id, client_name, student_id=0):
     syslog(f"completed on {course_id}")
     return
 
-def edx_import(course_id, client_name):
+def edx_import(course_id, client_name, force_active=False):
     global max_iu
     qry = f"select cohort_id from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
     cohort_id = rds_param(qry)
     if cohort_id=="":
-        cohort_id = piece(piece(course_id,':',1),'+',1)
+        #cohort_id = piece(piece(course_id,':',1),'+',1)
+        cohort_id = getcohort(course_id)
     qry = f"select module_code from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
     module_code = rds_param(qry)
     if module_code=="":
         module_code = piece(cohort_id,'-',0)
     condqry = f"client_name = '{client_name}' and courseid = '{course_id}';"
+    qry = f"select enabled from course_module where client_name = '{client_name}' and module_code = '{module_code}';"
+    module_enabled = int("0" + rds_param(qry))
+    if module_enabled==0:
+        #syslog(f"this module {module_code} is not enabled, edx_import stopped")
+        return
     qry = f"select pillar from course_module where client_name = '{client_name}' and module_code = '{module_code}';"
     module_id = rds_param(qry)
     if module_id=="":
-        syslog("incomplete information , edx_import stopped")
+        #syslog(f"incomplete information for pillar {module_id}, edx_import stopped")
         return
     course_name = edx_coursename(course_id)
-    #eoc = edx_endofcourse(client_name, course_id)
-    eoc = 0
+    if force_active:
+        eoc = 0
+    else:
+        eoc = edx_endofcourse(client_name, course_id)
     update_playbooklist(course_id, client_name, course_name, eoc)
     if eoc==1:
-        syslog(f"this course {course_id} already expired. No need to import again")
+        #syslog(f"this course {course_id} already expired. No need to import again")
         return
 
     cnt = rds_param("select count(*) as cnt from stages where client_name='{client_name}' and courseid='{course_id}';")
@@ -777,13 +794,13 @@ def edx_import(course_id, client_name):
             df['stagedate'] = ''
             df['courseid'] = course_id
             df1 = df[['client_name','courseid', 'id', 'stage', 'name', 'desc', 'days', 'f2f', 'mcq', 'flipclass', 'assignment', 'IU', 'stagedate']]
-            syslog("update stages table")
+            #syslog("update stages table")
             copydbtbl(df1, "stages")
 
     df = edx_userdata(course_id)
     nrows = len(df)
     if nrows == 0:
-        syslog("no user data from edx api found")
+        #syslog("no user data from edx api found")
         return
     query = "delete from userdata where " + condqry
     rds_update(query)
@@ -821,7 +838,7 @@ def edx_import(course_id, client_name):
     try:
         rds_update(query)
     except:
-        syslog("unable to initialized table userdata")
+        #syslog("unable to initialized table userdata")
         return
 
     update_assignment(course_id, client_name)
@@ -1410,6 +1427,62 @@ def edx_alluserdata():
         df = pd.DataFrame.from_dict(data)
     return df
 
+def load_edx(client_name):
+    query = f"select `value` from params WHERE client_name='{client_name}' AND `key`='email_filter';"
+    email_filter = rds_param(query)
+    efilter = email_filter.split(',')
+    date_today = datetime.datetime.now().date()
+    yr_str = str(date_today.strftime('%Y'))
+    yrnow = yr_str[-2:]
+    query = f"SELECT DISTINCT u.courseid FROM userdata u INNER JOIN playbooks p "
+    query += f" ON u.client_name=p.client_name AND u.courseid=p.course_id "
+    query += f"WHERE u.client_name = '{client_name}' AND p.eoc=0 AND SUBSTRING(u.courseid,-2)='{yrnow}';"
+    df = rds_df(query)
+    if df is None:
+        course_list = []
+    else:
+        df.columns = ['courseid']
+        course_list = [x for x in df.courseid]
+
+    #print("running edx_update")
+    updated_courses = []
+    vars = dict()
+    txt =  ""
+    for course_id in course_list:
+        eoc = edx_endofcourse(client_name, course_id)
+        eoc_gap = edx_eocgap(client_name, course_id, 7)
+        if (eoc == 0) or (eoc_gap==1):
+            #print(f"update {course_id}")
+            update_mcq(course_id, client_name)
+            update_assignment(course_id, client_name)
+            update_schedule(course_id, client_name)
+            updated_courses.append(course_id)
+        if eoc == 1:
+            query = f"update playbooks set eoc=1 where client_name='{client_name}' AND course_id='{course_id}';"
+            rds_update(query)
+
+    query = f"SELECT DISTINCT u.courseid FROM userdata u INNER JOIN playbooks p "
+    query += f" ON u.client_name=p.client_name AND u.courseid=p.course_id "
+    query += f"WHERE u.client_name = '{client_name}' AND p.eoc=1 AND SUBSTRING(u.courseid,-2)='{yrnow}';"
+    df = rds_df(query)
+    if df is None:
+        eoc_list = []
+    else:
+        df.columns = ['courseid']
+        eoc_list = [x for x in df.courseid]
+
+    #print("running edx_import")
+    course_list = search_course_list(yrnow)
+    course_list = [x for x in course_list if (x[-3].isnumeric()==False and x[-2:]==yrnow) or x[-4:]==yr_str ]
+    for course_id in [ x for x in course_list if x not in updated_courses and x not in eoc_list]:
+        #print(f"import {course_id}")
+        edx_import(course_id, client_name)
+        updated_courses.append(course_id)
+
+    #print("running update_usermaster")
+    mass_update_usermaster(client_name)
+    return
+
 if __name__ == "__main__":
     global use_edxapi, edx_api_header, edx_api_url, max_iu
     with open("vmbot.json") as json_file:
@@ -1418,6 +1491,7 @@ if __name__ == "__main__":
     edx_api_url = "https://omnimentor.sambaash.com/edx/v1"
     edx_api_header = {'Authorization': 'Basic ZWR4YXBpOlVzM3VhRUxJVXZENUU4azNXdG9E', 'Content-Type': 'text/plain'}
     vmsvclib.rds_connstr = bot_info['omdb']
+    vmsvclib.rdsdb = None
     vmsvclib.rdscon = None
     vmsvclib.rds_pool = 0
     vmsvclib.rds_schema = bot_info['schema']
@@ -1536,8 +1610,11 @@ if __name__ == "__main__":
     elif cmd=="pipeline":
         generate_mcq_as(client_name)
         print("pipeline data generated")
+    elif cmd=="mass_update":
+        load_edx(client_name)
+        print("mass update completed")
     else:
         prog = str(sys.argv[0])
         print(f"usage :\n\tpython3 {prog} [commands] [cohort_id] [student_id]")
-        print("commands:\n\timport\n\tmcq\n\tassignment\n\tschedule\n\tcalendar\n\tinfo\n\tpipeline")
+        print("commands:\n\timport\n\tmcq\n\tassignment\n\tschedule\n\tcalendar\n\tinfo\n\tpipeline\n\tmass_update")
         print(f"Example:\n\tpython3 {prog} assignment IMM-0520A 4558")
