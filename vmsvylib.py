@@ -1,10 +1,10 @@
-#  ___                  _ __  __            _ 
+#  ___                  _ __  __            _                                                         
 # / _ \ _ __ ___  _ __ (_)  \/  | ___ _ __ | |_ ___  _ __
 #| | | | '_ ` _ \| '_ \| | |\/| |/ _ \ '_ \| __/ _ \| '__|
 #| |_| | | | | | | | | | | |  | |  __/ | | | || (_) | |
 # \___/|_| |_| |_|_| |_|_|_|  |_|\___|_| |_|\__\___/|_|
 #
-# Library functions for PSS/EOC survey                                      
+# Library functions for PSS/EOC survey          
 #------------------------------------------------------------------------------------------------------
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -36,12 +36,12 @@ class Omni_Survey():
         return x.replace('_index','').replace('_',' ').capitalize()
 
     def load_data(self, client_name , course_id, table_name):
-        status = False        
+        status = False
         try:
             cohort_id = self.getcohort(course_id)
             pillar = rds_param(f"select pillar from playbooks where course_id='{course_id}' and client_name='{client_name}';")
             course_code = rds_param(f"select course_code from playbooks where course_id='{course_id}' and client_name='{client_name}';")
-            query = f"SELECT * FROM {table_name} WHERE cohort = '{cohort_id}' and pillar = '{pillar}' and qualification = '{course_code}';"
+            query = f"SELECT * FROM {table_name} WHERE studentid > 0 and cohort = '{cohort_id}' and pillar = '{pillar}' and qualification = '{course_code}';"
             df = rds_df(query)
             cnt = len(df)
             if (df is None) or (cnt==0):
@@ -49,7 +49,7 @@ class Omni_Survey():
                 print(txt)
                 return status
             cols = get_columns(table_name)
-            df.columns = cols            
+            df.columns = cols
             self.survey_df = df
             self.table_name = table_name
             status = True
@@ -89,7 +89,7 @@ class Omni_Survey():
             colorscnt = [2, 3, 3, 2, 2, 3]
             mycolor = []
             for n in range(len(colorscnt)):
-                mycolor += [ colors[n] for x in range(colorscnt[n])]                
+                mycolor += [ colors[n] for x in range(colorscnt[n])]
         else:
             surveygroup = []
         tlabels = [x[0] for x in surveygroup]
@@ -111,7 +111,7 @@ class Omni_Survey():
         handles = [plt.Rectangle((0,0),1,1, color=colors[label]) for label in clabels]
         plt.legend(handles, tlabels, bbox_to_anchor=(1,1), loc="upper left")
         plt.bar( index_name, list_index, color = mycolor)
-        plt.savefig(fn, bbox_inches='tight') 
+        plt.savefig(fn, bbox_inches='tight')
         plt.clf()
         f = open(fn, 'rb')
         df3 = pd.DataFrame({
@@ -153,7 +153,7 @@ class Omni_Survey():
                 ratings.append(col)
                 for x in range(cnt):
                     y = label_list[x]
-                    z = col_dict[y] if y in list(col_dict) else 0 
+                    z = col_dict[y] if y in list(col_dict) else 0
                     ratingtable[x].append( z )
         list_index = [ x+1 for x in range(len(ratings)) ]
         df_dict  = {'#': list_index }
@@ -173,14 +173,14 @@ class Omni_Survey():
         plt.ylabel('# of Votes')
         plt.xticks(range(len(cols)), cols, rotation = 0)
         plt.legend( bbox_to_anchor=(1,1), loc="upper left")
-        plt.savefig(fn, bbox_inches='tight') 
+        plt.savefig(fn, bbox_inches='tight')
         plt.clf()
         f = open(fn, 'rb')
         txt = ""
         for x in range(5):
             txt += "ABCDE"[x] + " = " + label_list[x] + "\n"
         df5 = pd.DataFrame(df1_dict)
-        df5.columns = ['#','Topics','A','B','C','D','E']  
+        df5.columns = ['#','Topics','A','B','C','D','E']
         msg = html_report(df5, df5.columns, [3,25,3,3,3,3,3],15)
         txt += msg[0]
         txt = "<b>" + title + "</b>\n" + "<pre>" + txt + "</pre>"
@@ -223,8 +223,8 @@ class Omni_Survey():
 if __name__ == "__main__":
     rdsconnector = None
     survey_analysis = Omni_Survey()
-    print(survey_analysis)    
-    with open("vmbot.json") as json_file:  
+    print(survey_analysis)
+    with open("vmbot.json") as json_file:
         bot_info = json.load(json_file)
     vmsvclib.rds_connstr = bot_info['omdb']
     vmsvclib.rdscon = None
