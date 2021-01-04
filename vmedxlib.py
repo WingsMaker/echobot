@@ -4,7 +4,7 @@
 #| |_| | | | | | | | | | | |  | |  __/ | | | || (_) | |
 # \___/|_| |_| |_|_| |_|_|_|  |_|\___|_| |_|\__\___/|_|
 #        
-# This is for SMS/LMS interface                                                                        
+# This is for SMS/LMS interface  
 #------------------------------------------------------------------------------------------------------
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -28,6 +28,37 @@ str2date = lambda x : string2date(x,"%d/%m/%Y")
 dmy_str = lambda v : piece(v,'-',2) + '/' + piece(v,'-',1) + '/' + piece(v,'-',0)
 ymd_str = lambda v : piece(v,'-',0) + '/' + piece(v,'-',1) + '/' + piece(v,'-',2)
 getcohort = lambda x : '-'.join(x.split(':')[1].replace('+','-').split('-')[:-1][1:])
+
+def course_header(course_id):
+    # wait for rest-api , specification not clear being http post or http get
+    # https://omnimentor.sambaash.com/edx/v1/course/fetch/info/course-v1:Lithan+BMM-0920A+28Oct2020
+    # url = f"{edx_api_url}/course/fetch/info"
+    if course_id=="":
+        return ["","","",""]
+    cohort_id = getcohort(course_id)
+    module_code = piece(cohort_id.replace('+','-'),'-',0)
+    qry = f"select * from playbooks where module_code='{module_code}' limit 1;"
+    df = rds_df(qry)
+    if df is None:
+        qry = f"select * from course_module where module_code = '{module_code}';"
+        df = rds_df(qry)
+        if df is None:
+            return ["","", module_code,cohort_id]
+        else:    
+            df1 = df.T
+            df1.columns = ['col']
+            records = [x for x in df1.col]
+            pillar = records[1]
+            course_code = records[2]
+            return [pillar, course_code, module_code,cohort_id]
+    df1 = df.T
+    df1.columns = ['col']
+    records = [x for x in df1.col]
+    pillar = records[2]
+    course_code = records[3]
+    module_code = records[4]
+    cohort_id = records[6]
+    return [pillar, course_code, module_code,cohort_id]
 
 def edx_coursename(course_id):
     global edx_api_header,edx_api_url
@@ -436,30 +467,7 @@ def edx_eocend(client_name, course_id, gap=7):
 def update_schedule(course_id, client_name):
     dstr = lambda x : piece(piece(x.strip(),':',1),'+',2)
     dtype = lambda x : ('%d%b%Y' if len(dstr(x))==9 else '%d%B%Y') if dstr(x)[0].isdigit() else '%B%Y'
-    cohort_date = lambda x : string2date(dstr(x),dtype(x))
-    qry = f"select cohort_id from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
-    cohort_id = rds_param(qry)
-    if cohort_id=="":
-        #cohort_id = piece(piece(course_id,':',1),'+',1)
-        cohort_id = getcohort(course_id)
-    qry = f"select * from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
-    df = rds_df(qry)
-    if df is None:
-        module_code = piece(cohort_id,'-',0)
-        qry = f"select * from course_module where client_name = '{client_name}' and module_code = '{module_code}';"
-        df = rds_df(qry)
-        if df is None:
-            course_code = ""
-            pillar = ""
-        else:
-            df.columns = get_columns("course_module")
-            course_code = df.course_code.values[0]
-            pillar = df.pillar.values[0]
-    else:
-        df.columns = get_columns("playbooks")
-        module_code = df.module_code.values[0]
-        course_code = df.course_code.values[0]
-        pillar = df.pillar.values[0]
+    [ pillar, course_code, module_code, cohort_id ] = course_header(course_id)
     stage_list = get_google_calendar(course_id, client_name)
     if stage_list == []:
         syslog("google calendar return nothing")
@@ -640,7 +648,6 @@ def update_assignment(course_id, client_name, student_id=0):
 
 def update_mcq(course_id, client_name, student_id=0):
     global max_iu
-    #cohort_id = piece(piece(course_id,':',1),'+',1)
     cohort_id = getcohort(course_id)
     if student_id==0:
         condqry = f"client_name = '{client_name}' and courseid = '{course_id}'"
@@ -752,26 +759,14 @@ def update_mcq(course_id, client_name, student_id=0):
 
 def edx_import(course_id, client_name, force_active=False):
     global max_iu
-    qry = f"select cohort_id from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
-    cohort_id = rds_param(qry)
-    if cohort_id=="":
-        #cohort_id = piece(piece(course_id,':',1),'+',1)
-        cohort_id = getcohort(course_id)
-    qry = f"select module_code from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
-    module_code = rds_param(qry)
-    if module_code=="":
-        module_code = piece(cohort_id,'-',0)
+    [ pillar, course_code, module_code, cohort_id ] = course_header(course_id)
     condqry = f"client_name = '{client_name}' and courseid = '{course_id}';"
     qry = f"select enabled from course_module where client_name = '{client_name}' and module_code = '{module_code}';"
-    module_enabled = int("0" + rds_param(qry))
+    module_enabled = rds_param(qry)
     if module_enabled==0:
         #syslog(f"this module {module_code} is not enabled, edx_import stopped")
         return
     qry = f"select pillar from course_module where client_name = '{client_name}' and module_code = '{module_code}';"
-    module_id = rds_param(qry)
-    if module_id=="":
-        #syslog(f"incomplete information for pillar {module_id}, edx_import stopped")
-        return
     course_name = edx_coursename(course_id)
     if force_active:
         eoc = 0
@@ -810,7 +805,7 @@ def edx_import(course_id, client_name, force_active=False):
     if stage=="":
         stage = "SOC Days"
     df['client_name'] = client_name
-    df['module_id'] = module_id
+    df['module_id'] = pillar # module_id
     df['amt'] = 0
     df['grade'] = 0
     df['stage'] = stage
@@ -1120,15 +1115,7 @@ def stage_code(txt):
 
 def get_google_calendar(course_id, client_name):
     qry = f"select cohort_id from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
-    cohort_id = rds_param(qry)
-    if cohort_id=="":
-        cohort_id = piece(piece(course_id,':',1),'+',1)
-    qry = f"select module_code from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
-    module_code = rds_param(qry)
-    if module_code=="":
-        module_code = piece(cohort_id,'-',0)
-    qry = f"select course_code from course_module where module_code = '{module_code}' and client_name='{client_name}' limit 1;"
-    course_code = rds_param(qry)
+    [ pillar, course_code, module_code, cohort_id ] = course_header(course_id)
     api_url = f"https://realtime.sambaash.com/v1/calendar/fetch?cohortId={course_code}%20:%20{cohort_id}"
     data  = get_calendar_json(api_url)
     if data == {}:
@@ -1280,23 +1267,7 @@ def update_playbooklist(course_id, client_name, course_name, eoc):
     cnt = rds_param(query)
     if cnt==1:
         return
-    qry = f"select cohort_id from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
-    cohort_id = rds_param(qry)
-    if cohort_id=="":
-        cohort_id = piece(piece(course_id,':',1),'+',1)
-    qry = f"select module_code from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
-    module_code = rds_param(qry)
-    if module_code=="":
-        module_code = piece(cohort_id,'-',0)
-    qry = f"select pillar,course_code from course_module where client_name = '{client_name}' and module_code = '{module_code}';"
-    df = rds_df(qry)
-    if df is None:
-        pillar = ""
-        course_code = ""
-    else:
-        df.columns = ['pillar','course_code']
-        pillar = df.pillar.values[0]
-        course_code = df.course_code.values[0]
+    [ pillar, course_code, module_code, cohort_id ] = course_header(course_id)
     query = "insert into playbooks(client_name,pillar,course_code,module_code,cohort_id,course_id,course_name,mentor,eoc) \
              values('_c_', '_p_', '_w_', '_m_', '_x_', '_y_', '_z_', '', _e_);"
     query = query.replace("_c_", client_name)
