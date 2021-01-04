@@ -9,7 +9,7 @@
 # \▓▓    ▓▓ ▓▓ | ▓▓ | ▓▓ ▓▓  | ▓▓ ▓▓ ▓▓  \▓ | ▓▓\▓▓     \ ▓▓  | ▓▓  \▓▓  ▓▓\▓▓    ▓▓ ▓▓
 #  \▓▓▓▓▓▓ \▓▓  \▓▓  \▓▓\▓▓   \▓▓\▓▓\▓▓      \▓▓ \▓▓▓▓▓▓▓\▓▓   \▓▓   \▓▓▓▓  \▓▓▓▓▓▓ \▓▓
 #
-# Async task scheduler                                                  
+# Async task scheduler                                                        
 #------------------------------------------------------------------------------------------------------
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -272,6 +272,20 @@ class BotInstance():
             self.max_iu = int(par_dict['max_iu'])
         if self.client_name == "":
             self.client_name = par_dict['client_name']
+        base_connection=rds_param("select `value` from params where `key`='base_connection' and client_name='system';")
+        qry = "select schema_name from information_schema.schemata where SCHEMA_NAME LIKE 'omnimentor%';"
+        df = rds_df(qry)
+        df.columns = ['schema_name']
+        schema_list = [x for x in df.schema_name]
+        self.connection_dict = dict()
+        for schema_name in schema_list:
+            qry = f"SELECT DISTINCT client_name FROM {schema_name}.params WHERE client_name<>'system';"
+            df = rds_df(qry)
+            df.columns = ['client_name']
+            list_clients = [x for x in df.client_name]
+            for client_name in [x for x in df.client_name]:
+                conn_strings = base_connection.replace('__x__',schema_name)
+                self.connection_dict[client_name] = [schema_name, conn_strings]
         return
 
     def get_client_config(self):
@@ -373,7 +387,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         self.records = dict()
         self.menu_id = 0
         self.menu_home = []
-        self.connection_dict = dict()
 
     def reset(self):
         self.__init__()
@@ -958,7 +971,8 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         if stud==0:
             qry = f"SELECT DISTINCT a.course_id, a.course_name FROM playbooks a "
             qry += f"INNER JOIN course_module c ON a.client_name=c.client_name and a.module_code=c.module_code "
-            qry += f"where a.eoc=0 and c.enabled=1 AND a.client_name='{client_name}' and SUBSTRING(course_id,-2)='{yrnow}' ORDER BY a.course_id;"
+            #qry += f"where a.eoc=0 and c.enabled=1 AND a.client_name='{client_name}' and SUBSTRING(course_id,-2)='{yrnow}' ORDER BY a.course_id;"
+            qry += f"where a.eoc=0 and c.enabled=1 AND a.client_name='{client_name}' ORDER BY a.course_id;"
             df = rds_df(qry)
             if df is None:
                 syslog("There is no courses found")
@@ -1060,7 +1074,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 return
 
         # ================================================================================================
-        #elif resp == menu_txt['an_survey']: 
+        #elif resp == menu_txt['an_survey']:
         elif resp in ["/testeoc","/testpss"]:
             self.client_name = bot_intance.client_name
             self.courseid = "course-v1:Lithan+CCN-1119A+28Feb20"
@@ -1071,13 +1085,13 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 await self.sender.sendMessage(txt)
                 return
             await self.sender.sendMessage(f"{tname} survey data has been loaded")
-            
+
             ( f, txt ) = survey_analysis.feedback_by_index()
             if f is not None:
                 await self.bot.sendPhoto(self.chatid, f)
             if txt != "":
                 await bot.sendMessage(chat_id, txt, parse_mode='HTML')
-                
+
             ( f, txt ) = survey_analysis.feedback_by_votes()
             if f is not None:
                 await self.bot.sendPhoto(self.chatid, f)
@@ -1132,7 +1146,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     txt = "Sorry your account is blocked, please contact the super admin."
                     await self.sender.sendMessage(txt)
                     await self.logoff()
-                return            
+                return
             query = "select * from user_master where binded=1 and chat_id =" + str(chat_id) + " and client_name = '" + self.client_name + "';"
             df = rds_df(query)
             if df is None:
@@ -1244,22 +1258,10 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     txt = 'This option is strickly for Sambaash admin.'
                     await self.sender.sendMessage(txt)
             elif resp == menu_txt['opt_client']:
-                qry = "SELECT client_name, conn_str FROM ( "
-                qry += "SELECT  client_name, `key` ,value AS conn_str from omnimentor.params union all "
-                qry += "SELECT client_name, `key`,value AS conn_str from omnimentor_test.params union all "
-                qry += "SELECT client_name, `key`,value AS conn_str from omnimentor_prod.params) zz WHERE `key` = 'omdb';"
-                df = rds_df(qry)
-                if df is None:
-                    retmsg = "Unable to the client change at the moment."
-                else:
-                    df.columns = ['client_name', 'conn_str']
-                    client_list = [x for x in df.client_name]
-                    connection_list = [x for x in df.conn_str]
-                    self.connection_dict = dict(zip(client_list,connection_list))
-                    btn_client_list = build_menu(client_list, 1)
-                    txt = f"Switch client_name from {self.client_name} to the below:"
-                    await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(btn_client_list))
-                    self.menu_id = keys_dict[menu_txt['opt_setclient']]
+                btn_client_list = build_menu(list(bot_intance.connection_dict), 1)
+                txt = f"Switch client_name from {self.client_name} to the below:"
+                await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(btn_client_list))
+                self.menu_id = keys_dict[menu_txt['opt_setclient']]
             elif (resp == option_back) or (resp == "0"):
                 tid = self.endchat()
                 if tid > 0:
@@ -1272,9 +1274,9 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([[menu_txt['btn_hellobot']]]))
 
         elif self.menu_id == keys_dict[menu_txt['opt_setclient']] :
-            if resp in list(self.connection_dict):
-                conn_str = self.connection_dict[resp]
-                bot_intance.schema = piece(piece(piece(conn_str,"?",0),'@',2),'/',1)
+            if resp in list(bot_intance.connection_dict):
+                bot_intance.schema = bot_intance.connection_dict[resp][0]
+                conn_str = bot_intance.connection_dict[resp][1]
                 vmsvclib.rdscon.close()
                 vmsvclib.rds_connstr = conn_str
                 vmsvclib.rdscon = None
@@ -2022,7 +2024,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                         cohort_id = getcohort(self.courseid)
                         title = f"MCQ and Assignment scores for cohort {cohort_id}"
                         html_msg_dict[title] = html_report(df, df.columns, [10, 10, 10], 15)
-                        
+
         elif self.menu_id == keys_dict[menu_txt['opt_mcqd']]:
             if (resp == option_back) or (resp == "0"):
                 txt = 'Please select the following mode:'
