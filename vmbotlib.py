@@ -9,7 +9,7 @@
 # \▓▓    ▓▓ ▓▓ | ▓▓ | ▓▓ ▓▓  | ▓▓ ▓▓ ▓▓  \▓ | ▓▓\▓▓     \ ▓▓  | ▓▓  \▓▓  ▓▓\▓▓    ▓▓ ▓▓
 #  \▓▓▓▓▓▓ \▓▓  \▓▓  \▓▓\▓▓   \▓▓\▓▓\▓▓      \▓▓ \▓▓▓▓▓▓▓\▓▓   \▓▓   \▓▓▓▓  \▓▓▓▓▓▓ \▓▓
 #
-# Telegram bot    
+# Telegram bot                                                                       
 #------------------------------------------------------------------------------------------------------
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -42,7 +42,7 @@ from nltk.sentiment.vader import SentimentIntensityAnalyzer # nltk.download('vad
 import vmnlplib
 import vmaiglib
 import vmmcqdlib
-import vmsvylib     # refer to vmsvylib.py, next task is to migrate eoc survey into it
+import vmsvylib
 import vmsvclib
 import vmedxlib
 from vmsvclib import *
@@ -971,7 +971,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         if stud==0:
             qry = f"SELECT DISTINCT a.course_id, a.course_name FROM playbooks a "
             qry += f"INNER JOIN course_module c ON a.client_name=c.client_name and a.module_code=c.module_code "
-            #qry += f"where a.eoc=0 and c.enabled=1 AND a.client_name='{client_name}' and SUBSTRING(course_id,-2)='{yrnow}' ORDER BY a.course_id;"
             qry += f"where a.eoc=0 and c.enabled=1 AND a.client_name='{client_name}' ORDER BY a.course_id;"
             df = rds_df(qry)
             if df is None:
@@ -985,14 +984,41 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         syslog("completed")
         return (course_id_list, course_name_list, logon_list)
 
-    def pycmd(self, cmdstr):
-        result = ""
+    def shellcmd(self, cmdstr):
         try:
-            pycode = compile(cmdstr, 'test', 'eval')
-            result = str(eval(pycode))
+            ps = subprocess.Popen(cmdstr,shell=True,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+            output = (ps.communicate()[0]).decode("utf8")
         except:
-            result = ""
-        return result
+            output = ''
+        return output
+
+    def txt2list(self, txt):
+        txt_list = txt.split('\n') if len(txt)>0 else []
+        msglist = []
+        if txt_list!=[]:
+            cnt = int((len(txt_list)+19)/20)
+            html_msglist = []
+            for n in range(cnt):
+                m = n*20
+                result = '\n'.join(txt_list[m:][:20])
+                msglist.append(result)
+        return msglist
+
+    def whitelist_users(self, course_id):
+        query = f"select studentid FROM user_master where client_name = '{self.client_name}' "
+        query += ''.join([ " and lower(email) not like '%" + x + "'"  for x in bot_intance.efilter])
+        query += f" AND studentid IN (select studentid FROM userdata WHERE client_name = '{self.client_name}' "
+        query += f" AND courseid = '{course_id}');"
+        df = rds_df(query)
+        if df is None:
+            return
+        if len(df)==0:
+            return
+        df.columns = ['studentid']
+        slist = ','.join([ str(x) for x in df.studentid ])
+        query = f"update user_master set usertype = 1 where client_name = '{self.client_name}' and studentid IN ({slist});"
+        rds_update(query)
+        return
 
     def reply_markup(self, buttons=[], opt_resize = True):
         global bot_intance
@@ -1102,6 +1128,14 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             if msg != []:
                 for txt in msg:
                     await bot.sendMessage(chat_id, txt, parse_mode='HTML')
+
+        elif resp.startswith("/!") and (len(resp) > 2) and (chat_id == developerid) and (bot_intance.svcbot_id==bot_intance.bot_id):
+            try:
+                txt = self.shellcmd(resp[2:])
+                html_msg_dict[resp[2:]] = self.txt2list(txt)
+            except:
+                return
+
         # ================================================================================================
 
         elif resp=='/stop' and (chat_id in [adminchatid, developerid]):
@@ -1656,7 +1690,8 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 vmedxlib.edx_import(course_id, self.client_name, True)
                 qry = f"update playbooks set eoc=0 where course_id = '{course_id}' and client_name = '{self.client_name}';"
                 rds_update(qry)
-                retmsg = f"LMS import for {course_id} has been completed."
+                self.whitelist_users(course_id)
+                retmsg = f"LMS import for {course_id} has been completed.\nPlease logoff and login again to get the latest course list."
                 syslog(retmsg)
             txt = "you are back to the menu"
             menu_item = menu_items['faculty_menu']
@@ -2344,26 +2379,8 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
 
         elif self.menu_id == keys_dict[menu_txt['option_whitelist']]:
             if resp in self.list_courseids:
-                txt = "Please wait for a moment."
-                await self.sender.sendMessage(txt)
-                query = f"select studentid FROM user_master where client_name = '{self.client_name}' "
-                query += ''.join([ " and lower(email) not like '%" + x + "'"  for x in bot_intance.efilter])
-                query += f" AND studentid IN (select studentid FROM userdata WHERE client_name = '{self.client_name}' "
-                query += f" AND courseid = '{resp}');"
-                df = rds_df(query)
-                if df is not None:
-                    if len(df)>0:
-                        df.columns = ['studentid']
-                        slist = ','.join([ str(x) for x in df.studentid ])
-                        query = f"update user_master set usertype = 1 where client_name = '{self.client_name}' and studentid IN ({slist});"
-                        try:
-                            rds_update(query)
-                            txt = "Learners has been whitelisted for course_id : " + resp
-                        except:
-                            syslog("unable to whitelist users")
-                            txt = "Unable to whitelist for course_id : " + resp
-            else:
-                txt = "You are back to the user management menu."
+                self.whitelist_users(resp)
+            txt = "Learners has been whitelisted for course_id : " + resp
             menu_item = menu_items['users_menu']
             await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
             self.menu_id = keys_dict[menu_txt['option_usermgmt']]

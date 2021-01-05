@@ -9,8 +9,7 @@
 # \▓▓    ▓▓ ▓▓ | ▓▓ | ▓▓ ▓▓  | ▓▓ ▓▓ ▓▓  \▓ | ▓▓\▓▓     \ ▓▓  | ▓▓  \▓▓  ▓▓\▓▓    ▓▓ ▓▓
 #  \▓▓▓▓▓▓ \▓▓  \▓▓  \▓▓\▓▓   \▓▓\▓▓\▓▓      \▓▓ \▓▓▓▓▓▓▓\▓▓   \▓▓   \▓▓▓▓  \▓▓▓▓▓▓ \▓▓
 #
-# Library functions by KH                                    
-#                                                                                                      
+# Library functions by KH                                                
 #------------------------------------------------------------------------------------------------------
 summary = """
 ╔«═══════════════════════════════════════════════════════════════════════•[^]»╗
@@ -109,8 +108,6 @@ def get_columns(tablename):
     global rds_schema
     query = f"SELECT COLUMN_NAME FROM information_schema.columns WHERE TABLE_SCHEMA = '{rds_schema}' AND TABLE_NAME = '{tablename}';"
     df = rds_df(query)
-    #df.columns = ['COLUMN_NAME']
-    #cols = [ x for x in df.COLUMN_NAME ]
     cols =[x for x in df[0]]
     del df
     return cols
@@ -158,7 +155,9 @@ def rds_connector():
         with open("vmbot.json") as json_file:
             bot_info = json.load(json_file)
         rds_connstr = bot_info['omdb']
+        
     if ':' in rds_connstr:
+        ssl_pem=rds_connstr.split('=')[1] if '=' in rds_connstr else ''
         conn_info = rds_connstr.split(":")
         user = conn_info[1].replace('/','')
         pwhost = conn_info[2].split('/')[0].split('@')
@@ -168,22 +167,26 @@ def rds_connector():
             dbase = conn_info[2].split('/')[1].split('?')[0]
         else:
             port = conn_info[3].split('/')[0]
+            if port != "":
+                port = int(port)
             dbase = conn_info[3].split('/')[1]
         if 'ssl_ca' in rds_connstr:
-            if rdsdb is None:
-                rds_pool = 0
+            if host == "localhost":
+                dbase = dbase.split('?')[0]
+                rdscon = pymysql.connect(host=host, port=port, user=user,passwd=passwd, db=dbase,ssl={'ssl': 'OmniMentorProdAzure.pem'})
+                rdsdb = None
             else:
-                rds_pool = rdsdb.size()
-            if rds_pool == 0:
-                ssl_pem=rds_connstr.split('=')[1]
-                rds_pool = 20
-                config={'host':host, 'user':user, 'password':passwd, 'database':dbase, 'autocommit':True, 'ssl':{'ca': ssl_pem}}
-                rdsdb = pymysqlpool.ConnectionPool(size=rds_pool,name='pool', **config)
-                rds_pool = rdsdb.size()
-            rdscon = rdsdb.get_connection()
+                if rdsdb is None:
+                    rds_pool = 0
+                else:
+                    rds_pool = rdsdb.size()
+                if rds_pool == 0:
+                    rds_pool = 20
+                    config={'host':host, 'user':user, 'password':passwd, 'database':dbase, 'autocommit':True, 'ssl':{'ca': ssl_pem}}
+                    rdsdb = pymysqlpool.ConnectionPool(size=rds_pool,name='pool', **config)
+                    rds_pool = rdsdb.size()
+                rdscon = rdsdb.get_connection()
         else:
-            #rdscon = pymysql.connect(host=host, port=port, user=user, passwd=passwd, db=dbase)
-            #rdscon.ping(True)
             rds_pool = 1
             rdsdb = None
             rdscon = mysql.connector.connect(host=host, port=port,user=user,password=passwd,db=dbase)
