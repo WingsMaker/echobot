@@ -4,9 +4,7 @@
 #| |_| | | | | | | | | | | |  | |  __/ | | | || (_) | |
 # \___/|_| |_| |_|_| |_|_|_|  |_|\___|_| |_|\__\___/|_|
 #
-# Library functions by                                             
-# NLP module using FastText                                                                        
-#                                                                                                    
+# NLP module using FastText                        
 #------------------------------------------------------------------------------------------------------
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -65,7 +63,7 @@ class NLP_Parser():
         for word in text:
             temp_string += word
             temp_string += ' '
-        return temp_string  
+        return temp_string
 
     def load_modelfile(self, dumpfile):
         try:
@@ -73,61 +71,60 @@ class NLP_Parser():
             vmsvclib.rdscon=vmsvclib.rds_connector()
             df = rds_df("select * from prompts;")
             if df is None:
-                syslog("failure reading table : prompts")
+                errlog("failure reading table : prompts")
                 return 0
-            df.columns = ['questions', 'resp']            
-            self.qn_resp = df.copy()            
-            
+            df.columns = ['questions', 'resp']
+            self.qn_resp = df.copy()
+
             df = rds_df("select * from ft_corpus;")
             if df is None:
-                syslog("failure reading table : ft_corpus")
+                errlog("failure reading table : ft_corpus")
                 return 0
-            df.columns = ['label', 'prompt', 'response']            
+            df.columns = ['label', 'prompt', 'response']
             self.corpus_df = df.copy()
-            
+
             df1 = rds_df("select * from faq;")
             if df1 is None:
                 return 0
-            df1.columns = ['questions']            
-            
+            df1.columns = ['questions']
+
             df2 = rds_df("select * from dictionary;")
             if df2 is None:
-                syslog("failure reading table : dictionary")
+                errlog("failure reading table : dictionary")
                 return 0
-            df2.columns = ['keywords']                        
+            df2.columns = ['keywords']
 
             df3 = rds_df("select * from stopwords;")
             if df3 is None:
-                syslog("failure reading table : stopwords")
+                errlog("failure reading table : stopwords")
                 return 0
-            df3.columns = ['keywords']            
-            
+            df3.columns = ['keywords']
+
             self.faq_list = [ x for x in df1.questions ]
             self.regword_list = [x for x in df2.keywords]
-            #stopwords = [ x for x in df3.keywords ]
             stopwords = [ x for x in df3.keywords ]
-            stopwords_processed = self.LemNormalize(self.stopwords_processor(stopwords))            
-            self.stopwords = stopwords_processed            
+            stopwords_processed = self.LemNormalize(self.stopwords_processor(stopwords))
+            self.stopwords = stopwords_processed
             TfidfVec = TfidfVectorizer(tokenizer=self.LemNormalize, stop_words=stopwords_processed, ngram_range=(1,2))
             with open(os.devnull, "w") as f, contextlib.redirect_stdout(f):
                 ft_model = fasttext.load_model(dumpfile)
             self.model = ft_model
             ok = 1
         except:
-            TfidfVec = TfidfVectorizer(tokenizer=self.tokenizer, stop_words='english')            
+            TfidfVec = TfidfVectorizer(tokenizer=self.tokenizer, stop_words='english')
         self.TfidfVec = TfidfVec
         if ok==0:
-            syslog("model is incomplete")
+            errlog("model is incomplete")
         else:
             syslog("model loading completed")
-        return        
+        return
 
     def load_corpus(self):
         self.corpus_df = rds_df("select * from ft_corpus")
 
     def create_prompts_corpus(self, input_text):
         if self.model is None:
-            syslog("model is incomplete")
+            errlog("model is incomplete")
             return ""
         if '\n' in input_text:
             inp_txt = ' '.join([txt.strip() for txt in input_text.split('\n')])
@@ -138,8 +135,6 @@ class NLP_Parser():
         mask = (df.label == matched_label)
         corp = ''
         for prompt in df[mask]['prompt'].values:
-            #corp += prompt
-            #corp = corp.replace('.', '. ').replace('?', '? ').replace('!', '! ')
             txt = prompt.replace('.', '. ').replace('?', '? ').replace('!', '! ')
             corp += txt
         return corp
@@ -152,7 +147,7 @@ class NLP_Parser():
         user_input = inp_txt.lower()
         response = ''
         matched_score = 0
-        prompts_corpus = self.create_prompts_corpus(inp_txt)        
+        prompts_corpus = self.create_prompts_corpus(inp_txt)
         prompts_sent_token = nltk.sent_tokenize(prompts_corpus)
         prompts_sent_token.append(user_input)
         if self.TfidfVec is not None:
@@ -170,10 +165,10 @@ class NLP_Parser():
             token_match = ""
             if matched_score in matching_list:
                 index = matching_list.index(matched_score)
-                token_match = prompts_sent_token[index]             
+                token_match = prompts_sent_token[index]
                 df = self.corpus_df
                 try:
-                    df1 = df[df['prompt'] == token_match]                
+                    df1 = df[df['prompt'] == token_match]
                 except:
                     df1 = df[(df['prompt'].str.contains(prompts_sent_token[index]))]
                 response += [ r for r in df1.response ][0]
@@ -186,7 +181,7 @@ class NLP_Parser():
             inp_txt = ' '.join([txt.strip() for txt in input_text.split('\n')])
         else:
             inp_txt = input_text
-        user_input = inp_txt.lower()        
+        user_input = inp_txt.lower()
         matched_label = self.model.predict(inp_txt, k=1)[0][0]
         matched_score = self.model.predict(inp_txt, k=1)[1][0]
 
@@ -196,7 +191,7 @@ class NLP_Parser():
     def find_matching(self, txt):
         accuracy = 0
         sent_tokens = self.faq_list.copy()
-        try:        
+        try:
             sent_tokens.append(txt)
             TfidfVec = TfidfVectorizer(tokenizer=self.tokenizer, stop_words='english')
             tfidf = TfidfVec.fit_transform(sent_tokens)
@@ -222,16 +217,16 @@ class NLP_Parser():
             prompts_qn = [x.lower() for x in self.qn_resp.questions]
             prompts_resp = [x for x in self.qn_resp.resp]
         except:
-            prompts_resp = []   
+            prompts_resp = []
             prompts_qn = []
             return ''
-        
+
         resp = user_resp.lower()
         if resp in prompts_qn:
             n = prompts_qn.index(resp)
             return prompts_resp[n]
 
-        for n in range(len(prompts_qn)):    
+        for n in range(len(prompts_qn)):
             qn = re.sub(r"[^a-zA-Z]", " ", prompts_qn[n]).lower().strip().replace("ing","")
             qlist = [ q for q in qn.split(' ') if q in self.regword_list ]
             if len(qlist)>0:
@@ -239,9 +234,9 @@ class NLP_Parser():
                 cond = '^.*' + reg.lower().replace(' ','.*') + '.*$'
                 if re.search(cond, resp):
                     return prompts_resp[n]
-        return ''        
+        return ''
 
-    def recommend_list(self, input_text):        
+    def recommend_list(self, input_text):
         output = []
         if '\n' in input_text:
             inp_txt = ' '.join([txt.strip() for txt in input_text.split('\n')])
@@ -262,7 +257,7 @@ class NLP_Parser():
         questions = [ x for x in df.prompt if x[-1]=='?' ]
 
         if len(questions) >= 3 :
-            return random.sample(questions, 3) 
+            return random.sample(questions, 3)
         else:
             return questions
 
@@ -279,13 +274,7 @@ class NLP_Parser():
                 fout.write(line.replace('  ', ' '))
             fin.close()
             fout.close()
-            model = fasttext.train_supervised('ft_input.txt', 
-                                            epoch=100,
-                                            lr=0.1,
-                                            wordNgrams=2,
-                                            loss='softmax',
-                                            ws=10
-                                            )
+            model = fasttext.train_supervised('ft_input.txt', epoch=100, lr=0.1, wordNgrams=2, loss='softmax', ws=10)
             model.save_model(model_filename)
         except:
             err = 1
@@ -300,18 +289,14 @@ if __name__ == "__main__":
         nltk.download('wordnet')
     rdsconnector = None
     ft_model = NLP_Parser()
-    print(ft_model)    
-    with open("vmbot.json") as json_file:  
+    print(ft_model)
+    with open("vmbot.json") as json_file:
         bot_info = json.load(json_file)
     vmsvclib.rds_connstr = bot_info['omdb']
     vmsvclib.rdscon = None
     vmsvclib.rds_pool = 0
     vmsvclib.rdsdb = None
-    #opts = [ 0,1,2,3,4,5 ]
     opts = [ 0, 1, 5 , 7 ]
-    #resp = "What should I do ?"
-    #resp = "how is my mcq schedule date ?"        
-    #resp = "Can I request for an extension of fee payment?" # score 0.6355392655859758        
     resp = "I was told it would be when my last contract began?"
     print(resp)
     if 0 in opts :
@@ -327,7 +312,7 @@ if __name__ == "__main__":
         print(score)
     if 2 in opts :
         ( result, accuracy ) = ft_model.find_matching(resp)
-        print(result, accuracy)    
+        print(result, accuracy)
     if 3 in opts :
         (result, score) = ft_model.predict_label(resp)
         print(score, result)
@@ -346,10 +331,4 @@ if __name__ == "__main__":
         from nltk.chat.eliza import eliza_chatbot
         result = eliza_chatbot.respond(resp)
         print(f"result = {result}")
-    #if 8 in opts :
-    #    import wikipedia
-    #    resp = "entropy"
-    #    print(resp)
-    #    result = wikipedia.summary(resp)
-    #    print(f"result = {result}")
     print("End of unit test")

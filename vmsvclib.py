@@ -9,7 +9,7 @@
 # \▓▓    ▓▓ ▓▓ | ▓▓ | ▓▓ ▓▓  | ▓▓ ▓▓ ▓▓  \▓ | ▓▓\▓▓     \ ▓▓  | ▓▓  \▓▓  ▓▓\▓▓    ▓▓ ▓▓
 #  \▓▓▓▓▓▓ \▓▓  \▓▓  \▓▓\▓▓   \▓▓\▓▓\▓▓      \▓▓ \▓▓▓▓▓▓▓\▓▓   \▓▓   \▓▓▓▓  \▓▓▓▓▓▓ \▓▓
 #
-# Library functions by KH                                                
+# Library functions by KH                           
 #------------------------------------------------------------------------------------------------------
 summary = """
 ╔«═══════════════════════════════════════════════════════════════════════•[^]»╗
@@ -19,6 +19,7 @@ summary = """
 ║ build_menu         build telegram reply-to menu buttons with a list         ║▒▒
 ║ copydbtbl          append the dataframe into another table in RDS           ║▒▒
 ║ email_lookup       email address search when the field is encrypted         ║▒▒
+║ errlog             standard error logger using syslog function              ║▒▒
 ║ get_columns        product the dataframe header into python list            ║▒▒
 ║ html_report        process tabulated data into formatted telegram message   ║▒▒
 ║ html_tbl           process tabulated data into formatted html document      ║▒▒
@@ -103,6 +104,10 @@ def email_lookup(df, email):
         sid = user_dict[email]
         return str(sid)
     return ""
+
+def errlog(msg):
+    syslog(msg,msgtype="ERROR")
+    return
 
 def get_columns(tablename):
     global rds_schema
@@ -208,8 +213,6 @@ def rds_df(query):
     rdscur = rdscon.cursor()
     rdscur.execute(query)
     rows = rdscur.fetchall()
-    #if rdsdb is not None:
-    #    rdscon.close()
     if len(rows) == 0:
         return None
     else:
@@ -265,10 +268,10 @@ def rds_update(query):
     #    rdscon.close()
     return
 
-def syslog(msg):
+def syslog(msg, msgtype="INFO"):
     s = inspect.stack()[1]
     date_now = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime() )
-    result = f"{date_now} :: INFO :: {s[3]} :: {s[2]} :: {msg}\n"
+    result = f"{date_now} :: {msgtype} :: {s[3]} :: {s[2]} :: {msg}\n"
     f = open('syslog.log','a')
     fname = 'syslog.log'
     with open(fname, "a", encoding="utf-8") as f:

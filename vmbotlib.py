@@ -9,7 +9,7 @@
 # \▓▓    ▓▓ ▓▓ | ▓▓ | ▓▓ ▓▓  | ▓▓ ▓▓ ▓▓  \▓ | ▓▓\▓▓     \ ▓▓  | ▓▓  \▓▓  ▓▓\▓▓    ▓▓ ▓▓
 #  \▓▓▓▓▓▓ \▓▓  \▓▓  \▓▓\▓▓   \▓▓\▓▓\▓▓      \▓▓ \▓▓▓▓▓▓▓\▓▓   \▓▓   \▓▓▓▓  \▓▓▓▓▓▓ \▓▓
 #
-# Telegram bot                                                                       
+# Message handler        
 #------------------------------------------------------------------------------------------------------
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -67,7 +67,7 @@ def do_main():
     syslog('Starting up vmbot')
     print("starting up vmbot")
     if not loadconfig():
-        syslog("error loading config")
+        errlog("error loading config")
         return
     if dt_model.model_name=="" :
         txt = "AI grading model data file dt_model.bin is missing"
@@ -241,7 +241,7 @@ class BotInstance():
     def get_system_config(self):
         df = rds_df("select * from params where client_name = 'System';")
         if df is None:
-            syslog("Unable to access params table from RDS")
+            errlog("Unable to access params table from database")
             return
         df.columns = ['client_name','key', 'value', 'paramId']
         par_val = ['' + str(x) for x in df.value]
@@ -291,7 +291,7 @@ class BotInstance():
     def get_client_config(self):
         df = rds_df(f"select * from params where client_name = '{self.client_name}';")
         if df is None:
-            syslog("Unable to access params table from RDS")
+            errlog("Unable to access params table from database")
             return
         df.columns = ['client_name','key', 'value', 'paramId']
         par_val = ['' + str(x) for x in df.value]
@@ -1101,7 +1101,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
 
         # ================================================================================================
         #elif resp == menu_txt['an_survey']:
-        elif resp in ["/testeoc","/testpss"]:
+        elif resp in ["/testeoc","/testpss"] and self.is_admin:
             self.client_name = bot_intance.client_name
             self.courseid = "course-v1:Lithan+CCN-1119A+28Feb20"
             table_name = "tb_pss" if resp=="/testpss" else "tb_eoc"
@@ -1128,13 +1128,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             if msg != []:
                 for txt in msg:
                     await bot.sendMessage(chat_id, txt, parse_mode='HTML')
-
-        elif resp.startswith("/!") and (len(resp) > 2) and (chat_id == developerid) and (bot_intance.svcbot_id==bot_intance.bot_id):
-            try:
-                txt = self.shellcmd(resp[2:])
-                html_msg_dict[resp[2:]] = self.txt2list(txt)
-            except:
-                return
 
         # ================================================================================================
 
@@ -1241,6 +1234,13 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([]))
                 self.menu_id = keys_dict[menu_txt['option_learners']]
 
+        elif resp.startswith("!") and (len(resp[1:].strip()) > 0) and (chat_id == developerid) and (bot_intance.svcbot_id==bot_intance.bot_id):
+            try:
+                txt = self.shellcmd(resp[1:])
+                html_msg_dict[resp[1:]] = self.txt2list(txt)
+            except:
+                return
+
         elif self.menu_id == keys_dict[menu_txt['option_mainmenu']]:
             if resp == menu_txt['option_fct']:
                 txt = 'You are in faculty admin mode.'
@@ -1291,11 +1291,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 else:
                     txt = 'This option is strickly for Sambaash admin.'
                     await self.sender.sendMessage(txt)
-            elif resp == menu_txt['opt_client']:
-                btn_client_list = build_menu(list(bot_intance.connection_dict), 1)
-                txt = f"Switch client_name from {self.client_name} to the below:"
-                await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(btn_client_list))
-                self.menu_id = keys_dict[menu_txt['opt_setclient']]
             elif (resp == option_back) or (resp == "0"):
                 tid = self.endchat()
                 if tid > 0:
@@ -1306,26 +1301,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 await self.logoff()
                 txt = "Session closed."
                 await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([[menu_txt['btn_hellobot']]]))
-
-        elif self.menu_id == keys_dict[menu_txt['opt_setclient']] :
-            if resp in list(bot_intance.connection_dict):
-                bot_intance.schema = bot_intance.connection_dict[resp][0]
-                conn_str = bot_intance.connection_dict[resp][1]
-                vmsvclib.rdscon.close()
-                vmsvclib.rds_connstr = conn_str
-                vmsvclib.rdscon = None
-                vmsvclib.rdsdb = None
-                vmsvclib.rds_pool = 0
-                vmsvclib.rds_schema = bot_intance.schema
-                self.client_name = resp
-                bot_intance.client_name = resp
-                df = rds_df(f"select client_name,course_id from playbooks where client_name = '{resp}' limit 10;")
-                txt = f"You are connected to client_name {resp}"
-            else:
-                txt = "You are back to the svcbot menu"
-            menu_item = menu_items['svcbot_menu']
-            await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
-            self.menu_id = 1
 
         elif self.menu_id == keys_dict[menu_txt['option_learners']] :
             if (resp == option_back) or (resp == "0"):
@@ -1692,7 +1667,6 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 rds_update(qry)
                 self.whitelist_users(course_id)
                 retmsg = f"LMS import for {course_id} has been completed.\nPlease logoff and login again to get the latest course list."
-                syslog(retmsg)
             txt = "you are back to the menu"
             menu_item = menu_items['faculty_menu']
             await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
@@ -2470,16 +2444,11 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup([client_list]))
                     self.menu_id = keys_dict[menu_txt['opt_tgtclt']]
                     self.records['clt_opt'] = keys_dict[resp]
-            elif resp == menu_txt['sys_clientconfig']:
-                df = rds_df(f"select `key`,`value` from params where client_name = '{self.client_name}';")
-                if df is None:
-                    retmsg = "Unable to access client configuration"
-                else:
-                    df.columns = ['key', 'value']
-                    title = "client configuration"
-                    html_msg_dict[title] = html_report(df, df.columns, [15, 70], 25)
-                bot_intance.get_client_config()
-                retmsg = "Client configuration has been reloaded."
+            elif resp == menu_txt['opt_client']:
+                btn_client_list = build_menu(list(bot_intance.connection_dict), 1)
+                txt = f"Switch client_name from {self.client_name} to the below:"
+                await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(btn_client_list))
+                self.menu_id = keys_dict[menu_txt['opt_setclient']]
 
         elif self.menu_id == keys_dict[menu_txt['opt_tgtclt']]:
             if resp == option_back:
@@ -2533,6 +2502,30 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             menu_item = menu_items['client_menu']
             await self.bot.sendMessage(chat_id, txt, reply_markup=self.reply_markup(menu_item))
             self.menu_id = keys_dict[menu_txt['option_client']]
+
+        elif self.menu_id == keys_dict[menu_txt['opt_setclient']] :
+            if resp in list(bot_intance.connection_dict):
+                bot_intance.schema = bot_intance.connection_dict[resp][0]
+                conn_str = bot_intance.connection_dict[resp][1]
+                vmsvclib.rdscon.close()
+                vmsvclib.rds_connstr = conn_str
+                vmsvclib.rdscon = None
+                vmsvclib.rdsdb = None
+                vmsvclib.rds_pool = 0
+                vmsvclib.rds_schema = bot_intance.schema
+                self.client_name = resp
+                bot_intance.client_name = resp
+                bot_intance.get_client_config()
+                df = rds_df(f"select client_name,course_id from playbooks where client_name = '{resp}' limit 10;")
+                txt = f"You are connected to client_name {resp}\nPlease login again to the new client."
+                await self.sender.sendMessage(txt)
+                await self.logoff()
+                return
+            else:
+                txt = "You are back in the system admin menu"
+            menu_item = menu_items['svcbot_menu']
+            await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
+            self.menu_id = keys_dict[menu_txt['option_admin']]
 
         elif self.menu_id == keys_dict[menu_txt['option_syscfg']]:
             if (resp == option_back) or (resp == "0"):

@@ -4,7 +4,7 @@
 #| |_| | | | | | | | | | | |  | |  __/ | | | || (_) | |
 # \___/|_| |_| |_|_| |_|_|_|  |_|\___|_| |_|\__\___/|_|
 #        
-# This is for SMS/LMS interface  
+# This is for SMS/LMS interface                                                         
 #------------------------------------------------------------------------------------------------------
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -199,7 +199,6 @@ def edx_mcqinfo(client_name, course_id, student_id=0):
         grade_list = []
         att_list = []
         avgscore_list = []
-        #for rec in [ x for x in list(data) if 'attempts' in x['state']]  :
         for rec in [ x for x in list(data) ]:
             qn = 99
             pp = 0
@@ -642,7 +641,7 @@ def update_assignment(course_id, client_name, student_id=0):
         try:
             rds_update(updsql)
         except:
-            syslog(f"SQL update error\n{updsql}")
+            errlog(f"SQL update error\n{updsql}")
     syslog("completed for course_id " + course_id)
     return True
 
@@ -764,7 +763,7 @@ def edx_import(course_id, client_name, force_active=False):
     qry = f"select enabled from course_module where client_name = '{client_name}' and module_code = '{module_code}';"
     module_enabled = rds_param(qry)
     if module_enabled==0:
-        #syslog(f"this module {module_code} is not enabled, edx_import stopped")
+        syslog(f"this module {module_code} is not enabled, edx_import stopped")
         return
     qry = f"select pillar from course_module where client_name = '{client_name}' and module_code = '{module_code}';"
     course_name = edx_coursename(course_id)
@@ -774,7 +773,7 @@ def edx_import(course_id, client_name, force_active=False):
         eoc = edx_endofcourse(client_name, course_id)
     update_playbooklist(course_id, client_name, course_name, eoc)
     if eoc==1:
-        #syslog(f"this course {course_id} already expired. No need to import again")
+        syslog(f"this course {course_id} already expired. No need to import again")
         return
 
     cnt = rds_param("select count(*) as cnt from stages where client_name='{client_name}' and courseid='{course_id}';")
@@ -789,13 +788,12 @@ def edx_import(course_id, client_name, force_active=False):
             df['stagedate'] = ''
             df['courseid'] = course_id
             df1 = df[['client_name','courseid', 'id', 'stage', 'name', 'desc', 'days', 'f2f', 'mcq', 'flipclass', 'assignment', 'IU', 'stagedate']]
-            #syslog("update stages table")
             copydbtbl(df1, "stages")
 
     df = edx_userdata(course_id)
     nrows = len(df)
     if nrows == 0:
-        #syslog("no user data from edx api found")
+        errlog("no user data from edx api found")
         return
     query = "delete from userdata where " + condqry
     rds_update(query)
@@ -833,7 +831,7 @@ def edx_import(course_id, client_name, force_active=False):
     try:
         rds_update(query)
     except:
-        #syslog("unable to initialized table userdata")
+        errlog("unable to initialized table userdata")
         return
 
     update_assignment(course_id, client_name)
@@ -907,7 +905,7 @@ def gen_mcqas_df(colsum, client_name, course_id):
                 df[xvar + "_avgattempts"] = df.apply(lambda x: int(x[xvar + "_sumattempts"]*100/ x[xvar + "_cnt"])/100 if x[xvar + "_cnt"] > 0 else 0, axis=1)
                 df[xvar + '_avgscore'] = df.apply(lambda x: int(x[xvar + "_sumscore"]*100/ x[xvar + "_cnt"])/100 if x[xvar + "_cnt"] > 0 else 0, axis=1)
         except:
-            syslog(f"error updating {xvar}")
+            errlog(f"error updating {xvar}")
 
     try:
         df1 = df[ (df.mcq_cnt + df.as_cnt) > 0 ]
@@ -1452,6 +1450,13 @@ def load_edx(client_name):
 
     #print("running update_usermaster")
     mass_update_usermaster(client_name)
+    
+    #black-list all learners more related to the active courses
+    query = f"UPDATE user_master SET usertype=0 WHERE client_name = '{client_name}' AND studentid IN "
+    query += " ( SELECT studentid FROM ( SELECT b.studentid, SUM( IFNULL((SELECT 1 FROM playbooks WHERE client_name=b.client_name AND "
+    query += " course_id=b.courseid AND eoc=0),0)) AS cnt FROM userdata b INNER JOIN user_master c ON b.client_name=c.client_name AND "
+    query += f" b.studentid=c.studentid WHERE b.client_name = '{client_name}' AND c.usertype=1 group by b.studentid ) zz WHERE cnt = 0);"
+    rds_update(query)
     return
 
 if __name__ == "__main__":
@@ -1532,6 +1537,8 @@ if __name__ == "__main__":
                 print(f"EOC date = {dt}")
                 eoc = edx_endofcourse(client_name, course_id)
                 results = f"End of course (1:Yes,0:No) = {eoc}"
+                [ pillar, course_code, module_code, cohort_id ] = course_header(course_id)
+                print( [ pillar, course_code, module_code, cohort_id ] )
                 print(results)
                 df = edx_userdata(course_id)
                 if df is not None:
