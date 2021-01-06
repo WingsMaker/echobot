@@ -4,7 +4,7 @@
 #| |_| | | | | | | | | | | |  | |  __/ | | | || (_) | |
 # \___/|_| |_| |_|_| |_|_|_|  |_|\___|_| |_|\__\___/|_|
 #        
-# This is for SMS/LMS interface                                                         
+# This is for SMS/LMS interface              
 #------------------------------------------------------------------------------------------------------
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -37,7 +37,7 @@ def course_header(course_id):
         return ["","","",""]
     cohort_id = getcohort(course_id)
     module_code = piece(cohort_id.replace('+','-'),'-',0)
-    qry = f"select * from playbooks where module_code='{module_code}' limit 1;"
+    qry = f"select * from playbooks where course_id='{course_id}' limit 1;"
     df = rds_df(qry)
     if df is None:
         qry = f"select * from course_module where module_code = '{module_code}';"
@@ -1540,6 +1540,7 @@ if __name__ == "__main__":
                 [ pillar, course_code, module_code, cohort_id ] = course_header(course_id)
                 print( [ pillar, course_code, module_code, cohort_id ] )
                 print(results)
+                #zz = """
                 df = edx_userdata(course_id)
                 if df is not None:
                     sid_list = [x for x in df.student_id]
@@ -1548,6 +1549,7 @@ if __name__ == "__main__":
                     printdict(udict)
                 else:
                     print("No students information found.")
+                #"""
             elif cmd=="attendance":
                 df = sms_df(course_id, sid)
                 if df is not None and len(df)>0:
