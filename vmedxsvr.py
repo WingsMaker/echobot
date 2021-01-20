@@ -4,7 +4,7 @@
 #| |_| | | | | | | | | | | |  | |  __/ | | | || (_) | |
 # \___/|_| |_| |_|_| |_|_|_|  |_|\___|_| |_|\__\___/|_|
 #
-# EDX Server                                            
+# EDX Server                                                              
 #------------------------------------------------------------------------------------------------------
 import warnings
 warnings.filterwarnings("ignore")
@@ -13,14 +13,17 @@ import json
 import asyncio
 import vmedxlib
 import vmsvclib
-global tcp_port,loop
+global tcp_port,loop,task
 
 async def handle_echo(reader, writer):
-    global loop
-    data = await reader.read(100)
-    message = data.decode()    
+    global loop,task
+    data = await reader.read(1000)
+    message = data.decode()
+    print(message)
     addr = writer.get_extra_info('peername')
     if message=="/stopedx":
+        print("stopedx command received")
+        task.cancel()
         loop.stop()
         return
     arg_list = message.split("|")
@@ -31,40 +34,39 @@ async def handle_echo(reader, writer):
         resp = arg_list[2] if arglen>2 else ""
         arg = arg_list[3] if arglen>3 else ""
         cmd = cmd.replace("update_","")
-        print(client_name,cmd,resp,arg)
-        vmedxlib.parse_commands(client_name,cmd,resp,arg)
-        message=str(arg_list)
-    else:
-        print(message)
-    data=message.encode()
-    writer.write(data)
-    await writer.drain()
-    writer.close()
-    return 
+        message = vmedxlib.parse_commands(client_name,cmd,resp,arg)
+        data=message.encode()
+        writer.write(data)
+        await writer.drain()
+        writer.close()
+    return
 
 async def chat(msg):
     global tcp_port
+    txt = ""
     try:
         reader, writer = await asyncio.open_connection('localhost',tcp_port)
         writer.write(msg.encode())
-        data = await reader.read(100)
-        txt = f'Received: {data.decode()!r}'
+        await writer.drain()
+        data = await reader.read(1000)
+        txt = data.decode()
         print(txt)
+        reader.close()
         writer.close()
     except:
-        return
+        return txt
 
 async def streams_server():
     global tcp_port
     server = await asyncio.start_server(
         handle_echo, 'localhost', tcp_port)
-    addr = server.sockets[0].getsockname()    
+    addr = server.sockets[0].getsockname()
     async with server:
-        await server.serve_forever()    
-    return 
+        await server.serve_forever()
+    return
 
 if __name__ == "__main__":
-    global use_edxapi,loop,tcp_port
+    global use_edxapi,loop,tcp_port,task
     with open("vmbot.json") as json_file:
         bot_info = json.load(json_file)
     client_name = bot_info['client_name']
@@ -92,18 +94,17 @@ if __name__ == "__main__":
             loop.run_forever()
         except KeyboardInterrupt:
             task.cancel()
+        finally:
             txt='Thank you for using OmniMentor EDX Server. Goodbye!'
             print(txt)
-        finally:
-            pass
     elif cmd=="/testedx":
-        func_req = "info"
-        course_id = "course-v1:Lithan+FOS-0121A+11jan2021"
-        nl="|"
-        message=f"{client_name}{nl}{func_req}{nl}{course_id}"
-        asyncio.run(chat(message))
+        message=f"{client_name}|progress|9992"
+        #message=f"{client_name}|info|FOS-0121A"
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(chat(message))
     elif cmd=="/stopedx":
-        asyncio.run(chat(cmd))
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(chat(cmd))
     else:
         prog = str(sys.argv[0])
         print(f"usage :\n\tpython3 {prog} [commands]")

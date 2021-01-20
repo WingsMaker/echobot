@@ -4,8 +4,7 @@
 #| |_| | | | | | | | | | | |  | |  __/ | | | || (_) | |
 # \___/|_| |_| |_|_| |_|_|_|  |_|\___|_| |_|\__\___/|_|
 #
-# Library functions by KH
-# This is for AI Grading                                                                      
+# This is for AI Grading                                                      
 #------------------------------------------------------------------------------------------------------
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
@@ -15,7 +14,6 @@ warnings.filterwarnings("ignore")
 import pandas as pd
 from pandas_profiling import ProfileReport
 import numpy as np
-import pydotplus
 import pickle
 
 from sklearn.ensemble import AdaBoostRegressor
@@ -23,7 +21,6 @@ from io import StringIO
 from sklearn.linear_model import LinearRegression, LogisticRegression
 from sklearn.model_selection import cross_val_score
 from sklearn.model_selection import train_test_split
-from sklearn.tree import export_graphviz
 from sklearn.tree import DecisionTreeRegressor
 
 import vmsvclib

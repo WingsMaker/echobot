@@ -4,7 +4,7 @@
 #| |_| | | | | | | | | | | |  | |  __/ | | | || (_) | |
 # \___/|_| |_| |_|_| |_|_|_|  |_|\___|_| |_|\__\___/|_|
 #
-# SMS/LMS                 
+# SMS/LMS                      
 #------------------------------------------------------------------------------------------------------
 import warnings
 warnings.filterwarnings("ignore")
@@ -16,7 +16,7 @@ import datetime
 import sys
 import requests
 from openpyxl import load_workbook
-import vmsvclib
+import vmsvclib, vmbotlib
 from vmsvclib import *
 
 global edx_api_header,edx_api_url,max_iu
@@ -1341,13 +1341,6 @@ def mass_update_usermaster(client_name):
     syslog(f"completed on {client_name}")
     return
 
-def test_google_calendar(course_id,client_name):
-    stage_list = get_google_calendar(course_id,client_name)
-    for x in stage_list:
-        print(x)
-    print("\n")
-    return stage_list
-
 def edx_alluserdata():
     global edx_api_header,edx_api_url
     df = pd.DataFrame.from_dict({'student_id':[],'course_id':[],'username':[],'email':[]})
@@ -1568,7 +1561,9 @@ def course_import(client_name,fn,wb,master):
     return (True,title,df)
 
 def parse_commands(client_name,cmd,resp,arg):
-    if cmd != "" and resp != "":
+    cmd_log = ""
+    edxcmd_list = ['import','mcq','assignment','schedule','calendar','info']
+    if (cmd in edxcmd_list) and (resp != ""):
         sid = 0
         if (arg != "") and arg.isnumeric():
             sid = int(arg)
@@ -1579,66 +1574,68 @@ def parse_commands(client_name,cmd,resp,arg):
             course_list = search_course_list("%" + resp + "%" )
         if cmd=="search":
             for course_id in course_list:
-                print(course_id)
+                cmd_log += str(course_id) + '\n'
         elif len(course_list)==1:
             course_id = course_list[0]
-            print(course_id,client_name)
+            cmd_log += f"{course_id}\t{client_name}\n"
             if cmd=="import":
                 if course_id=='*':
                     edx_mass_import(client_name)
-                    print("Edx mass import completed")
+                    cmd_log += "Edx mass import completed\n"
                 else:
                     edx_import(course_id,client_name)
-                    print("Edx import completed")
+                    cmd_log += "Edx import completed\n"
             elif cmd=="mcq":
                 if course_id=='*':
                     mass_update_mcq(client_name)
-                    print("MCQ mass update completed")
+                    cmd_log += "MCQ mass update completed\n"
                 elif sid > 0 :
                     update_mcq(course_id,client_name,sid)
-                    print(f"MCQ update for studentid {sid} completed")
+                    cmd_log += f"MCQ update for studentid {sid} completed\n"
                 else:
                     update_mcq(course_id,client_name)
-                    print("MCQ update completed")
+                    cmd_log += "MCQ update completed\n"
             elif cmd=="assignment":
                 if course_id=='*':
                     mass_update_assignment(client_name)
-                    print("Assignment mass update completed")
+                    cmd_log += "Assignment mass update completed\n"
                 elif sid > 0 :
                     update_assignment(course_id,client_name,sid)
-                    print(f"Assignment update for studentid {sid} completed")
+                    cmd_log += f"Assignment update for studentid {sid} completed\n"
                 else:
                     update_assignment(course_id,client_name)
-                    print("Assignment update completed")
+                    cmd_log += "Assignment update completed\n"
             elif cmd=="schedule":
                 if course_id=='*':
                     mass_update_schedule(client_name)
-                    print("Schedule mass update completed")
+                    cmd_log += "Schedule mass update completed\n"
                 else:
                     update_schedule(course_id,client_name)
-                    print("Schedule update completed")
+                    cmd_log += "Schedule update completed\n"
             elif cmd=="calendar":
-                test_google_calendar(course_id,client_name)
-                print("google calendar test completed")
+                stage_list = get_google_calendar(course_id,client_name)
+                for x in stage_list:
+                    cmd_log += str(x) + '\n'
+                cmd_log += "google calendar test completed\n"
             elif cmd=="info":
                 dt = edx_day0(course_id)
-                print(f"start date = {dt}")
+                cmd_log += f"start date = {dt}\n"
                 dt = eoc_date(client_name,course_id)
-                print(f"EOC date = {dt}")
+                cmd_log += f"EOC date = {dt}\n"
                 eoc = edx_endofcourse(client_name,course_id)
                 results = f"End of course (1:Yes,0:No) = {eoc}"
                 [ pillar,course_code,module_code ] = course_header(course_id)
                 cohort_id = getcohort(course_id)
-                print( [ pillar,course_code,module_code,cohort_id ] )
-                print(results)
+                cmd_log += str( [ pillar,course_code,module_code,cohort_id ] ) + '\n'
+                cmd_log += str(results) + '\n'
                 df = edx_userdata(course_id)
                 if df is not None:
                     sid_list = [x for x in df.student_id]
                     uname_list = [x for x in df.username]
                     udict = dict(zip(sid_list,uname_list))
-                    printdict(udict)
+                    cmd_log += ''.join([ str(k) + '\t' + v + '\n' for k,v in udict.items()])
                 else:
-                    print("No students information found.")
+                    cmd_log += "No students information found\n"
             elif cmd=="attendance":
                 df = sms_df(course_id,sid)
                 if df is not None and len(df)>0:
@@ -1668,43 +1665,84 @@ def parse_commands(client_name,cmd,resp,arg):
                         txt += f"Attendance rate = {att_rate}"
                         cols = ['class_type_code', 'status_desc', 'attendance_type_desc', 'timetable_date', 'timetable_day']
                     df1 = df[cols]
-                    print(txt)
-                    print(df1)
-        elif cmd=="xls_import":
-            fname=resp
-            print(f"Performaning course import for {fname}")
-            (status,wb,master) = valid_format(fname,fname)
-            if status==True:
-                (status,msg,df) = course_import(client_name,fname,wb,master)
-                print(msg)
-                if status:
-                    print(df)
-            else:
-                print(wb)
-                    
-        elif len(course_list)>0:
-            print("which course_id is the one ?")
-            for course_id in course_list:
-                print(course_id)
+                    cmd_log += str(txt) + '\n'
+                    cmd_log += str(str(df1)) + '\n'
+    elif cmd=="xls_import" and resp != "":
+        fname=resp
+        cmd_log += f"Performaning course import for {fname}\n"
+        (status,wb,master) = valid_format(fname,fname)
+        if status==True:
+            (status,msg,df) = course_import(client_name,fname,wb,master)
+            cmd_log += str(msg) + '\n'
+            if status:
+                cmd_log += str(df) + '\n'
         else:
-            print("Unable to find matching information")
+            cmd_log += str(wb) + '\n'
+    elif cmd=="username" and resp != "":
+        if resp.isnumeric():
+            qry = f"select username from user_master where client_name='{client_name}' and studentid={resp};"
+        else:
+            qry = f"select username from user_master where client_name='{client_name}' and email='{resp}';"
+        username = rds_param(qry)
+        cmd_log += str(username) + '\n'
+    elif cmd=="whois" and resp != "":
+        qry = f"select * from user_master where client_name='{client_name}' and lower(username) like '%{resp}%';"
+        df = rds_df(qry)
+        df.columns = vmsvclib.get_columns("user_master")
+        cmd_log += str(df) + '\n'
+    elif cmd=="progress" and resp != "":
+        if resp.isnumeric():
+            qry = f"select studentid from user_master where client_name='{client_name}' and studentid={resp};"
+        else:
+            cmd_log += "Sorry it seems you are not a valid user in our system\n"
+            return cmd_log
+        studentid = rds_param(qry)
+        sid = int("0" + str(studentid))
+        if sid==0:
+            cmd_log += str("Sorry it seems you are not a valid user in our system.") + '\n'
+            return cmd_log
+        else:
+            vmbotlib.bot_intance = type('config', (object,), \
+            {'pass_rate': 0.7,'att_rate':0.75, 'max_iu':20, 'gmt': 8})
+            resp_dict = vmbotlib.load_respdict()
+            qry = "select a.* FROM userdata a INNER JOIN playbooks b ON a.client_name=b.client_name AND a.courseid=b.course_id"
+            qry += f" where b.eoc=0 and a.client_name='{client_name}' and a.studentid={resp};"
+            userdata = rds_df(qry)
+            if (userdata is None) or (len(userdata)==0):
+                cmd_log += str("Unable to find the record in the system") + '\n'
+                return cmd_log
+            cols = vmsvclib.get_columns("userdata")
+            userdata.columns = cols
+            df = userdata.T
+            df.columns = ['col']
+            records = dict(zip(cols,[x for x in df.col]))
+            course_id = records['courseid']
+            qry = f"select * from stages where client_name='{client_name}' and courseid='{course_id}';"
+            stagetable = rds_df(qry)
+            if (stagetable is None) or (len(stagetable)==0):
+                cmd_log += str("Unable to find the record in the system") + '\n'
+                return cmd_log
+            stagetable.columns = vmsvclib.get_columns("stages")
+            vars = vmbotlib.display_progress(userdata, stagetable, sid, records, client_name, resp_dict, vmbotlib.bot_intance.pass_rate, vmbotlib.bot_intance.att_rate)
+            if 'notification' in list(vars):
+                cmd_log += str(vars['notification']) + '\n'
     elif cmd=="pipeline":
         generate_mcq_as(client_name)
-        print("pipeline data generated")
+        cmd_log += str("pipeline data generated") + '\n'
     elif cmd=="mass_update":
         load_edx(client_name)
-        print("mass update completed")
+        cmd_log += str("mass update completed") + '\n'
     else:
         cmd = ""
     if cmd == "":
         prog = "vmedxlib.py"
-        print(f"usage :\n\tpython3 {prog} [commands] [cohort_id] [student_id]")
-        print("commands:\n\timport\n\tmcq\n\tassignment\n\tschedule\n\tcalendar\n\tinfo\n\tpipeline\n\tmass_update\n\txls_import\n")
-        print(f"Example:\n\tpython3 {prog} assignment IMM-0520A 4558")
-    return
+        cmd_log += str(f"usage :\n\tpython3 {prog} [commands] [cohort_id] [student_id]") + '\n'
+        cmd_log += str("commands:\n\timport\n\tmcq\n\tassignment\n\tschedule\n\tcalendar\n\tinfo\n\tpipeline\n\tmass_update\n\txls_import\n\tprogress\n\tusername\n\twhois\n") + '\n'
+        cmd_log += str(f"Example:\n\tpython3 {prog} assignment IMM-0520A 4558") + '\n'
+    return cmd_log
 
 if __name__ == "__main__":
-    global use_edxapi,edx_api_header,edx_api_url,max_iu,loop
+    global use_edxapi,edx_api_header,edx_api_url,max_iu,loop,cmd_log
     with open("vmbot.json") as json_file:
         bot_info = json.load(json_file)
     client_name = bot_info['client_name']
@@ -1716,7 +1754,9 @@ if __name__ == "__main__":
     vmsvclib.rds_pool = 0
     vmsvclib.rds_schema = bot_info['schema']
     max_iu = 20
+    cmd_log = ""
     cmd = str(sys.argv[1]) if len(sys.argv)>=2 else ""
     resp = str(sys.argv[2]) if len(sys.argv)>=3 else ""
     arg = str(sys.argv[3]) if len(sys.argv)>=4 else ""
-    parse_commands(client_name,cmd,resp,arg)
+    cmd_log = parse_commands(client_name,cmd,resp,arg)
+    print(cmd_log)
