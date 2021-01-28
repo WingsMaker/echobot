@@ -8,12 +8,12 @@
 #| ▓▓__/ ▓▓ ▓▓ | ▓▓ | ▓▓ ▓▓  | ▓▓ ▓▓ ▓▓ \▓▓▓| ▓▓ ▓▓▓▓▓▓▓▓ ▓▓  | ▓▓ | ▓▓|  \ ▓▓__/ ▓▓ ▓▓
 # \▓▓    ▓▓ ▓▓ | ▓▓ | ▓▓ ▓▓  | ▓▓ ▓▓ ▓▓  \▓ | ▓▓\▓▓     \ ▓▓  | ▓▓  \▓▓  ▓▓\▓▓    ▓▓ ▓▓
 #  \▓▓▓▓▓▓ \▓▓  \▓▓  \▓▓\▓▓   \▓▓\▓▓\▓▓      \▓▓ \▓▓▓▓▓▓▓\▓▓   \▓▓   \▓▓▓▓  \▓▓▓▓▓▓ \▓▓
-#        
-# messages handler
+#
+# messages handler                                                   
 #------------------------------------------------------------------------------------------------------
 import warnings
-warnings.filterwarnings("ignore", category=FutureWarning)
-warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore",category=FutureWarning)
+warnings.filterwarnings("ignore",category=DeprecationWarning)
 warnings.filterwarnings("ignore")
 
 import pandas as pd
@@ -122,7 +122,7 @@ async def job_scheduler():
         if (timenow==automsg) and (automsg>0):
             syslog("running auto_notify")
             await auto_notify(client_name,resp_dict,pass_rate,0)
-            syslog("completed auto_notify, running auto_intervent")
+            syslog("completed auto_notify,running auto_intervent")
             await auto_intervent(client_name,resp_dict,pass_rate,0)
             syslog("completed auto_intervent")
             await asyncio.sleep(60)
@@ -240,7 +240,7 @@ class BotInstance():
         if df is None:
             errlog("Unable to access params table from database")
             return
-        df.columns = ['client_name','key', 'value', 'paramId']
+        df.columns = ['client_name','key','value','paramId']
         par_val = ['' + str(x) for x in df.value]
         par_key = [x for x in df.key]
         par_dict = dict(zip(par_key,par_val))
@@ -282,7 +282,7 @@ class BotInstance():
             list_clients = [x for x in df.client_name]
             for client_name in [x for x in df.client_name]:
                 conn_strings = base_connection.replace('__x__',schema_name)
-                self.connection_dict[client_name] = [schema_name, conn_strings]
+                self.connection_dict[client_name] = [schema_name,conn_strings]
         return
 
     def get_client_config(self):
@@ -290,10 +290,10 @@ class BotInstance():
         if df is None:
             errlog("Unable to access params table from database")
             return
-        df.columns = ['client_name','key', 'value', 'paramId']
+        df.columns = ['client_name','key','value','paramId']
         par_val = ['' + str(x) for x in df.value]
         par_key = [x for x in df.key]
-        par_dict = dict(zip(par_key, par_val))
+        par_dict = dict(zip(par_key,par_val))
         email_filter = 'sambaash.com'
         if "email_filter" in list(par_dict):
             email_filter = par_dict['email_filter']
@@ -324,8 +324,8 @@ class BotInstance():
         if (df1 is None) or (df2 is None):
             syslog("Unable to access related menu tables from RDS")
             return
-        df1.columns = ['menu_key', 'lang', 'text']
-        df2.columns = ['id', 'menu_name', 'menu_key', 'text']
+        df1.columns = ['menu_key','lang','text']
+        df2.columns = ['id','menu_name','menu_key','text']
         key_list = [x for x in df1.menu_key]
         txt_list = [x for x in df1.text]
         self.menu_keys = dict(zip(txt_list,key_list))
@@ -351,18 +351,22 @@ class BotInstance():
                 idx += 1
         return
 
-    async def chat(self, msg):
+    async def tcpchat(self,msg):
         try:
-            reader, writer = await asyncio.open_connection('localhost',self.tcp_port)
+            reader,writer = await asyncio.open_connection('localhost',self.tcp_port)
             writer.write(msg.encode())
-            data = await reader.read(100)
+            await writer.drain()
+            data = await reader.read(1000)
+            txt = data.decode()
             writer.close()
+            await writer.wait_closed()
         except:
-            return
+            pass
+        return txt
 
 class MessageCounter(telepot.aio.helper.ChatHandler):
-    def __init__(self, *args, **kwargs):
-        super(MessageCounter, self).__init__(*args, **kwargs)
+    def __init__(self,*args,**kwargs):
+        super(MessageCounter,self).__init__(*args,**kwargs)
         self.new_session = True
         self.is_admin = False
         self.super_admin = False
@@ -397,7 +401,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         self.__init__()
         return
 
-    async def logoff(self, txt = "Have a great day!"):
+    async def logoff(self,txt = "Have a great day!"):
         global bot_intance
         try:
             if self.chatid in [d for d in bot_intance.user_list]:
@@ -407,7 +411,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         except:
             pass
         try:
-            await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup([[bot_intance.menu_txt['btn_hellobot']]]))
+            await self.bot.sendMessage(self.chatid,txt,reply_markup=self.reply_markup([[bot_intance.menu_txt['btn_hellobot']]]))
         except:
             pass
         syslog(f"telegram user {self.chatid} logged out.")
@@ -418,13 +422,13 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
         self.menu_id = 0
         return
 
-    async def on_close(self, exception):
+    async def on_close(self,exception):
         await self.logoff()
         txt = 'session time out.\nPress /start a few times to awake this bot.'
         await self.sender.sendMessage(txt)
         return
 
-    def mcqas_chart(self, groupcht = False ):
+    def mcqas_chart(self,groupcht = False ):
         global bot_intance
         if self.userdata is None:
             return (None,None)
@@ -441,8 +445,8 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             df = self.userdata[self.userdata.studentid==sid]
             fn = 'chart_' + str(sid) + '.png'
             title = f"MCQ and Assignment scores for student #{sid}"
-        mcq_cnt = vmedxlib.edx_mcqcnt(self.courseid, self.client_name)
-        as_cnt = vmedxlib.edx_ascnt(self.courseid, self.client_name)
+        mcq_cnt = vmedxlib.edx_mcqcnt(self.courseid,self.client_name)
+        as_cnt = vmedxlib.edx_ascnt(self.courseid,self.client_name)
         iu_cnt = max(mcq_cnt,as_cnt)
         if iu_cnt == 0:
             return (None,None)
@@ -482,25 +486,25 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
             'Test/IU' : [ '' ],
             'test score' : [ 0 ]
         })
-        df = pd.concat([df1, df2, df3])
-        colors = {'mcq':'deepskyblue', 'assignment':'orange'}
+        df = pd.concat([df1,df2,df3])
+        colors = {'mcq':'deepskyblue','assignment':'orange'}
         mycolor = [colors['mcq'] for x in range(iu_cnt)] + [colors['assignment'] for x in range(iu_cnt)] + ['white']
-        df.set_index('Test/IU').plot(kind='bar',figsize=(10,4), rot = 90)
+        df.set_index('Test/IU').plot(kind='bar',figsize=(10,4),rot = 90)
         plt.title(title)
         ax = plt.gca()
-        plt.bar( [x for x in range(len(df))], [ x for x in df['test score']], color = mycolor)
+        plt.bar( [x for x in range(len(df))],[ x for x in df['test score']],color = mycolor)
         cols = [c for c in df.columns]
         label_col = cols[0]
         xcol = cols[1]
         label_list = [ x for x in df[label_col] ]
         width = 0.8
-        plt.xlim([-width, len(df[xcol])-width])
+        plt.xlim([-width,len(df[xcol])-width])
         ax.set_xticklabels((label_list))
         ax.yaxis.set_major_formatter(mtk.PercentFormatter())
         clabels = list(colors.keys())
-        handles = [plt.Rectangle((0,0),1,1, color=colors[label]) for label in clabels]
-        plt.legend(handles, clabels, bbox_to_anchor=(0.8,1.1), loc="upper left")
-        plt.axhline(y=bot_intance.pass_rate * 100, xmin=0, xmax=1, color='red')
+        handles = [plt.Rectangle((0,0),1,1,color=colors[label]) for label in clabels]
+        plt.legend(handles,clabels,bbox_to_anchor=(0.8,1.1),loc="upper left")
+        plt.axhline(y=bot_intance.pass_rate * 100,xmin=0,xmax=1,color='red')
         plt.draw()
         plt.savefig(fn, dpi=100)
         plt.clf()
@@ -1654,7 +1658,7 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                 playbooklist_menu = [[x] for x in self.list_courseids]
                 playbooklist_menu.append([option_back])
                 await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(playbooklist_menu))
-                self.menu_id = keys_dict[menu_txt['fc_schedule']]
+                self.menu_id = keys_dict[menu_txt['opt_updschedule']]
             elif resp == menu_txt['fc_mentor']:
                 if len(self.list_courseids)==0:
                     txt = "There is nothing to process for now"
@@ -1663,22 +1667,28 @@ class MessageCounter(telepot.aio.helper.ChatHandler):
                     return
                 txt = "Please the course_id from below :"
                 courseid_menu = build_menu([x for x in self.list_courseids],1)
-                await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(courseid_menu))                
+                await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(courseid_menu))
                 self.menu_id = keys_dict[menu_txt['fc_mentor']]
             elif resp == menu_txt['opt_upload'] :
                 msg = "Please upload the course module information XLS file, the filename must starts with the pillar code."
                 await self.sender.sendMessage(msg)
                 self.menu_id = keys_dict[menu_txt['opt_upload']]
 
-        elif self.menu_id == keys_dict[menu_txt['fc_schedule']]:
+        elif self.menu_id == keys_dict[menu_txt['opt_updschedule']]:
             if resp in self.list_courseids:
                 txt = "Updating schedule now."
                 await self.sender.sendMessage(txt)
-                vmedxlib.update_schedule(resp, self.client_name)
-                retmsg = f"Schedule for {resp} has been updated."
-                syslog(retmsg)
+                if vmedxlib.update_schedule(resp, self.client_name):
+                    msg = f"Schedule for {resp} has been updated."
+                else:
+                    msg = f"Unable to perform schedule update for {resp}."
             elif (resp == '*') and self.super_admin :
                 job_request(self.chatid,self.client_name,"mass_update_schedule",None)
+                msg = "Running schedule update in the background"
+            else:
+                msg = "Unable to update, the course setup is incomplete"
+            syslog(msg)
+            await self.sender.sendMessage(msg)
             txt = 'You are in faculty admin mode.'
             menu_item = menu_items['faculty_menu']
             await self.bot.sendMessage(self.chatid, txt, reply_markup=self.reply_markup(menu_item))
@@ -4109,10 +4119,9 @@ async def checkjoblist():
     if bot_intance.tcp_port==0:
         await runbotjob(job_id,chat_id,func_req,func_param)
     else:
-        message=f"{bot_intance.client_name}|{func_req}|{func_param}"
-        await bot_intance.chat(message)
+        message = f"{bot_intance.client_name}|{func_req}|{func_param}"
+        result = await bot_intance.tcpchat(message)
         del bot_intance.job_items[job_id]
-        print(message)
     return
 
 async def runbotjob(job_id,chat_id,func_req,func_param):
@@ -4166,7 +4175,7 @@ async def runbotjob(job_id,chat_id,func_req,func_param):
 def course_status(clt, cid):
     qry = f"select module_code from playbooks where client_name = '{clt}' and course_id = '{cid}';"
     module_code = rds_param(qry)
-    [ pillar, course_code, module_code ] = vmedxlib.course_header(cid)
+    [ pillar, course_code, module_code ] = vmedxlib.course_header(clt,cid)
     if module_code=="":
         txt = "pillar/course_code/module_code/cohort_id is not defined in the course_module/playbooks table\n"
     else:
@@ -4204,9 +4213,8 @@ def course_status(clt, cid):
 def stage_calendar(df):
     m = 5
     xstr = lambda x : '   ' if x == 0 else ('  ' + str(x))[-3:]
-    ystr = lambda x,y,z : y[x] if x in list(z) else '     '
     zstr = lambda x : ((' *' if ',' in x else x) + ' '*m)[:m]
-    slist = [(x + ''*m)[:m] for x in df.stage]
+    slist = [x for x in df.stage]
     tlist = ['' if dt=='' else datetime.datetime.strptime(dt,"%d/%m/%Y").strftime('%Y%m%d') for dt in df.startdate]
     ylist = list(set([int(t[:4]) for t in tlist if t != '']))
     tlist = [x for x in tlist if x != '']
@@ -4658,13 +4666,11 @@ if __name__ == "__main__":
         vmsvclib.rdscon = vmsvclib.rds_connector()
         course_id = ""
         if len(sys.argv)>=2:
-            course_id = str(sys.argv[1])
-        if course_id != "":
-            qry = f"select * from stages where client_name = '{client_name}' and courseid = '{course_id}';"
+            qry = str(sys.argv[1])
             df = rds_df(qry)
             if df is not None:
-                df.columns = get_columns("stages")
-                msg = stage_calendar(df)
-                print(msg)
+                print(df)
+        else:
+            print(f"Usage : python {sys.argv[0]} 'select_sql_query_statements'")
     else:
         syslog("Unable to use this version of python\n", version)

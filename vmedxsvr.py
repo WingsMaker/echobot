@@ -1,10 +1,11 @@
 #------------------------------------------------------------------------------------------------------#
+#  ___                  _ __  __            _ 
 # / _ \ _ __ ___  _ __ (_)  \/  | ___ _ __ | |_ ___  _ __
 #| | | | '_ ` _ \| '_ \| | |\/| |/ _ \ '_ \| __/ _ \| '__|
 #| |_| | | | | | | | | | | |  | |  __/ | | | || (_) | |
 # \___/|_| |_| |_|_| |_|_|_|  |_|\___|_| |_|\__\___/|_|
 #
-# EDX Server                                                              
+# KH 
 #------------------------------------------------------------------------------------------------------
 import warnings
 warnings.filterwarnings("ignore")
@@ -51,10 +52,11 @@ async def chat(msg):
         data = await reader.read(1000)
         txt = data.decode()
         print(txt)
-        reader.close()
         writer.close()
+        await writer.wait_closed()
     except:
-        return txt
+        pass
+    return txt
 
 async def streams_server():
     global tcp_port
@@ -98,7 +100,7 @@ if __name__ == "__main__":
             txt='Thank you for using OmniMentor EDX Server. Goodbye!'
             print(txt)
     elif cmd=="/testedx":
-        message=f"{client_name}|progress|9992"
+        message=f"{client_name}|userinfo|10334"
         #message=f"{client_name}|info|FOS-0121A"
         loop = asyncio.get_event_loop()
         loop.run_until_complete(chat(message))

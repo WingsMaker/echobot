@@ -1,10 +1,11 @@
 #------------------------------------------------------------------------------------------------------#
+#  ___                  _ __  __            _                       
 # / _ \ _ __ ___  _ __ (_)  \/  | ___ _ __ | |_ ___  _ __
 #| | | | '_ ` _ \| '_ \| | |\/| |/ _ \ '_ \| __/ _ \| '__|
 #| |_| | | | | | | | | | | |  | |  __/ | | | || (_) | |
 # \___/|_| |_| |_|_| |_|_|_|  |_|\___|_| |_|\__\___/|_|
 #
-# SMS/LMS                      
+# SMS/LMS with command line parser and tcp socket protocol support
 #------------------------------------------------------------------------------------------------------
 import warnings
 warnings.filterwarnings("ignore")
@@ -27,14 +28,15 @@ str2date = lambda x : string2date(x,"%d/%m/%Y")
 dmy_str = lambda v : piece(v,'-',2) + '/' + piece(v,'-',1) + '/' + piece(v,'-',0)
 ymd_str = lambda v : piece(v,'-',0) + '/' + piece(v,'-',1) + '/' + piece(v,'-',2)
 getcohort = lambda x : '-'.join(x.split(':')[1].replace('+','-').split('-')[:-1][1:])
+getmodulecode = lambda x : '-'.join(x.split(':')[1].replace('+','-').split('-')[:-1][1:][:-1])
 
-def course_header(course_id):
+def course_header(client_name,course_id):
     global edx_api_header,edx_api_url
     if course_id=="":
         return ["","",""]
-    qry = f"select * from playbooks where course_id='{course_id}' limit 1;"
+    qry = f"select * from playbooks where client_name = '{client_name}' and course_id='{course_id}' limit 1;"
     df = rds_df(qry)
-    if df is not None:
+    if (df is not None) and (len(df)>0):
         df1 = df.T
         df1.columns = ['col']
         records = [x for x in df1.col]
@@ -42,12 +44,21 @@ def course_header(course_id):
         course_code = records[3]
         module_code = records[4]
         return [pillar,course_code,module_code]
+    else:
+        module_code = getmodulecode(course_id)
+        qry = f"select * from course_module where client_name = '{client_name}' and module_code='{module_code}';"
+        df = rds_df(qry)
+        if (df is not None) and (len(df)==1):
+            df.columns = vmsvclib.get_columns("course_module")
+            pillar = [x for x in df.pillar][0]
+            course_code = [x for x in df.course_code][0]
+            return [pillar,course_code,module_code]
     url = f"{edx_api_url}/course/fetch/info/{course_id}"
     result = dict()
     response = requests.get(url,headers=edx_api_header)
     data = eval(response.content.decode('utf-8') if response.status_code==200 else "[{}]")
     result = data[0] if len(data)>0 else dict()
-    output = ([result['pillar'],result['courseCode'],result['moduleCode']] if len(result)>=4 else []) if isinstance(result,dict) else []
+    output = ([result['pillar'],result['courseCode'],result['moduleCode']] if len(result)>=4 else ['','','']) if isinstance(result,dict) else ['','','']
     return output
 
 def edx_coursename(course_id):
@@ -453,7 +464,10 @@ def edx_eocend(client_name,course_id,gap=7):
 def update_schedule(course_id,client_name):
     dstr = lambda x : piece(piece(x.strip(),':',1),'+',2)
     dtype = lambda x : ('%d%b%Y' if len(dstr(x))==9 else '%d%B%Y') if dstr(x)[0].isdigit() else '%B%Y'
-    [ pillar,course_code,module_code ] = course_header(course_id)
+    [ pillar,course_code,module_code ] = course_header(client_name,course_id)
+    if (pillar=="") or (course_code=="") or (module_code==""):
+        syslog(f"The course setup for {course_id} is incomplete, update_schedule stopped")
+        return False
     cohort_id = getcohort(course_id)
     stage_list = get_google_calendar(course_id,client_name)
     if stage_list == []:
@@ -462,7 +476,7 @@ def update_schedule(course_id,client_name):
         stage_list = update_stage_table(stage_list,course_id,client_name,cohort_id,pillar,course_code,module_code)
         if stage_list == []:
             syslog(f"System calendar not match for {course_id}")
-            return
+            return False
         dt = string2date(stage_list[0][3],"%d/%m/%Y")
         stg=[x for x in stage_list if x[0]=='EOC']
         eoc_date = string2date(stg[0][4],"%d/%m/%Y")
@@ -470,7 +484,7 @@ def update_schedule(course_id,client_name):
         days = (date_today - eoc_date).days
     except:
         syslog(f"update_stage_table failed for {course_id}")
-        return
+        return False
     condqry = "client_name = '_c_' and courseid = '_x_';"
     condqry = condqry.replace('_c_',client_name)
     condqry = condqry.replace('_x_',course_id)
@@ -496,6 +510,9 @@ def update_schedule(course_id,client_name):
         qry = qry.replace('_x_',stg)
         query = qry.replace('_y_',str(dd))
         rds_update(query)
+    for fld in ['mcq','assignment','IU']:
+        query = f"UPDATE stages_master SET {fld}='0' WHERE client_name = '{client_name}' and {fld} = '';"
+        rds_update(query)
     query = "update stages SET IU=IFNULL((SELECT b.IU FROM stages_master b WHERE b.client_name=client_name "
     query += f"AND b.module_code='{module_code}' AND b.stage=stage LIMIT 1) ,'0') "
     query += f"WHERE courseid = '{course_id}' AND client_name = '{client_name}';"
@@ -512,6 +529,9 @@ def update_schedule(course_id,client_name):
     query = f"update stages set startdate = '' where (startdate is null) and "
     query += condqry
     rds_update(query)
+    for fld in ['mcq','assignment','IU']:
+        query = f"UPDATE stages SET {fld}='0' WHERE client_name = '{client_name}' and courseid='{course_id}' and {fld} = '';"
+        rds_update(query)
     query = "UPDATE userdata SET mcq_zero = '[]',mcq_failed = '[]',as_zero = '[]',as_failed = '[]',risk_level=0 "
     query += f" WHERE client_name='{client_name}' and courseid='{course_id}';"
     rds_update(query)
@@ -561,7 +581,7 @@ def update_schedule(course_id,client_name):
         qry += " AND NOT (mcq_zero='[]' AND mcq_failed='[]' AND as_zero='[]' AND as_failed='[]');"
         rds_update(qry)
     syslog(f"completed on {course_id}")
-    return
+    return True
 
 def update_assignment(course_id,client_name,student_id=0):
     condqry = f"client_name = '{client_name}' and courseid = '{course_id}';"
@@ -740,7 +760,10 @@ def update_mcq(course_id,client_name,student_id=0):
 
 def edx_import(course_id,client_name,force_active=False):
     global max_iu
-    [ pillar,course_code,module_code ] = course_header(course_id)
+    [ pillar,course_code,module_code ] = course_header(client_name,course_id)
+    if (pillar=="") or (course_code=="") or (module_code==""):
+        syslog(f"The course setup for {course_id} is incomplete, edx_import stopped")
+        return False
     cohort_id = getcohort(course_id)
     condqry = f"client_name = '{client_name}' and courseid = '{course_id}';"
     qry = f"select enabled from course_module where client_name = '{client_name}' and pillar = '{pillar}' and course_code = '{course_code}' and module_code = '{module_code}';"
@@ -999,7 +1022,7 @@ def get_stage_list(data,module_node):
             cohort = x_list[0] if n>0 else ""
             stage_name = x_list[1] if n>2 else ""
             stage_desc = x_list[2] if n>2 else stage_name
-            stage_desc = stage_desc.replace('?','')
+            stage_desc = stage_desc.replace('?','').split('(')[0]
         cohort = cohort.strip()
         iu_list = "0"
         stdate = ymd_str(x['startDate'][:10])
@@ -1093,7 +1116,7 @@ def stage_code(txt):
 
 def get_google_calendar(course_id,client_name):
     qry = f"select cohort_id from playbooks where client_name = '{client_name}' and course_id = '{course_id}';"
-    [ pillar,course_code,module_code ] = course_header(course_id)
+    [ pillar,course_code,module_code ] = course_header(client_name,course_id)
     cohort_id = getcohort(course_id)
     api_url = f"https://realtime.sambaash.com/v1/calendar/fetch?cohortId={course_code}%20:%20{cohort_id}"
     data  = get_calendar_json(api_url)
@@ -1246,7 +1269,7 @@ def update_playbooklist(course_id,client_name,course_name,eoc):
     cnt = rds_param(query)
     if cnt==1:
         return
-    [ pillar,course_code,module_code ] = course_header(course_id)
+    [ pillar,course_code,module_code ] = course_header(client_name,course_id)
     cohort_id = getcohort(course_id)
     query = "insert into playbooks(client_name,pillar,course_code,module_code,cohort_id,course_id,course_name,mentor,eoc) \
              values('_c_','_p_','_w_','_m_','_x_','_y_','_z_','',_e_);"
@@ -1422,6 +1445,10 @@ def load_edx(client_name):
     query += " course_id=b.courseid AND eoc=0),0)) AS cnt FROM userdata b INNER JOIN user_master c ON b.client_name=c.client_name AND "
     query += f" b.studentid=c.studentid WHERE b.client_name = '{client_name}' AND c.usertype=1 group by b.studentid ) zz WHERE cnt = 0);"
     rds_update(query)
+    for tbl in ['stages_master','stages']:
+        for fld in ['mcq','assignment','IU']:
+            query = f"UPDATE {tbl} SET {fld}='0' WHERE client_name = '{client_name}' and {fld} = '';"
+            rds_update(query)
     return
 
 def list_tables(module_code,details):
@@ -1453,8 +1480,13 @@ def list_tables(module_code,details):
     list_desc = [ details[col_dict['desc']][n] for n in rownum_list ]
     list_days = [ details[col_dict['days']][n] for n in rownum_list ]
     list_mcq = [ details[col_dict['mcq']][n] for n in rownum_list ]
+    list_mcq = [ '0' if str(x)=='' else str(x) for x in list_mcq]
+    list_mcq = [ ','.join([x for x in y.split(',') if int(x) <= iu_cnt]) for y in list_mcq ]
     list_assignment  = [ details[col_dict['assignment']][n] for n in rownum_list ]
+    list_assignment = [ '0' if str(x)=='' else str(x) for x in list_assignment]
+    list_assignment = [ ','.join([x for x in y.split(',') if int(x) <= iu_cnt]) for y in list_assignment ]
     list_iu = [ details[col_dict['IU']][n] for n in rownum_list ]
+    list_iu = [ '0' if str(x)=='' else str(x) for x in list_iu]
     stages_master = {'id': list_stage_id,'stage': list_stage,'name': list_name,'desc': list_desc,'days': list_days,'mcq': list_mcq,'assignment': list_assignment,'iu': list_iu}
     return ( module_iu,stages_master )
 
@@ -1471,7 +1503,8 @@ def valid_format(original_fn,fn):
     if 'Master Course Details' not in list_sheets:
         errmsg = "Missing 'Master Course Details' sheet in this file."
         return (False,errmsg,None)
-    active_modules = list_sheets[3:]
+    exclusion_list = ['Intro Sheet','Master Course Details','Cohorts','course_id']
+    active_modules = [ x for x in list_sheets if x not in exclusion_list]
     ws = wb['Master Course Details']
     master = [ ['' if ws.cell(m+1,n+1).value is None else ws.cell(m+1,n+1).value for m in range(ws.max_row)] for n in range(ws.max_column)]
     m=min([len(x) for x in master])
@@ -1486,12 +1519,20 @@ def valid_format(original_fn,fn):
     course_code = master[3][1]
     n = len(pillar)
     pillar_code = original_fn[:n].upper()
-    if pillar_code != pillar:
-        errmsg = f"Unable to import from this file {fn} due to pillar code {pillar} mismatch with the filename prefix"
+    if (pillar_code != pillar) or (n==0):
+        errmsg = f"Unable to import from this file {original_fn} due to pillar code {pillar} mismatch with the filename prefix"
         return (False,errmsg,None)
     return (True,wb,master)
 
 def course_import(client_name,fn,wb,master):
+    def is_valid_courseid(course_id, mcode_list):
+        valid_courseid = False
+        for module_code in mcode_list:
+            mcode = "+" + module_code
+            if mcode in course_id:
+                valid_courseid = True
+                break
+        return valid_courseid
     list_sheets = wb.sheetnames
     pillar = master[0][1]
     course_code = master[3][1]
@@ -1505,11 +1546,14 @@ def course_import(client_name,fn,wb,master):
     mcq_cnt_dict = dict()
     as_cnt_dict = dict()
     stages_cnt_dict = dict()
-    cnt = len(master[5])
+    module_code_list = [x for x in master[5] if x != '']
+    cnt = len(module_code_list)
+    df = None
     for n in range(1,cnt):
         module_code = master[5][n]
         module_name = master[6][n]
         course_dict[module_code] = module_name
+
     active_modules = list(course_dict)
     import_list = [ x for x in list(list_sheets ) if x in active_modules ]
     where_cond = f"where client_name = '{client_name}' and pillar = '{pillar}' and course_code='{course_code}' and module_code in ('"
@@ -1558,11 +1602,27 @@ def course_import(client_name,fn,wb,master):
             'MCQs':[mcq_cnt_dict[x] for x in import_list],\
             'Assignments':[as_cnt_dict[x] for x in import_list],\
             'Stages':[stages_cnt_dict[x] for x in import_list] })
+    if 'course_id' in list_sheets:
+        ws = wb['course_id']
+        eoc = 0
+        mentor = ''
+        course_list = [ ['' if ws.cell(m+1,n+1).value is None else ws.cell(m+1,n+1).value for m in range(ws.max_row)] for n in range(ws.max_column)]
+        if (len(course_list) >= 1) and (course_list[0][0]=="course_id"):
+            for course_id in course_list[0][1:]:
+                if is_valid_courseid(course_id, module_code_list[1:]):
+                    cohort_id = getcohort(course_id)
+                    module_code = getmodulecode(course_id)
+                    course_name = course_dict[module_code] if module_code in list(course_dict) else ''
+                    sql_code = f"DELETE FROM playbooks WHERE client_name='{client_name}' and course_id='{course_id}';"
+                    vmsvclib.rds_update(sql_code)
+                    sql_code = "INSERT INTO playbooks (`client_name`, `course_id`, `pillar`, `course_code`, `module_code`, `course_name`, `cohort_id`, `eoc`, `mentor`) VALUES "
+                    sql_code += f"('{client_name}','{course_id}','{pillar}','{course_code}','{module_code}','{course_name}','{cohort_id}','{eoc}','{mentor}');"
+                    vmsvclib.rds_update(sql_code)
     return (True,title,df)
 
 def parse_commands(client_name,cmd,resp,arg):
     cmd_log = ""
-    edxcmd_list = ['import','mcq','assignment','schedule','calendar','info']
+    edxcmd_list = ['import','mcq','assignment','schedule','stages','calendar','info']
     if (cmd in edxcmd_list) and (resp != ""):
         sid = 0
         if (arg != "") and arg.isnumeric():
@@ -1583,8 +1643,10 @@ def parse_commands(client_name,cmd,resp,arg):
                     edx_mass_import(client_name)
                     cmd_log += "Edx mass import completed\n"
                 else:
-                    edx_import(course_id,client_name)
-                    cmd_log += "Edx import completed\n"
+                    if edx_import(course_id,client_name):
+                        cmd_log += "Edx import completed\n"
+                    else:
+                        cmd_log += "Edx import not successful\n"
             elif cmd=="mcq":
                 if course_id=='*':
                     mass_update_mcq(client_name)
@@ -1610,13 +1672,20 @@ def parse_commands(client_name,cmd,resp,arg):
                     mass_update_schedule(client_name)
                     cmd_log += "Schedule mass update completed\n"
                 else:
-                    update_schedule(course_id,client_name)
-                    cmd_log += "Schedule update completed\n"
-            elif cmd=="calendar":
+                    if update_schedule(course_id,client_name):
+                        cmd_log += "Schedule update completed\n"
+                    else:
+                        cmd_log += "Schedule update not successful\n"
+            elif cmd=="stages":
                 stage_list = get_google_calendar(course_id,client_name)
                 for x in stage_list:
                     cmd_log += str(x) + '\n'
                 cmd_log += "google calendar test completed\n"
+            elif cmd=="calendar":
+                df = rds_df(f"select * from stages where client_name='{client_name}' and courseid='{course_id}';")
+                if df is not None:
+                    df.columns = get_columns("stages")
+                    cmd_log += vmbotlib.stage_calendar(df) + "\n"
             elif cmd=="info":
                 dt = edx_day0(course_id)
                 cmd_log += f"start date = {dt}\n"
@@ -1624,7 +1693,7 @@ def parse_commands(client_name,cmd,resp,arg):
                 cmd_log += f"EOC date = {dt}\n"
                 eoc = edx_endofcourse(client_name,course_id)
                 results = f"End of course (1:Yes,0:No) = {eoc}"
-                [ pillar,course_code,module_code ] = course_header(course_id)
+                [ pillar,course_code,module_code ] = course_header(client_name,course_id)
                 cohort_id = getcohort(course_id)
                 cmd_log += str( [ pillar,course_code,module_code,cohort_id ] ) + '\n'
                 cmd_log += str(results) + '\n'
@@ -1655,7 +1724,7 @@ def parse_commands(client_name,cmd,resp,arg):
                     txt += str(dlist) + "\n"
                     df['timetable_date'] = df.apply(lambda x: str(x['timetable_date'])[:10],axis=1)
                     if sid==0:
-                        cols = ['class_type_code','status_desc','attendance_type_desc','timetable_date','timetable_day', 'email']
+                        cols = ['class_type_code','status_desc','attendance_type_desc','timetable_date','timetable_day','email']
                     else:
                         cols = get_columns("stages")
                         stage_list = sms_missingdates(client_name,course_id,sid,cols,date_list)
@@ -1663,7 +1732,7 @@ def parse_commands(client_name,cmd,resp,arg):
                         txt += "Missing stages : " + str(results) + "\n"
                         att_rate = sms_att_rate(client_name,course_id,sid,date_list)
                         txt += f"Attendance rate = {att_rate}"
-                        cols = ['class_type_code', 'status_desc', 'attendance_type_desc', 'timetable_date', 'timetable_day']
+                        cols = ['class_type_code','status_desc','attendance_type_desc','timetable_date','timetable_day']
                     df1 = df[cols]
                     cmd_log += str(txt) + '\n'
                     cmd_log += str(str(df1)) + '\n'
@@ -1678,13 +1747,16 @@ def parse_commands(client_name,cmd,resp,arg):
                 cmd_log += str(df) + '\n'
         else:
             cmd_log += str(wb) + '\n'
-    elif cmd=="username" and resp != "":
-        if resp.isnumeric():
-            qry = f"select username from user_master where client_name='{client_name}' and studentid={resp};"
-        else:
-            qry = f"select username from user_master where client_name='{client_name}' and email='{resp}';"
+    elif cmd=="userinfo" and resp != "":
+        if not resp.isnumeric():
+            cmd_log += "Sorry it seems you are not a valid user in our system\n"
+            return cmd_log
+        qry = f"select username from user_master where client_name='{client_name}' and studentid={resp};"
         username = rds_param(qry)
-        cmd_log += str(username) + '\n'
+        qry = "SELECT a.courseid FROM userdata a INNER JOIN playbooks b ON a.client_name=b.client_name "
+        qry += f"AND a.courseid=b.course_id WHERE b.eoc=0 and a.studentid={resp} AND a.client_name = '{client_name}' LIMIT 1;"
+        courseid = rds_param(qry)
+        cmd_log += 'userinfo\n' + str(username) + '\n' + str(courseid) + '\n'
     elif cmd=="whois" and resp != "":
         qry = f"select * from user_master where client_name='{client_name}' and lower(username) like '%{resp}%';"
         df = rds_df(qry)
@@ -1702,7 +1774,7 @@ def parse_commands(client_name,cmd,resp,arg):
             cmd_log += str("Sorry it seems you are not a valid user in our system.") + '\n'
             return cmd_log
         else:
-            vmbotlib.bot_intance = type('config', (object,), \
+            vmbotlib.bot_intance = type('config',(object,), \
             {'pass_rate': 0.7,'att_rate':0.75, 'max_iu':20, 'gmt': 8})
             resp_dict = vmbotlib.load_respdict()
             qry = "select a.* FROM userdata a INNER JOIN playbooks b ON a.client_name=b.client_name AND a.courseid=b.course_id"
@@ -1737,7 +1809,7 @@ def parse_commands(client_name,cmd,resp,arg):
     if cmd == "":
         prog = "vmedxlib.py"
         cmd_log += str(f"usage :\n\tpython3 {prog} [commands] [cohort_id] [student_id]") + '\n'
-        cmd_log += str("commands:\n\timport\n\tmcq\n\tassignment\n\tschedule\n\tcalendar\n\tinfo\n\tpipeline\n\tmass_update\n\txls_import\n\tprogress\n\tusername\n\twhois\n") + '\n'
+        cmd_log += str("commands:\n\timport\n\tmcq\n\tassignment\n\tschedule\n\tcalendar\n\tinfo\n\tpipeline\n\tmass_update\n\txls_import\n\tprogress\n\tstages\n\tuserinfo\n\twhois\n") + '\n'
         cmd_log += str(f"Example:\n\tpython3 {prog} assignment IMM-0520A 4558") + '\n'
     return cmd_log
 
